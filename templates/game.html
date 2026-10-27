@@ -48,6 +48,15 @@
   .unit-abs { position:absolute; left:0; top:0; width:auto; height:auto; transition: transform var(--unit-move-ms) linear; will-change: transform; border-radius:2px; }
   .unit .icon, .unit-abs .icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
   .unit .icon.ghost-icon, .unit-abs .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
+  /* 词缀 / 精英标记（ISSUE-20261028-05）：词缀做成右上角小标签，精英用金边 + 星标。
+     刻意不用 CSS filter 改图标色 —— 会把 emoji 与后续像素画（ISSUE-07）的色阶一起毁掉。 */
+  .affix-tag { position:absolute; top:0; right:0; display:flex; gap:1px; align-items:center;
+    font-size: calc(var(--cell) * 0.2); line-height:1; padding:1px 2px; border-radius:4px;
+    background: rgba(0,0,0,0.66); color:#ffd93d; font-weight:900; letter-spacing:0;
+    pointer-events:none; z-index:46; white-space:nowrap; }
+  .unit-abs.ua-elite { outline:2px solid #ffd700; outline-offset:-2px;
+    box-shadow: inset 0 0 10px rgba(255,215,0,0.45); }
+  .unit-abs.ua-elite .icon { text-shadow: 0 0 6px #ffd700; }
   .unit .hp-bar, .unit-abs .hp-bar { width: 78%; height: 3px; background: rgba(0,0,0,0.55); border-radius: 2px; margin-top: 1px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.6); }
   .unit .hp-fill, .unit-abs .hp-fill { height: 100%; border-radius: 2px; transition: width 0.25s ease; }
   .unit-abs.ua-player { outline:2px solid #4ecdc4; outline-offset:-2px; }
@@ -509,6 +518,12 @@ function killEnemy(e, opts = {}) {
   if (showRing) ringFx(e.x, e.y, '#ff6b6b');
   if (showFloat) floatText(e.x, e.y, floatMsg, '#ff6b6b');
   if (logText) log(logText === true ? `敌人${e.id + 1}被击败` : logText);
+  /* 精英击杀奖励（ISSUE-20261028-05）：在死亡格留下一个恢复道具 ❤️。
+   * 只碰 rewardItems 数组，不新增单位、不动 enemyPathOrder —— 这是首轮排除「分裂」词缀的原因。 */
+  if (e.isElite && typeof rewardItems !== 'undefined') {
+    if (!rewardItems.some(r => r.x === e.x && r.y === e.y)) rewardItems.push({ x: e.x, y: e.y });
+    log('★ 精英被击败，掉落了恢复道具 ❤️！');
+  }
   if (amiyaSp && selectedChar === 'amiya') amiyaGainKillBonus();
   return true;
 }
@@ -584,10 +599,15 @@ function triggerFencerCounter() {
   if (targets.length > 0) {
     const target = targets[randInt(targets.length)];
     const dmg = player.meleeDmg * 2;
-    target.hp -= dmg;
-    slashFx(target.x, target.y, '#ffd700');
-    hitFx(target.x, target.y, dmg, true, '反击暴击');
-    log(`泥岩触发反击，对敌人${target.id+1}造成${dmg}点暴击伤害！`);
+    /* 护盾词缀（ISSUE-20261028-05）：第一击被完全吸收 */
+    const dealt = enemyTakeDamage(target, dmg);
+    if (dealt > 0) {
+      slashFx(target.x, target.y, '#ffd700');
+      hitFx(target.x, target.y, dealt, true, '反击暴击');
+      log(`泥岩触发反击，对敌人${target.id+1}造成${dealt}点暴击伤害！`);
+    }
+    /* 荆棘词缀：近战命中后反弹（被打死的不反弹，函数内已判） */
+    if (enemyThornsReflect(target)) return;
     if (target.hp <= 0 && target.alive) {
       target.alive = false;
       floatText(target.x, target.y, '击杀!', '#ff6b6b');
@@ -644,11 +664,15 @@ async function executeAmiyaBurst(count) {
     amiyaMarkReveal(target);
     await animateBullet({ x: player.x, y: player.y }, 'enemy-' + target.id, target, isCrit, false, 'player');
     const dmg = player.rangedDmg * 2;
-    target.hp -= dmg;
+    const dealt = enemyTakeDamage(target, dmg);
     /* 精神爆发的击杀不给技力（否则倾泻过程中边杀边攒，会滚雪球） */
     if (target.hp <= 0) target.alive = false;
-    hitFx(target.x, target.y, dmg, true, '爆发暴击');
-    log(`「精神爆发」${i + 1}/${count}：必定命中·必定暴击，对敌人${target.id + 1}造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+    if (dealt > 0) {
+      hitFx(target.x, target.y, dealt, true, '爆发暴击');
+      log(`「精神爆发」${i + 1}/${count}：必定命中·必定暴击，对敌人${target.id + 1}造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
+    } else {
+      log(`「精神爆发」${i + 1}/${count}：被护盾词缀吸收，未造成伤害。`);
+    }
     refreshUnits();
     await sleep(180);
   }
@@ -737,7 +761,10 @@ function initLevel() {
       const eProf = getEnemyProf(type);
       const eAC = computeAC(eAbilities);
       const eMove = Math.max(1, Math.floor(eAbilities.dex / 2));
-      const hp = grow.maxHp;
+      /* 词缀与精英（ISSUE-20261028-05）：L5 起每关 1 个精英（HP×1.5、必带 2 词缀），
+       * 普通敌人按关卡概率带 1 个词缀。全部由 RUN_SEED 派生 → 同种子重开完全一致。 */
+      const affixPlan = rollEnemyAffixPlan(level, i, numEnemies, RUN_SEED);
+      const hp = affixPlan.isElite ? Math.ceil(grow.maxHp * ELITE_HP_MUL) : grow.maxHp;
       /* 伤害骰（ISSUE-20261028-04）：结算走 rollEnemyDamage(e, kind) 掷骰，
        * meleeDmg/rangedDmg 保留为**骰子期望值**，供 AI 估值与日志面板展示。 */
       const baseDice = ENEMY_STATS[type].dice || {};
@@ -756,6 +783,9 @@ function initLevel() {
         meleeDice,
         rangedDice,
         explodeDmg: ENEMY_STATS[type].explode || 0,
+        isElite: affixPlan.isElite,
+        affixes: affixPlan.affixes,
+        shieldLeft: affixPlan.affixes.indexOf('shield') >= 0 ? 1 : 0,
         alive: true, attackedThisRound: false,
         facing: faceToward(s, player),
         amiyaRevealBonus: 0,
@@ -792,7 +822,7 @@ function initLevel() {
     log(`敌人面板（第 ${level} 关 · 每个敌人已成长 ${level} 次属性${eLv > 0 ? ` · 等级 Lv.${eLv}` : ''}）：`);
     enemies.forEach(e => {
       const a = e.abilities;
-      log(`  ${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${e.move} HP${e.maxHp} 近战${e.meleeDice ? diceLabel(e.meleeDice) + '(' + e.meleeDmg + ')' : e.meleeDmg} 远程${e.rangedDice ? diceLabel(e.rangedDice) + '(' + e.rangedDmg + ')' : e.rangedDmg}${e.explodeDmg ? ' 自爆' + e.explodeDmg : ''}`);
+      log(`  ${e.isElite ? '★精英 ' : ''}${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${enemyMoveOf(e)} HP${e.maxHp} 近战${e.meleeDice ? diceLabel(e.meleeDice) + '(' + e.meleeDmg + ')' : e.meleeDmg} 远程${e.rangedDice ? diceLabel(e.rangedDice) + '(' + e.rangedDmg + ')' : e.rangedDmg}${e.explodeDmg ? ' 自爆' + e.explodeDmg : ''}${e.affixes.length ? '　词缀：' + enemyAffixLabel(e) : ''}`);
     });
     log(`规则：攻击检定 = d20 + 属性修正 + 熟练加值 ≥ 目标AC；自然20暴击；自然1必失。`);
     if (level === 1) {
@@ -1874,7 +1904,7 @@ function generateEnemyPaths() {
   // 关键修复：还没轮到的敌人先按「原地不动」把所有 tick 都预留住。
   // 旧版只预留 t=0，第一个 tick 却去查 t=1，于是计划层允许踩同伴、结算层 occNow 又拦下来，
   // 路径被 slice 截断 → 窄走廊里幽灵被前方骷髅永久堵死（实测 25 回合零进展）。
-  const maxT = Math.max(...aliveList.map(e => e.move)) + 1;
+  const maxT = Math.max(...aliveList.map(e => enemyMoveOf(e))) + 1;
   const occ = [];
   for (let t = 0; t <= maxT; t++) occ.push(new Set());
   for (const e of aliveList) {
@@ -1903,7 +1933,7 @@ function generateEnemyPaths() {
     // 拖回合会让敌人越来越激进，20 回合后 10 感知的敌人就到顶。
     const aggression = enemyAggression(wis);
     // ★ 预判：目标取玩家路径上更靠后的位置（WIS 越高越靠后）
-    let target = pickEnemyTarget(playerPositions, aggression, e.move);
+    let target = pickEnemyTarget(playerPositions, aggression, enemyMoveOf(e));
     // ★ 补丁：角色周围 8 格（切比雪夫距离 ≤1）内的敌人，寻路目标固定为角色所在格，
     // 不会再预判到玩家路径末端、也不会随重绘改变。
     if (Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1) {
@@ -1914,7 +1944,7 @@ function generateEnemyPaths() {
     // 旧版这里还有一段「到达目标后追玩家实际位置」，那段会从目标点折返，
     // 实测 500 局面里 24 次出现 A→B→A 的来回抖动，已移除：
     // 敌人提前到达预判点后原地待命，玩家自己会走进来（这本身就是最好的拦截）。
-    let path = bfsPathTo(e.x, e.y, target.x, target.y, e.move, isOccupiedAt, ghost, 0);
+    let path = bfsPathTo(e.x, e.y, target.x, target.y, enemyMoveOf(e), isOccupiedAt, ghost, 0);
 
     // ★ 反罚站补丁：同伴占位可能把窄口/凹槽里的敌人完全堵死（BFS 一步都扩展不出去、返回原地），
     // 且每回合重算结果相同 → 敌人永久罚站（实测外星人距离玩家 5 格、几何可达，连站 11 回合不动）。
@@ -1922,7 +1952,7 @@ function generateEnemyPaths() {
     // 也不要原地站死。目标本来就是自己格（真没路可走）的不算堵塞。
     const targetIsSelf = target.x === e.x && target.y === e.y;
     if (path.length <= 1 && !targetIsSelf) {
-      path = bfsPathTo(e.x, e.y, target.x, target.y, e.move, null, ghost, 0);
+      path = bfsPathTo(e.x, e.y, target.x, target.y, enemyMoveOf(e), null, ghost, 0);
     }
 
     // 路径上如果某一 tick 正好落在「玩家在该 tick 的位置」，就是贴脸/相杀，
@@ -2115,9 +2145,11 @@ async function resolvePlayerAttack() {
       const critTag = meleeCritTag(target, atk, 'cone');
       const isCrit = !!critTag;
       if (isCrit) dmg *= 2;
-      target.hp -= dmg;
+      const dealt = enemyTakeDamage(target, dmg);
       if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
       if (selectedChar === 'amiya') amiyaMarkReveal(target);
+      if (enemyThornsReflect(target)) return true;
+      if (dealt === 0) { refreshUnits(); await sleep(120); continue; }
       slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
       hitFlashCell(target.x, target.y);
       if (isCrit) {
@@ -2186,16 +2218,18 @@ async function resolvePlayerAttack() {
       if (hit) {
         const dmg = player.rangedDmg * (isCrit ? 2 : 1);
         const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
-        target.hp -= dmg;
+        const dealt = enemyTakeDamage(target, dmg);
         if (target.hp <= 0) {
           killEnemy(target, { showRing: true, showFloat: true, logText: `敌人${target.id+1}被击败（远程击杀）` });
         }
-        if (isCrit) {
-          hitFx(target.x, target.y, dmg, true, '暴击');
-          log(`玩家远程暴击敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
+        if (dealt === 0) {
+          /* 护盾词缀已吸收，伤害表现交给 enemyTakeDamage 的提示 */
+        } else if (isCrit) {
+          hitFx(target.x, target.y, dealt, true, '暴击');
+          log(`玩家远程暴击敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
         } else {
-          hitFx(target.x, target.y, dmg, false);
-          log(`玩家远程命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
+          hitFx(target.x, target.y, dealt, false);
+          log(`玩家远程命中敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
         }
       } else {
         missFx(target.x, target.y);
@@ -2248,18 +2282,20 @@ async function resolveScuffleAttacks(playerActionThisTick) {
     const critTag = scuffleFlatDmg ? '' : meleeCritTag(target, atk);
     const isCrit = !!critTag;
     if (isCrit) dmg *= 2;
-    target.hp -= dmg;
+    const dealt = enemyTakeDamage(target, dmg);
     if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
+    if (enemyThornsReflect(target)) return;
+    if (dealt === 0) { refreshUnits(); await sleep(120); continue; }
     slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
     hitFlashCell(target.x, target.y);
     if (isCrit) {
       ringFx(target.x, target.y, '#ff4500');
-      floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
-      log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+      floatText(target.x, target.y, critTag + ' -' + dealt, '#ffd700', true);
+      log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
     } else {
       ringFx(target.x, target.y, '#ffb86b');
-      floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
-      log(`趁乱攻击命中敌人${target.id+1}，造成${dmg}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
+      floatText(target.x, target.y, '-' + dealt, '#ff6b6b');
+      log(`趁乱攻击命中敌人${target.id+1}，造成${dealt}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
     }
     if (target.hp <= 0) killEnemy(target, { showRing: false });
     refreshUnits();
@@ -2528,15 +2564,19 @@ async function resolveStep(pIdxIn, eIdx) {
         const ex = em.unit.x, ey = em.unit.y;
         let pd = player.meleeDmg * 2;
         if (playerChargingThisTurn) pd *= 2;
-        em.unit.hp -= pd;
+        const pdDealt = enemyTakeDamage(em.unit, pd);
         if (playerChargingThisTurn) {
           playerChargeCausedDamage = true;
           playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 每次命中消耗 1 次冲锋额度
           playerChargeHits += 1;
         }
         if (selectedChar === 'amiya') amiyaMarkReveal(em.unit);
-        floatText(ex, ey, '暴击 -' + pd, '#ffd700', true);
-        log(`相杀！玩家对敌人${em.unit.id+1}造成暴击${pd}伤害`);
+        if (pdDealt > 0) {
+          floatText(ex, ey, '暴击 -' + pdDealt, '#ffd700', true);
+          log(`相杀！玩家对敌人${em.unit.id+1}造成暴击${pdDealt}伤害`);
+        } else {
+          log(`相杀！敌人${em.unit.id+1} 的护盾吸收了本次伤害。`);
+        }
         if (em.unit.hp <= 0) killEnemy(em.unit, { killedIds: killedEnemyIds });
         em.unit.attackedThisRound = true;
       }
@@ -2603,15 +2643,15 @@ async function resolveStep(pIdxIn, eIdx) {
       if (blockingEnemy) {
         if (playerChargingThisTurn) {
           let dmg = player.meleeDmg * 2;
-          blockingEnemy.hp -= dmg;
+          const dmgDealt = enemyTakeDamage(blockingEnemy, dmg);
           playerChargeCausedDamage = true;
           playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 撞击消耗 1 次额度
           playerChargeHits += 1;
           slashFx(blockingEnemy.x, blockingEnemy.y, '#ffd700');
           ringFx(blockingEnemy.x, blockingEnemy.y, '#ff4500');
           hitFlashCell(blockingEnemy.x, blockingEnemy.y);
-          floatText(blockingEnemy.x, blockingEnemy.y, '冲锋撞击 -' + dmg, '#ffd700', true);
-          log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmg}点伤害！（剩余 ${playerChargeBudget} 次）`);
+          floatText(blockingEnemy.x, blockingEnemy.y, '冲锋撞击 -' + dmgDealt, '#ffd700', true);
+          log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmgDealt}点伤害！（剩余 ${playerChargeBudget} 次）`);
           if (blockingEnemy.hp <= 0) {
             killEnemy(blockingEnemy, {
               showRing: false,
