@@ -1,5 +1,5 @@
 {
- "updated_at": 1793120882,
+ "updated_at": 1793121113,
  "entries": [
   {
    "id": "5648491503",
@@ -13,6 +13,13 @@
    "name": "bxia",
    "level": 3,
    "kills": 6,
+   "runs": 1
+  },
+  {
+   "id": "dev_0a1b6da2105c4978b97262e61d7f357a",
+   "name": "Coco",
+   "level": 1,
+   "kills": 3,
    "runs": 1
   },
   {
