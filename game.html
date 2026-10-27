@@ -48,6 +48,15 @@
   .unit-abs { position:absolute; left:0; top:0; width:auto; height:auto; transition: transform var(--unit-move-ms) linear; will-change: transform; border-radius:2px; }
   .unit .icon, .unit-abs .icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
   .unit .icon.ghost-icon, .unit-abs .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
+  /* 词缀 / 精英标记（ISSUE-20261028-05）：词缀做成右上角小标签，精英用金边 + 星标。
+     刻意不用 CSS filter 改图标色 —— 会把 emoji 与后续像素画（ISSUE-07）的色阶一起毁掉。 */
+  .affix-tag { position:absolute; top:0; right:0; display:flex; gap:1px; align-items:center;
+    font-size: calc(var(--cell) * 0.2); line-height:1; padding:1px 2px; border-radius:4px;
+    background: rgba(0,0,0,0.66); color:#ffd93d; font-weight:900; letter-spacing:0;
+    pointer-events:none; z-index:46; white-space:nowrap; }
+  .unit-abs.ua-elite { outline:2px solid #ffd700; outline-offset:-2px;
+    box-shadow: inset 0 0 10px rgba(255,215,0,0.45); }
+  .unit-abs.ua-elite .icon { text-shadow: 0 0 6px #ffd700; }
   .unit .hp-bar, .unit-abs .hp-bar { width: 78%; height: 3px; background: rgba(0,0,0,0.55); border-radius: 2px; margin-top: 1px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.6); }
   .unit .hp-fill, .unit-abs .hp-fill { height: 100%; border-radius: 2px; transition: width 0.25s ease; }
   .unit-abs.ua-player { outline:2px solid #4ecdc4; outline-offset:-2px; }
@@ -447,9 +456,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '20261028c',
+  build:   '20261028d',
   commit:  'unknown',
-  builtAt: '2026-10-27T19:20:38Z'
+  builtAt: '2026-10-27T20:33:51Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -484,7 +493,7 @@ window.__ARK_VERSION__ = {
  *   - 纯逻辑函数不碰 DOM；渲染函数不改战斗状态；结算函数通过返回值报告「是否致死」。
  *   - 新增角色时，只需在 CHARACTERS 里加数据 + 在「规则判定」区加它的技能分支。
  * ========================================================================= */
-/* ---- src: src/data/constants.js ---- */
+/* src: src/data/constants.js */
 /* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 487-522 行原样搬移（常量与方向表）。
  * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
 const SPAWN_CLEAR_RADIUS = 2;
@@ -530,9 +539,8 @@ const FACING_GLYPH = { '1,0': ['▶', 'r'], '-1,0': ['◀', 'l'], '0,1': ['▼',
 const ARROW_CHARS = { '0,-1': '↑', '0,1': '↓', '-1,0': '←', '1,0': '→', '1,-1': '↗', '1,1': '↘', '-1,-1': '↙', '-1,1': '↖' };
 const DIR_NAMES = { '0,-1': '上', '0,1': '下', '-1,0': '左', '1,0': '右' };
 
-/* ---- src: src/data/characters.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 524-594 行原样搬移（角色数据与派生查询函数）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/data/characters.js */
+/* P0.1-4 拆分 · 20261028b 基线 524-594 行 · 角色数据与派生查询 */
 const CHARACTERS = {
   wheelchair: {
     name: '风笛', icon: '🤺',
@@ -605,7 +613,7 @@ function charAttackType(id) {
 function isRangedChar(id) { return charAttackType(id) === 'ranged'; }
 function charDmgLabel(id) { return isRangedChar(id) ? '远程伤害' : '近战伤害'; }
 
-/* ---- src: src/data/enemies.js ---- */
+/* src: src/data/enemies.js */
 /* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 596-671 行原样搬移（敌人类型 / L1 基础面板 / 成长推演（computeEnemyGrowth））。
  * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
 const ENEMY_TYPES = ['skeleton', 'ghost', 'alien', 'shield', 'bomber'];
@@ -699,13 +707,14 @@ function pickEnemyType(level) {
   return pool[0].type;
 }
 
-/* 伤害骰：dice 形如 [n, sides]。未定义时退回面板常量的兜底。 */
+/* 伤害骰：dice 形如 [n, sides]。未定义时退回面板常量的兜底。
+ * 狂暴词缀的 +1 在掷骰之后叠加（ISSUE-20261028-05），保证「骰子本体不变、只是更疼」。 */
 function rollEnemyDamage(e, kind) {
   const dd = kind === 'ranged' ? e.rangedDice : e.meleeDice;
-  if (!dd) return kind === 'ranged' ? e.rangedDmg : e.meleeDmg;
+  if (!dd) return (kind === 'ranged' ? e.rangedDmg : e.meleeDmg) + enemyDamageBonus(e);
   let total = 0;
   for (let i = 0; i < dd.n; i++) total += 1 + randInt(dd.s);
-  return total;
+  return total + enemyDamageBonus(e);
 }
 
 /* 骰子期望值（面板展示 / AI 估算用）：n × (sides+1) / 2，四舍五入且至少 1。 */
@@ -769,9 +778,126 @@ function computeEnemyGrowth(type, level, idx, runSeed) {
   return { abilities: a, maxHp: a.con + hpBonus, level: Math.floor(level / LEVELUP_EVERY_N_LEVELS), hpBonus };
 }
 
-/* ---- src: src/rules/state.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 673-728 行原样搬移（运行时状态：关卡 / 路径 / 技力 / 闪避 / 冲锋额度 / 升级 / UI 缓存）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* =========================================================
+ * ★ 词缀与精英（ISSUE-20261028-05）
+ *
+ * 目的：让第 13 关之后不再只是「同一件事数字变大」。词缀给敌人多一个**行为维度**，
+ * 精英给单关一个**记忆点**。
+ *
+ * ★ 随机源：复用 enemyGrowthRng 工厂但换偏移量，**绝不用全局 rng()**
+ *   （全局有滚动状态，用它会导致每次重绘面板词缀抖动，违反「意图可预判」）。
+ *   种子含 level —— 与成长不同，这里不需要前缀稳定，只需要「同一 RUN_SEED 同一关一致」。
+ *
+ * ★ 首轮不做「分裂」词缀：它会在结算中途新增数组元素，破坏 enemyPathOrder 的落位顺序
+ *   与 enemies[i].id 的稳定性（历史上「敌人永久罚站」的 bug 就源于落位顺序）。
+ * ========================================================= */
+const AFFIX_DEFS = {
+  shield: { name: '护盾', short: '盾', icon: '🛡' },
+  swift:  { name: '迅捷', short: '疾', icon: '💨' },
+  frenzy: { name: '狂暴', short: '暴', icon: '🔥' },
+  thorns: { name: '荆棘', short: '棘', icon: '🌵' },
+};
+const AFFIX_ORDER = ['shield', 'swift', 'frenzy', 'thorns'];
+/* L5–L9 只放这两个（护盾/迅捷是"读得懂、不劝退"的），L10+ 再放开狂暴/荆棘 */
+const AFFIX_POOL_EARLY = ['shield', 'swift'];
+const AFFIX_POOL_LATE  = ['shield', 'swift', 'frenzy', 'thorns'];
+const AFFIX_LATE_FROM_LEVEL = 10;
+const AFFIX_CHANCE_EARLY = 0.30;
+const AFFIX_CHANCE_LATE  = 0.45;
+
+const ELITE_FROM_LEVEL = 5;      // L5 起每关至少 1 个精英
+const ELITE_HP_MUL = 1.5;        // 精英 HP 上限 ×1.5（向上取整）
+const ELITE_AFFIX_COUNT = 2;     // 精英必带 2 个词缀
+const AFFIX_SEED_OFFSET = 104729;
+
+/* 词缀/精英的专用随机工厂（与成长序列互不干扰） */
+function affixRng(level, idx, runSeed, tag) {
+  return enemyGrowthRng((((runSeed >>> 0) + level * 613 + idx * 3571 + tag * 8191 + AFFIX_SEED_OFFSET) >>> 0));
+}
+
+/* 本关精英是第几只（-1 = 本关没有精英）。确定性：同 RUN_SEED 同一关恒定。 */
+function eliteIndexFor(level, count, runSeed) {
+  if (level < ELITE_FROM_LEVEL || count <= 0) return -1;
+  const r = affixRng(level, 0, runSeed, 1)();
+  return Math.min(count - 1, Math.floor(r * count));
+}
+
+/* 生成第 level 关第 idx 只敌人的词缀方案：{ isElite, affixes[] } */
+function rollEnemyAffixPlan(level, idx, count, runSeed) {
+  const isElite = idx === eliteIndexFor(level, count, runSeed);
+  const late = level >= AFFIX_LATE_FROM_LEVEL;
+  const pool = (late ? AFFIX_POOL_LATE : AFFIX_POOL_EARLY).slice();
+  const rnd = affixRng(level, idx, runSeed, 2);
+  let want;
+  if (isElite) want = ELITE_AFFIX_COUNT;
+  else want = rnd() < (late ? AFFIX_CHANCE_LATE : AFFIX_CHANCE_EARLY) ? 1 : 0;
+  want = Math.min(want, pool.length);
+  const affixes = [];
+  for (let i = 0; i < want; i++) affixes.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  return { isElite, affixes };
+}
+
+function enemyHasAffix(e, id) {
+  return !!(e && e.affixes && e.affixes.indexOf(id) >= 0);
+}
+/* 狂暴：HP 严格低于一半时才生效（= 一半时还不生效，边界明确好测） */
+function enemyIsFrenzied(e) {
+  return enemyHasAffix(e, 'frenzy') && e.hp > 0 && e.hp * 2 < e.maxHp;
+}
+/* 实际移动力：基础 + 迅捷(+2) + 狂暴(+2)。AI 寻路与面板都读这个，别直接读 e.move。 */
+function enemyMoveOf(e) {
+  if (!e) return 1;
+  let m = e.move || 1;
+  if (enemyHasAffix(e, 'swift')) m += 2;
+  if (enemyIsFrenzied(e)) m += 2;
+  return m;
+}
+function enemyDamageBonus(e) {
+  return enemyIsFrenzied(e) ? 1 : 0;
+}
+
+/* 词缀给玩家看的短标签，如「精英 🛡盾 💨疾」 */
+function enemyAffixLabel(e) {
+  if (!e || !e.affixes || e.affixes.length === 0) return '';
+  return e.affixes.map(id => `${AFFIX_DEFS[id].icon}${AFFIX_DEFS[id].short}`).join(' ');
+}
+
+/* 玩家对敌人造成伤害的统一入口（护盾词缀在这里吃掉第一击）。
+ * 返回实际扣掉的血量（0 = 被护盾完全吸收）。 */
+function enemyTakeDamage(e, dmg) {
+  if (!e || dmg <= 0) return 0;
+  if (e.shieldLeft > 0) {
+    e.shieldLeft -= 1;
+    floatText(e.x, e.y, '护盾 -0', '#7fd1ff');
+    ringFx(e.x, e.y, '#7fd1ff');
+    log(`🛡 ${ENEMY_STATS[e.type].name}${e.id + 1} 的护盾吸收了 ${dmg} 点伤害，护盾破碎。`);
+    refreshUnits();
+    return 0;
+  }
+  e.hp -= dmg;
+  return dmg;
+}
+
+/* 荆棘：被近战命中后反弹 1 点给玩家（被打死的不反弹）。
+ * 返回 true 表示玩家因此阵亡。 */
+function enemyThornsReflect(e) {
+  if (!enemyHasAffix(e, 'thorns')) return false;
+  if (!e.alive || e.hp <= 0) return false;          // 这一击已经打死它 → 不反弹
+  if (!player || !player.alive) return false;
+  const res = damagePlayer(1, '荆棘');
+  if (res.dmg > 0) {
+    log(`🌵 ${ENEMY_STATS[e.type].name}${e.id + 1} 的荆棘反弹 1 点伤害。`);
+    floatText(player.x, player.y, '荆棘 -1', '#c77dff');
+    updateStats();
+  } else if (res.shielded) {
+    log(`🌵 荆棘反弹被护盾抵消。`);
+  }
+  if (player.hp <= 0) { player.alive = false; refreshUnits(); endGame(); return true; }
+  return false;
+}
+
+/* src: src/rules/state.js */
+/* P0.1-4 拆分 · 20261028b 基线 673-728 行 · 运行时状态（关卡 / 路径 / 技力 / 闪避 / 冲锋额度） */
 let phase = PHASE.CHAR_SELECT;
 /* 联机模式开关：'solo' 单人 / 'pvp' 对战。
  * 必须在这里声明（而不是写在文件末尾的联机区块里）：
@@ -829,9 +955,8 @@ let levelHpBonus = 0;
 // 点角色卡里的「近战伤害 / 远程伤害」→ 在地块上叠蓝色显示攻击范围
 let showRangeOverlay = false;
 
-/* ---- src: src/rules/buffs.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 730-777 行原样搬移（升级与奖励池 buff + 玩家受伤统一入口）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/rules/buffs.js */
+/* P0.1-4 拆分 · 20261028b 基线 730-777 行 · 升级与奖励池 buff / 统一受伤入口 */
 /* =========================================================
  * ★ 升级与奖励池（buff）
  * 每 3 关（通关第 3/6/9… 关）提升 1 级：HP 上限 + 体质加值、回满血，并从奖励池 3 选 1。
@@ -881,9 +1006,8 @@ function damagePlayer(amount, label = '') {
   return { dmg: amount, shielded: false, immune: false };
 }
 
-/* ---- src: src/rules/sp.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 779-809 行原样搬移（角色技力系统 / 冲锋补刀范围 / 敌人攻击欲望）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/rules/sp.js */
+/* P0.1-4 拆分 · 20261028b 基线 779-809 行 · 角色技力 / 冲锋补刀范围 / 攻击欲望 */
 // ★ 泥岩技力系统
 const FENCER_SP_MAX = 5;
 let fencerSp = 0;
@@ -916,9 +1040,8 @@ let battleRound = 1;
 // 0.6 时：骷髅 6/20×0.6=0.18、幽灵/外星人 8/20×0.6=0.24。
 const ENEMY_AGGRESSION_SCALE = 0.6;
 
-/* ---- src: src/ui/dom-refs.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 489-523 行原样搬移（DOM 引用与六维图点击热区注册（boardWrap / board / unitLayer / fxLayer / log / stats / radarCanvas 等））。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/ui/dom-refs.js */
+/* P0.1-4 拆分 · 20261028b 基线 811-845 行 · DOM 引用与六维图点击热区 */
 const boardWrap = document.getElementById('boardWrap');
 const boardEl = document.getElementById('board');
 const unitLayer = document.getElementById('unitLayer');
@@ -955,9 +1078,8 @@ radarCanvas.addEventListener('mousemove', (e) => {
 
 const unitEls = new Map();
 
-/* ---- src: src/rules/rng.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 525-551 行原样搬移（可播种伪随机 mulberry32：seedRng / rng / randInt、RNG_SEED 与本局种子 RUN_SEED）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/rules/rng.js */
+/* P0.1-4 拆分 · 20261028b 基线 847-873 行 · mulberry32 可播种随机（RNG_SEED / RUN_SEED） */
 /* =========================================================
  * ★ 可播种伪随机（mulberry32）
  * 原来直接用 Math.random，导致同一份输入无法复现同一局：
@@ -986,11 +1108,8 @@ seedRng(Date.now());   // 单人默认：时间播种
 
 function randInt(n) { return Math.floor(rng() * n); }
 
-/* ---- src: src/net/pvp-core.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 553-740 行原样搬移
- * （联机结算核心 PVP-CORE：纯函数，被 net/pvp_core_test.mjs 按区块起止标记切片 eval）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。
- * ⚠️ 本文件注释中不得再出现区块起止标记的字面量：dom_load_test 断言全文各仅 1 处。 */
+/* src: src/net/pvp-core.js */
+/* P0.1-4 拆分 · 20261028b 基线 875-1062 行 · PVP-CORE 联机结算核心（勿在注释中复写区块起止标记） */
 /* ==== PVP-CORE BEGIN ====
  * 联机对战的结算核心：纯函数，不碰 DOM、不读全局变量、不用全局 rng()。
  *
@@ -1180,10 +1299,8 @@ function pvpResolveTurn(chars, unitsIn, plans, seed) {
 }
 //#PVP_CORE_END
 
-/* ---- src: src/ui/tools.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 489-534 行原样搬移
- * （基础工具与战斗日志：dist / cheb / key / LOG_MAX / autoLogType / makeLogLine / renderLogAll / clearLog / log / sleep / inBounds / findLastIndex）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/ui/tools.js */
+/* P0.1-4 拆分 · 20261028b 基线 1063-1108 行 · 距离工具与战斗日志系统 */
 function dist(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
 function cheb(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
 function key(x, y) { return x + ',' + y; }
@@ -1231,7 +1348,7 @@ function findLastIndex(arr, predicate) {
   return -1;
 }
 
-/* ---- src: src/rules/dnd.js ---- */
+/* src: src/rules/dnd.js */
 /* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 536-609 行原样搬移
  * （泥岩技力获取 + DnD 六属性系统：abilityMod / computeAC / attackRoll / 掷骰检定 / recomputePlayerDerivedStats / 敌人 L1 基础面板只读查询）。
  * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
@@ -1315,10 +1432,8 @@ function computeEnemyMove(type) {
   return Math.max(1, Math.floor(ENEMY_STATS[type].abilities.dex / 2));
 }
 
-/* ---- src: src/ui/radar.js ---- */
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 611-776 行原样搬移
- * （六维雷达图 drawRadar（canvas 绘制 + 属性文字命中框 radarLabelHits））。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* src: src/ui/radar.js */
+/* P0.1-4 拆分 · 20261028b 基线 1185-1350 行 · 六维雷达图 drawRadar */
 /* =========================================================
  * 六维雷达图
  * ========================================================= */
@@ -1486,6 +1601,8 @@ function drawRadar() {
   // 等级已移到角色卡「名字右侧」显示（金色 Lv.N），六维图中心不再绘制，保持留白。
 }
 
+/* src: src/rules/path.js */
+/* P0.1-4 拆分 · 20261028b 基线 1352-1564 行 · 路径判定 / 冲锋计算 / 步数统计 */
 /* =========================================================
  * 基础工具
  * ========================================================= */
@@ -1700,6 +1817,8 @@ function countWaitSteps(path) {
   return n;
 }
 
+/* src: src/rules/actions.js */
+/* P0.1-4 拆分 · 20261028b 基线 1566-1621 行 · 动作机制与有效 AC 计算 */
 /* =========================================================
  * ★ 动作机制（技能触发系统重做后）
  *
@@ -1757,6 +1876,8 @@ function playerEffectiveAC() {
   return ac;
 }
 
+/* src: src/ui/units.js */
+/* P0.1-4 拆分 · 20261028b 基线 1623-1768 行 · 动作预算与单位渲染 */
 /* ★ 动作预算：一回合只能进行一次动作。
  * 闪避节点与攻击节点互斥 —— 闪避后不能再攻击，攻击后也不能再闪避。
  * scout 奖励提供的额外攻击次数同样受动作预算限制。
@@ -1810,6 +1931,9 @@ function renderUnits() {
       icon, hp: e.hp, maxHp: e.maxHp,
       isPlayer: false, isGhost, facing: e.facing,
       stunTurns: e.stunTurns || 0,
+      /* 词缀 / 精英（ISSUE-20261028-05）：标签文字由数据层拼，渲染层只负责显示 */
+      isElite: !!e.isElite,
+      affixTag: enemyAffixLabel(e),
     });
   }
   /* 联机对战：对手是玩家控制的单位，不是敌人，单独一个渲染条目 */
@@ -1831,6 +1955,7 @@ function renderUnits() {
       <div class="facing-ind" style="display:none"></div>
       <div class="icon"></div>
       <div class="hp-bar"><div class="hp-fill"></div></div>
+      <div class="affix-tag" style="display:none"></div>
     `;
     unitLayer.appendChild(el);
     unitEls.set(u.key, {
@@ -1838,6 +1963,7 @@ function renderUnits() {
       icon: el.querySelector('.icon'),
       hpFill: el.querySelector('.hp-fill'),
       facingEl: el.querySelector('.facing-ind'),
+      affixEl: el.querySelector('.affix-tag'),
       lastPos: null,
     });
   }
@@ -1871,6 +1997,12 @@ function renderUnits() {
     rec.lastPos = { left: pos.left, top: pos.top };
     if (rec.icon.textContent !== u.icon) rec.icon.textContent = u.icon;
     rec.icon.classList.toggle('ghost-icon', !!u.isGhost);
+    /* 词缀标签：无词缀时藏起来，避免空格子挂一个空胶囊 */
+    if (rec.affixEl) {
+      const tagText = u.affixTag || '';
+      if (rec.affixEl.textContent !== tagText) rec.affixEl.textContent = tagText;
+      rec.affixEl.style.display = tagText ? 'flex' : 'none';
+    }
     const pct = u.maxHp > 0 ? Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100)) : 0;
     rec.hpFill.style.width = pct + '%';
     rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : (u.isPeer ? '#e8a33d' : '#e74c3c');
@@ -1897,6 +2029,7 @@ function renderUnits() {
       rec.el.classList.remove('ua-player', 'ua-charging', 'ua-attacked');
       rec.el.classList.toggle('ua-debug', debugMode);
       rec.el.classList.toggle('ua-stunned', u.stunTurns > 0);
+      rec.el.classList.toggle('ua-elite', !!u.isElite);
     }
   }
   const seen = new Set(toRender.map(u => u.key));
@@ -1905,6 +2038,8 @@ function renderUnits() {
   }
 }
 
+/* src: src/rules/reset.js */
+/* P0.1-4 拆分 · 20261028c 基线 1908-2003 行 · 状态重置（整局 / 整轮两级收敛）：freshBuffs / clearLevelUpOverlay / resetSkillState / resetRunProgress / resetTurnState / createPlayerStats / createPlayerUnit / syncPlayerFromStats */
 /* =========================================================
  * ★ 状态重置：开局 / 换角色 / 通关 / 回合切换
  * 原来同一个变量表在 initCharSelect、selectCharacter、initLevel、
@@ -2002,6 +2137,8 @@ function syncPlayerFromStats() {
   player.rangedProf = playerStats.rangedProf;
 }
 
+/* src: src/ui/char-select.js */
+/* P0.1-4 拆分 · 20261028c 基线 2005-2050 行 · 角色选择流程：initCharSelect / selectCharacter */
 function initCharSelect() {
   phase = PHASE.CHAR_SELECT;
   debugMode = false;
@@ -2049,6 +2186,8 @@ function selectCharacter(charId) {
   initLevel();
 }
 
+/* src: src/ui/board-fx.js */
+/* P0.1-4 拆分 · 20261028c 基线 2052-2340 行 · 棋盘几何与特效：findPath / getBoundingBox / getCellEl / cellCenter / unitCenter / facingIndicatorHtml / unitHtml / hasLineOfSight / canRangedAttack / playerAttackRangeCells / 敌人首步箭头 / floatText / ringFx / slashFx / animateBullet / hitFx / missFx / refreshUnits */
 function findPath(startX, startY, targetX, targetY, maxSteps = 99) {
   if (startX === targetX && startY === targetY) return [];
   const queue = [{ x: startX, y: startY, path: [] }];
@@ -2362,6 +2501,12 @@ function killEnemy(e, opts = {}) {
   if (showRing) ringFx(e.x, e.y, '#ff6b6b');
   if (showFloat) floatText(e.x, e.y, floatMsg, '#ff6b6b');
   if (logText) log(logText === true ? `敌人${e.id + 1}被击败` : logText);
+  /* 精英击杀奖励（ISSUE-20261028-05）：在死亡格留下一个恢复道具 ❤️。
+   * 只碰 rewardItems 数组，不新增单位、不动 enemyPathOrder —— 这是首轮排除「分裂」词缀的原因。 */
+  if (e.isElite && typeof rewardItems !== 'undefined') {
+    if (!rewardItems.some(r => r.x === e.x && r.y === e.y)) rewardItems.push({ x: e.x, y: e.y });
+    log('★ 精英被击败，掉落了恢复道具 ❤️！');
+  }
   if (amiyaSp && selectedChar === 'amiya') amiyaGainKillBonus();
   return true;
 }
@@ -2437,10 +2582,15 @@ function triggerFencerCounter() {
   if (targets.length > 0) {
     const target = targets[randInt(targets.length)];
     const dmg = player.meleeDmg * 2;
-    target.hp -= dmg;
-    slashFx(target.x, target.y, '#ffd700');
-    hitFx(target.x, target.y, dmg, true, '反击暴击');
-    log(`泥岩触发反击，对敌人${target.id+1}造成${dmg}点暴击伤害！`);
+    /* 护盾词缀（ISSUE-20261028-05）：第一击被完全吸收 */
+    const dealt = enemyTakeDamage(target, dmg);
+    if (dealt > 0) {
+      slashFx(target.x, target.y, '#ffd700');
+      hitFx(target.x, target.y, dealt, true, '反击暴击');
+      log(`泥岩触发反击，对敌人${target.id+1}造成${dealt}点暴击伤害！`);
+    }
+    /* 荆棘词缀：近战命中后反弹（被打死的不反弹，函数内已判） */
+    if (enemyThornsReflect(target)) return;
     if (target.hp <= 0 && target.alive) {
       target.alive = false;
       floatText(target.x, target.y, '击杀!', '#ff6b6b');
@@ -2497,11 +2647,15 @@ async function executeAmiyaBurst(count) {
     amiyaMarkReveal(target);
     await animateBullet({ x: player.x, y: player.y }, 'enemy-' + target.id, target, isCrit, false, 'player');
     const dmg = player.rangedDmg * 2;
-    target.hp -= dmg;
+    const dealt = enemyTakeDamage(target, dmg);
     /* 精神爆发的击杀不给技力（否则倾泻过程中边杀边攒，会滚雪球） */
     if (target.hp <= 0) target.alive = false;
-    hitFx(target.x, target.y, dmg, true, '爆发暴击');
-    log(`「精神爆发」${i + 1}/${count}：必定命中·必定暴击，对敌人${target.id + 1}造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+    if (dealt > 0) {
+      hitFx(target.x, target.y, dealt, true, '爆发暴击');
+      log(`「精神爆发」${i + 1}/${count}：必定命中·必定暴击，对敌人${target.id + 1}造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
+    } else {
+      log(`「精神爆发」${i + 1}/${count}：被护盾词缀吸收，未造成伤害。`);
+    }
     refreshUnits();
     await sleep(180);
   }
@@ -2551,6 +2705,8 @@ function amiyaMarkReveal(enemy) {
   log(`阿米娅标记敌人${enemy.id + 1}：下一次移动意图额外显示 3 步（累计 +${enemy.amiyaRevealBonus}）。`);
 }
 
+/* src: src/rules/mapgen.js */
+/* P0.1-4 拆分 · 20261028c 基线（templates/game.html）701-927 行 · 地图生成：bfsReachable / growRegion / smoothRegion / clearSpawnArea / countWalkable / placeObstacles / generateMap（纯逻辑，不碰 DOM） */
 function bfsReachable(m, sx, sy) {
   const visited = new Set();
   const q = [[sx, sy]];
@@ -2816,7 +2972,10 @@ function initLevel() {
       const eProf = getEnemyProf(type);
       const eAC = computeAC(eAbilities);
       const eMove = Math.max(1, Math.floor(eAbilities.dex / 2));
-      const hp = grow.maxHp;
+      /* 词缀与精英（ISSUE-20261028-05）：L5 起每关 1 个精英（HP×1.5、必带 2 词缀），
+       * 普通敌人按关卡概率带 1 个词缀。全部由 RUN_SEED 派生 → 同种子重开完全一致。 */
+      const affixPlan = rollEnemyAffixPlan(level, i, numEnemies, RUN_SEED);
+      const hp = affixPlan.isElite ? Math.ceil(grow.maxHp * ELITE_HP_MUL) : grow.maxHp;
       /* 伤害骰（ISSUE-20261028-04）：结算走 rollEnemyDamage(e, kind) 掷骰，
        * meleeDmg/rangedDmg 保留为**骰子期望值**，供 AI 估值与日志面板展示。 */
       const baseDice = ENEMY_STATS[type].dice || {};
@@ -2835,6 +2994,9 @@ function initLevel() {
         meleeDice,
         rangedDice,
         explodeDmg: ENEMY_STATS[type].explode || 0,
+        isElite: affixPlan.isElite,
+        affixes: affixPlan.affixes,
+        shieldLeft: affixPlan.affixes.indexOf('shield') >= 0 ? 1 : 0,
         alive: true, attackedThisRound: false,
         facing: faceToward(s, player),
         amiyaRevealBonus: 0,
@@ -2871,7 +3033,7 @@ function initLevel() {
     log(`敌人面板（第 ${level} 关 · 每个敌人已成长 ${level} 次属性${eLv > 0 ? ` · 等级 Lv.${eLv}` : ''}）：`);
     enemies.forEach(e => {
       const a = e.abilities;
-      log(`  ${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${e.move} HP${e.maxHp} 近战${e.meleeDice ? diceLabel(e.meleeDice) + '(' + e.meleeDmg + ')' : e.meleeDmg} 远程${e.rangedDice ? diceLabel(e.rangedDice) + '(' + e.rangedDmg + ')' : e.rangedDmg}${e.explodeDmg ? ' 自爆' + e.explodeDmg : ''}`);
+      log(`  ${e.isElite ? '★精英 ' : ''}${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${enemyMoveOf(e)} HP${e.maxHp} 近战${e.meleeDice ? diceLabel(e.meleeDice) + '(' + e.meleeDmg + ')' : e.meleeDmg} 远程${e.rangedDice ? diceLabel(e.rangedDice) + '(' + e.rangedDmg + ')' : e.rangedDmg}${e.explodeDmg ? ' 自爆' + e.explodeDmg : ''}${e.affixes.length ? '　词缀：' + enemyAffixLabel(e) : ''}`);
     });
     log(`规则：攻击检定 = d20 + 属性修正 + 熟练加值 ≥ 目标AC；自然20暴击；自然1必失。`);
     if (level === 1) {
@@ -2928,6 +3090,8 @@ function applySidebarWidth(w, save) {
   if (!isNaN(saved) && saved > 0) applySidebarWidth(saved, false);
   else fitSidebarToWidth();
 })();
+/* src: src/ui/layout.js 第 1 段/beforeLayoutV */
+/* P0.1-4 拆分 · 20261028c 基线（templates/game.html）1078-1161 行 · 竖版地图高度比例拖动：gameEl / MAP_V_KEY / mapVRatio / vGameBox / vMapBounds / applyMapVHeight / syncMapVHeight / clearMapVHeight / 拖动状态与 endSideDrag */
 // ===== 竖版（layout-v）：地图高度比例，可上下拖动 =====
 const gameEl = document.getElementById('game');
 const MAP_V_KEY = 'ark_map_v_ratio';
@@ -4036,7 +4200,7 @@ function generateEnemyPaths() {
   // 关键修复：还没轮到的敌人先按「原地不动」把所有 tick 都预留住。
   // 旧版只预留 t=0，第一个 tick 却去查 t=1，于是计划层允许踩同伴、结算层 occNow 又拦下来，
   // 路径被 slice 截断 → 窄走廊里幽灵被前方骷髅永久堵死（实测 25 回合零进展）。
-  const maxT = Math.max(...aliveList.map(e => e.move)) + 1;
+  const maxT = Math.max(...aliveList.map(e => enemyMoveOf(e))) + 1;
   const occ = [];
   for (let t = 0; t <= maxT; t++) occ.push(new Set());
   for (const e of aliveList) {
@@ -4065,7 +4229,7 @@ function generateEnemyPaths() {
     // 拖回合会让敌人越来越激进，20 回合后 10 感知的敌人就到顶。
     const aggression = enemyAggression(wis);
     // ★ 预判：目标取玩家路径上更靠后的位置（WIS 越高越靠后）
-    let target = pickEnemyTarget(playerPositions, aggression, e.move);
+    let target = pickEnemyTarget(playerPositions, aggression, enemyMoveOf(e));
     // ★ 补丁：角色周围 8 格（切比雪夫距离 ≤1）内的敌人，寻路目标固定为角色所在格，
     // 不会再预判到玩家路径末端、也不会随重绘改变。
     if (Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1) {
@@ -4076,7 +4240,7 @@ function generateEnemyPaths() {
     // 旧版这里还有一段「到达目标后追玩家实际位置」，那段会从目标点折返，
     // 实测 500 局面里 24 次出现 A→B→A 的来回抖动，已移除：
     // 敌人提前到达预判点后原地待命，玩家自己会走进来（这本身就是最好的拦截）。
-    let path = bfsPathTo(e.x, e.y, target.x, target.y, e.move, isOccupiedAt, ghost, 0);
+    let path = bfsPathTo(e.x, e.y, target.x, target.y, enemyMoveOf(e), isOccupiedAt, ghost, 0);
 
     // ★ 反罚站补丁：同伴占位可能把窄口/凹槽里的敌人完全堵死（BFS 一步都扩展不出去、返回原地），
     // 且每回合重算结果相同 → 敌人永久罚站（实测外星人距离玩家 5 格、几何可达，连站 11 回合不动）。
@@ -4084,7 +4248,7 @@ function generateEnemyPaths() {
     // 也不要原地站死。目标本来就是自己格（真没路可走）的不算堵塞。
     const targetIsSelf = target.x === e.x && target.y === e.y;
     if (path.length <= 1 && !targetIsSelf) {
-      path = bfsPathTo(e.x, e.y, target.x, target.y, e.move, null, ghost, 0);
+      path = bfsPathTo(e.x, e.y, target.x, target.y, enemyMoveOf(e), null, ghost, 0);
     }
 
     // 路径上如果某一 tick 正好落在「玩家在该 tick 的位置」，就是贴脸/相杀，
@@ -4277,9 +4441,11 @@ async function resolvePlayerAttack() {
       const critTag = meleeCritTag(target, atk, 'cone');
       const isCrit = !!critTag;
       if (isCrit) dmg *= 2;
-      target.hp -= dmg;
+      const dealt = enemyTakeDamage(target, dmg);
       if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
       if (selectedChar === 'amiya') amiyaMarkReveal(target);
+      if (enemyThornsReflect(target)) return true;
+      if (dealt === 0) { refreshUnits(); await sleep(120); continue; }
       slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
       hitFlashCell(target.x, target.y);
       if (isCrit) {
@@ -4348,16 +4514,18 @@ async function resolvePlayerAttack() {
       if (hit) {
         const dmg = player.rangedDmg * (isCrit ? 2 : 1);
         const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
-        target.hp -= dmg;
+        const dealt = enemyTakeDamage(target, dmg);
         if (target.hp <= 0) {
           killEnemy(target, { showRing: true, showFloat: true, logText: `敌人${target.id+1}被击败（远程击杀）` });
         }
-        if (isCrit) {
-          hitFx(target.x, target.y, dmg, true, '暴击');
-          log(`玩家远程暴击敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
+        if (dealt === 0) {
+          /* 护盾词缀已吸收，伤害表现交给 enemyTakeDamage 的提示 */
+        } else if (isCrit) {
+          hitFx(target.x, target.y, dealt, true, '暴击');
+          log(`玩家远程暴击敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
         } else {
-          hitFx(target.x, target.y, dmg, false);
-          log(`玩家远程命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
+          hitFx(target.x, target.y, dealt, false);
+          log(`玩家远程命中敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
         }
       } else {
         missFx(target.x, target.y);
@@ -4410,18 +4578,20 @@ async function resolveScuffleAttacks(playerActionThisTick) {
     const critTag = scuffleFlatDmg ? '' : meleeCritTag(target, atk);
     const isCrit = !!critTag;
     if (isCrit) dmg *= 2;
-    target.hp -= dmg;
+    const dealt = enemyTakeDamage(target, dmg);
     if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
+    if (enemyThornsReflect(target)) return;
+    if (dealt === 0) { refreshUnits(); await sleep(120); continue; }
     slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
     hitFlashCell(target.x, target.y);
     if (isCrit) {
       ringFx(target.x, target.y, '#ff4500');
-      floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
-      log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+      floatText(target.x, target.y, critTag + ' -' + dealt, '#ffd700', true);
+      log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
     } else {
       ringFx(target.x, target.y, '#ffb86b');
-      floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
-      log(`趁乱攻击命中敌人${target.id+1}，造成${dmg}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
+      floatText(target.x, target.y, '-' + dealt, '#ff6b6b');
+      log(`趁乱攻击命中敌人${target.id+1}，造成${dealt}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
     }
     if (target.hp <= 0) killEnemy(target, { showRing: false });
     refreshUnits();
@@ -4690,15 +4860,19 @@ async function resolveStep(pIdxIn, eIdx) {
         const ex = em.unit.x, ey = em.unit.y;
         let pd = player.meleeDmg * 2;
         if (playerChargingThisTurn) pd *= 2;
-        em.unit.hp -= pd;
+        const pdDealt = enemyTakeDamage(em.unit, pd);
         if (playerChargingThisTurn) {
           playerChargeCausedDamage = true;
           playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 每次命中消耗 1 次冲锋额度
           playerChargeHits += 1;
         }
         if (selectedChar === 'amiya') amiyaMarkReveal(em.unit);
-        floatText(ex, ey, '暴击 -' + pd, '#ffd700', true);
-        log(`相杀！玩家对敌人${em.unit.id+1}造成暴击${pd}伤害`);
+        if (pdDealt > 0) {
+          floatText(ex, ey, '暴击 -' + pdDealt, '#ffd700', true);
+          log(`相杀！玩家对敌人${em.unit.id+1}造成暴击${pdDealt}伤害`);
+        } else {
+          log(`相杀！敌人${em.unit.id+1} 的护盾吸收了本次伤害。`);
+        }
         if (em.unit.hp <= 0) killEnemy(em.unit, { killedIds: killedEnemyIds });
         em.unit.attackedThisRound = true;
       }
@@ -4765,15 +4939,15 @@ async function resolveStep(pIdxIn, eIdx) {
       if (blockingEnemy) {
         if (playerChargingThisTurn) {
           let dmg = player.meleeDmg * 2;
-          blockingEnemy.hp -= dmg;
+          const dmgDealt = enemyTakeDamage(blockingEnemy, dmg);
           playerChargeCausedDamage = true;
           playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 撞击消耗 1 次额度
           playerChargeHits += 1;
           slashFx(blockingEnemy.x, blockingEnemy.y, '#ffd700');
           ringFx(blockingEnemy.x, blockingEnemy.y, '#ff4500');
           hitFlashCell(blockingEnemy.x, blockingEnemy.y);
-          floatText(blockingEnemy.x, blockingEnemy.y, '冲锋撞击 -' + dmg, '#ffd700', true);
-          log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmg}点伤害！（剩余 ${playerChargeBudget} 次）`);
+          floatText(blockingEnemy.x, blockingEnemy.y, '冲锋撞击 -' + dmgDealt, '#ffd700', true);
+          log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmgDealt}点伤害！（剩余 ${playerChargeBudget} 次）`);
           if (blockingEnemy.hp <= 0) {
             killEnemy(blockingEnemy, {
               showRing: false,
@@ -5118,6 +5292,8 @@ function showLevelUpOverlay(conMod) {
   });
 }
 
+/* src: src/ui/chrome.js 第 1 段/beforeLogPanel */
+/* P0.1-4 拆分 · 20261028c 基线（templates/game.html）3268-3380 行 · 设置与日志面板外壳：日志面板 DOM ref / LOG_POS_KEY / setOpenBtn / clampLogPanelPos / setSettingsOpen / bindLogDrag / 重开 / 主页按钮 */
 /* 战斗日志：左上角悬浮窗（可拖动），标题栏显示版本号；开关是左上角 ⚙（同一位置切换） */
 const logPanelEl   = document.getElementById('logPanel');
 const logBarEl     = document.getElementById('logBar');
@@ -5232,6 +5408,8 @@ if (setHomeBtn) setHomeBtn.addEventListener('click', (e) => {
   initCharSelect();
 });
 
+/* src: src/ui/layout.js 第 2 段/beforeLayoutToggle */
+/* P0.1-4 拆分 · 20261028c 基线（templates/game.html）3382-3428 行 · 横竖版切换：LAYOUT_KEY / currentLayout / setLayout / 旋转按钮 / initLayoutMode */
 // 「旋转」：切换横版（地图左/UI右）↔ 竖版（地图上/UI下）
 const LAYOUT_KEY = 'ark_layout';
 function currentLayout() {
@@ -5743,6 +5921,8 @@ function pvpClosePanel() {
   if (m) m.classList.remove('open');
 }
 
+/* src: src/ui/chrome.js 第 2 段/beforeDlcChrome */
+/* P0.1-4 拆分 · 20261028c 基线（templates/game.html）3893-3959 行 · DLC 外壳接管：patchDLCChrome（隐藏外壳 #btnHome / 劫持 showHint / #ghint 同步） */
 /* 嵌入 DLC 外壳（同源 iframe）时，由游戏侧统一接管两处外壳 UI：
  *  - 隐藏外壳自带的悬浮「🏠 主页」按钮（主页已并入「设置」面板，避免重复）
  *  - 顶部绿色提示条 #hint：点击即消失 + 显示时长缩短到 ~2.2s
