@@ -1,5 +1,5 @@
 {
- "updated_at": 1793130598,
+ "updated_at": 1793131593,
  "entries": [
   {
    "id": "5648491503",
@@ -7,6 +7,13 @@
    "level": 6,
    "kills": 19,
    "runs": 7
+  },
+  {
+   "id": "dev_795886eefd284d10919125f63b913f0f",
+   "name": "雨雨",
+   "level": 3,
+   "kills": 8,
+   "runs": 1
   },
   {
    "id": "7283974274",
@@ -28,13 +35,6 @@
    "level": 1,
    "kills": 1,
    "runs": 2
-  },
-  {
-   "id": "dev_795886eefd284d10919125f63b913f0f",
-   "name": "雨雨",
-   "level": 0,
-   "kills": 0,
-   "runs": 0
   }
  ],
  "bot_username": "yu7_bot",
