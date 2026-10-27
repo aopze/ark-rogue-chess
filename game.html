@@ -10,9 +10,6 @@
   body { font-family: system-ui, -apple-system, "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; background:#1a1a2e; color:#eee; margin:0; padding:0; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; display:flex; flex-direction:column; touch-action: manipulation; }
   #topbar { display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0; padding: 4px 12px; }
   #topbar h1 { font-size:18px; margin:4px 0; text-align:center; }
-  #resetBtn { position:absolute; right:12px; top:50%; transform:translateY(-50%); padding:5px 12px; font-size:13px; font-weight:700; color:#cfe6ff; background:#26263f; border:1px solid #3a3a5c; border-radius:8px; cursor:pointer; transition:background .15s, border-color .15s; }
-  #resetBtn:hover { background:#34345a; border-color:#4a4a70; color:#fff; }
-  #resetBtn:active { background:#1c1c30; }
   #game { display:flex; gap:8px; padding: 8px 16px 16px 16px; flex-grow: 1; min-height: 0; justify-content:center; }
   #boardWrap { flex-grow: 1; display: flex; justify-content: center; align-items: center; position:relative; min-width: 0; min-height: 0; overflow: hidden; }
   #board { display:grid; gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; position: relative; }
@@ -168,29 +165,31 @@
   #footBar { flex-shrink:0; }
   #controls { flex-shrink: 0; display:flex; flex-direction:column; gap:8px; min-height: 90px; }
   #controls:empty { min-height: 0; }
-  /* ---- 战斗日志：底边抽屉，默认收起，点 📜 才弹出（浮层，不占布局高度） ---- */
+  /* ---- 战斗日志：左上角悬浮窗（可拖动，标题栏带重开/旋转/折叠） ---- */
   #logPanel {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1001;
-    height: 42vh; max-height: 42vh;
+    position: fixed; left: 8px; top: 4px; z-index: 1001;
+    width: 268px; max-width: calc(100vw - 16px);
     display: flex; flex-direction: column;
-    background: rgba(10,10,16,0.97);
-    border-top: 1px solid #3a3a55; border-radius: 12px 12px 0 0;
-    box-shadow: 0 -8px 32px rgba(0,0,0,.6);
-    transform: translateY(104%); transition: transform .24s ease;
-    pointer-events: none;
+    background: rgba(12,12,20,0.96);
+    border: 1px solid #3a3a55; border-radius: 10px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.55);
+    overflow: hidden;
   }
-  #logPanel.open { transform: translateY(0); pointer-events: auto; }
-  #logBar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px 6px 14px; font-size: 12px; font-weight: 800; color: #9a9ab5; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,.06); }
-  #logClose { width: 26px; height: 26px; padding: 0; font-size: 13px; line-height: 1; border-radius: 50%; background: #2c2c47; color: #ccc; border: 1px solid #44445f; display: flex; align-items: center; justify-content: center; cursor: pointer; }
-  #log { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px 16px; font-size: 12.5px; line-height: 1.5; color: #ddd; white-space: pre-wrap; contain: content; }
-  #logToggle {
-    position: fixed; right: 10px; bottom: 10px; z-index: 1002;
-    width: 40px; height: 40px; padding: 0; font-size: 17px; line-height: 1;
-    border-radius: 50%; background: #22223a; color: #cfcfe6; border: 1px solid #44445f;
-    display: flex; align-items: center; justify-content: center; cursor: pointer;
-    box-shadow: 0 4px 14px rgba(0,0,0,.45); opacity: .9;
-  }
-  #logToggle:active { transform: scale(.95); }
+  #logPanel.folded #log { display: none; }
+  #logPanel.folded #logBar { border-bottom: none; }
+  /* ---- 布局模式：layout-h 地图左/UI右（桌面默认）；layout-v 地图上/UI下（竖版） ---- */
+  body.layout-v #game { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
+  body.layout-v #dragHandle { display: none; }
+  body.layout-v #boardWrap { width: 100%; flex: 0 0 auto; height: min(62vh, 100%); }
+  body.layout-v #sidebar { width: 100%; max-width: 100%; height: auto; flex: 1 1 auto; min-height: 0; }
+  body.layout-v #sidebar > * { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+  #logBar { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 8px; font-size: 12px; font-weight: 800; color: #9a9ab5; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,.06); cursor: grab; user-select: none; touch-action: none; }
+  #logPanel.dragging #logBar { cursor: grabbing; }
+  #logGrip { color: #5a5a80; font-size: 12px; letter-spacing: -2px; }
+  #logTitle { flex: 1 1 auto; white-space: nowrap; }
+  #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
+  #logBar button:hover { background: #3a3a5c; color: #fff; }
+  #log { max-height: 38vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px 10px; font-size: 12.5px; line-height: 1.5; color: #ddd; white-space: pre-wrap; contain: content; }
   button { padding:10px 12px; font-size:14px; cursor:pointer; border:none; border-radius:4px; background:#4ecdc4; color:#111; font-weight:bold; touch-action: manipulation; }
   button:disabled { background:#555; color:#999; cursor:not-allowed; }
   .stat { font-size:13px; line-height:1.45; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
@@ -250,6 +249,16 @@
       flex: none;
     }
     #dragHandle { display: none; }
+    /* 手机端布局模式：layout-h 左右分栏 / layout-v 上下堆叠 */
+    body.layout-h #game { display: flex; flex-direction: row; align-items: stretch; gap: 6px; padding: 4px; }
+    body.layout-h #boardWrap { width: auto; height: auto; aspect-ratio: auto; max-height: none; flex: 1 1 55%; }
+    body.layout-h #sidebar { width: 45%; flex: 0 0 45%; height: 100%; max-height: none; }
+    body.layout-h #dragHandle { display: none; }
+    body.layout-h #radarCanvas { width: 104px; height: 104px; }
+    body.layout-v #game { display: flex; flex-direction: column; gap: 6px; padding: 4px; }
+    body.layout-v #boardWrap { width: 100%; height: auto; aspect-ratio: 1 / 1.12; max-height: 58vh; flex: none; }
+    body.layout-v #sidebar { width: 100%; height: auto; max-height: none; flex: 1 1 auto; }
+    body.layout-v #sidebar > * { max-width: 100%; }
     #sidebar {
       width: 100%;
       height: 100%;
@@ -305,8 +314,8 @@
       min-height: auto;
     }
     #controls .start-btn { padding: 12px; font-size: 15px; }
-    #logPanel { height: 58vh; max-height: 58vh; }
-    #logToggle { right: 8px; bottom: 8px; width: 34px; height: 34px; font-size: 15px; }
+    #logPanel { width: min(268px, calc(100vw - 16px)); }
+    #log { max-height: 34vh; }
     .float-text { font-size:16px; }
     .float-text.crit { font-size:20px; }
     .float-text.crosskill { font-size:20px; }
@@ -318,7 +327,6 @@
 
 <div id="topbar">
   <h1>方舟战棋</h1>
-  <button id="resetBtn" title="重开游戏（回到选角界面）">⟲ 重开</button>
 </div>
 <div id="game">
   <div id="boardWrap">
@@ -341,12 +349,17 @@
   </div>
 </div>
 
-<!-- 战斗日志：底边抽屉（默认收起，点右下角 📜 才弹出） -->
+<!-- 战斗日志：左上角悬浮窗（可拖动，标题栏右侧有 重开 / 旋转） -->
 <div id="logPanel">
-  <div id="logBar"><span>战斗日志</span><button id="logClose" aria-label="关闭日志">✕</button></div>
+  <div id="logBar">
+    <span id="logGrip" title="拖动移动窗口">⣿</span>
+    <span id="logTitle">战斗日志</span>
+    <button id="logResetBtn" title="重开游戏（回到选角界面）">⟲ 重开</button>
+    <button id="logRotateBtn" title="旋转屏幕 / 切换布局">⟳ 旋转</button>
+    <button id="logFoldBtn" title="折叠 / 展开">▾</button>
+  </div>
   <div id="log"></div>
 </div>
-<button id="logToggle" aria-label="日志">📜</button>
 
 <script>
 const SPAWN_CLEAR_RADIUS = 2;
@@ -2710,7 +2723,7 @@ function killEnemyByDebug(enemy) {
 
 document.addEventListener('pointerdown', (e) => {
   if (phase !== 'planning' || isMoving) return;
-  if (e.target.closest('button') || e.target.closest('#heroKv') || e.target.closest('#logToggle') || e.target.closest('#logClose') || e.target.closest('#logPanel')) return;
+  if (e.target.closest('button') || e.target.closest('#heroKv') || e.target.closest('#logPanel')) return;
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) {
     playerPath = [{ x: player.x, y: player.y }];
@@ -4044,36 +4057,129 @@ function showLevelUpOverlay(conMod) {
   });
 }
 
-/* 战斗日志：底边抽屉，默认收起，只有点按钮才弹出（不再占用布局高度） */
-const logToggleBtn = document.getElementById('logToggle');
-const logCloseBtn  = document.getElementById('logClose');
+/* 战斗日志：左上角悬浮窗（可拖动 / 可折叠），标题栏右侧有「重开」「旋转」 */
 const logPanelEl   = document.getElementById('logPanel');
+const logBarEl     = document.getElementById('logBar');
+const logFoldBtn   = document.getElementById('logFoldBtn');
+const logResetBtn  = document.getElementById('logResetBtn');
+const logRotateBtn = document.getElementById('logRotateBtn');
+const LOG_POS_KEY = 'ark_log_pos';
 
-function setLogOpen(open) {
-  logPanelEl.classList.toggle('open', open);
-  // 抽屉自带 ✕，打开时收起右下角浮标，避免两个关闭按钮
-  logToggleBtn.style.display = open ? 'none' : 'flex';
-  if (open) logEl.scrollTop = logEl.scrollHeight;
+// 折叠 / 展开
+function setLogFolded(folded) {
+  logPanelEl.classList.toggle('folded', folded);
+  logFoldBtn.textContent = folded ? '▸' : '▾';
+  logFoldBtn.title = folded ? '展开日志' : '折叠日志';
 }
-logToggleBtn.addEventListener('click', (e) => {
-  e.preventDefault();
-  setLogOpen(!logPanelEl.classList.contains('open'));
+logFoldBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setLogFolded(!logPanelEl.classList.contains('folded'));
 });
-logCloseBtn.addEventListener('click', (e) => {
-  e.preventDefault();
-  setLogOpen(false);
+setLogFolded(true);
+
+// 拖动移动悬浮窗（按住标题栏）
+(function bindLogDrag() {
+  let dragging = false, dx = 0, dy = 0;
+  const start = (e) => {
+    if (e.target.closest('button')) return;
+    dragging = true;
+    const r = logPanelEl.getBoundingClientRect();
+    dx = e.clientX - r.left; dy = e.clientY - r.top;
+    logPanelEl.classList.add('dragging');
+    try { logBarEl.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  };
+  const move = (e) => {
+    if (!dragging) return;
+    const w = logPanelEl.offsetWidth, h = logPanelEl.offsetHeight;
+    let x = e.clientX - dx, y = e.clientY - dy;
+    x = Math.max(0, Math.min(window.innerWidth - w, x));
+    y = Math.max(0, Math.min(window.innerHeight - h, y));
+    logPanelEl.style.left = x + 'px';
+    logPanelEl.style.top = y + 'px';
+    logPanelEl.style.right = 'auto';
+    logPanelEl.style.bottom = 'auto';
+  };
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    logPanelEl.classList.remove('dragging');
+    try {
+      localStorage.setItem(LOG_POS_KEY, JSON.stringify({
+        left: logPanelEl.style.left, top: logPanelEl.style.top
+      }));
+    } catch (_) {}
+  };
+  logBarEl.addEventListener('pointerdown', start);
+  logBarEl.addEventListener('pointermove', move);
+  logBarEl.addEventListener('pointerup', end);
+  logBarEl.addEventListener('pointercancel', end);
+  // 恢复上次位置（默认左上角）
+  try {
+    const p = JSON.parse(localStorage.getItem(LOG_POS_KEY) || 'null');
+    if (p && p.left && p.top) {
+      logPanelEl.style.left = p.left;
+      logPanelEl.style.top = p.top;
+      logPanelEl.style.right = 'auto';
+      logPanelEl.style.bottom = 'auto';
+    }
+  } catch (_) {}
+})();
+
+// 「重开」：随时回到选角界面
+logResetBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (window.confirm('确定重开游戏吗？当前进度将丢失。')) initCharSelect();
 });
+
+// 「旋转」：切换横版（地图左/UI右）↔ 竖版（地图上/UI下）
+const LAYOUT_KEY = 'ark_layout';
+function currentLayout() {
+  return document.body.classList.contains('layout-v') ? 'v' : 'h';
+}
+function setLayout(mode, save) {
+  const v = mode === 'v';
+  document.body.classList.toggle('layout-v', v);
+  document.body.classList.toggle('layout-h', !v);
+  if (save) { try { localStorage.setItem(LAYOUT_KEY, v ? 'v' : 'h'); } catch (_) {} }
+  try {
+    if (v) {
+      // 竖版：侧栏铺满宽度，六维图用默认尺寸
+      sidebarEl.style.width = '';
+      radarCanvas.style.width = '';
+      radarCanvas.style.height = '';
+    } else {
+      // 横版：恢复上次拖动宽度（手机端由媒体查询接管，不设内联宽度）
+      if (window.innerWidth > 760) {
+        let saved = NaN;
+        try { saved = parseInt(localStorage.getItem(SIDE_W_KEY), 10); } catch (_) {}
+        if (!isNaN(saved) && saved > 0) applySidebarWidth(saved, false);
+        else fitSidebarToWidth();
+      } else {
+        sidebarEl.style.width = '';
+        radarCanvas.style.width = '';
+        radarCanvas.style.height = '';
+      }
+    }
+  } catch (_) {}
+  setTimeout(() => {
+    updateCellSize();
+    if (player || phase === 'char_select') render();
+  }, 30);
+}
+logRotateBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setLayout(currentLayout() === 'v' ? 'h' : 'v', true);
+});
+(function initLayoutMode() {
+  let m = null;
+  try { m = localStorage.getItem(LAYOUT_KEY); } catch (_) {}
+  // 无记忆时：桌面默认横版（地图左/UI右），手机默认竖版（地图上/UI下）
+  if (m === 'v' || m === 'h') setLayout(m, false);
+  else setLayout(window.innerWidth <= 760 ? 'v' : 'h', false);
+})();
 
 initCharSelect();
-
-// 顶部「重开」按钮：随时回到选角界面（重开一局）
-(function bindResetBtn() {
-  const rb = document.getElementById('resetBtn');
-  if (!rb) return;
-  rb.addEventListener('click', () => {
-    if (window.confirm('确定重开游戏吗？当前进度将丢失。')) initCharSelect();
-  });
-})();
 </script>
 </body>
 </html>
