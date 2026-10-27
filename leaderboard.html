@@ -72,6 +72,20 @@ var MY = null;      // 我这次的成绩 {level, kills}
 var MY_ID = 0;      // 我的 Telegram id（外壳传入，优先用于高亮）
 var LIST = [];
 var UPDATED = 0;
+var API_BASE = '';  // bot 的 API 根地址（外壳传入），有它就走实时数据
+
+// 统一入口：优先用外壳推来的快照 / bot 的实时 API，最后才退回 Pages 的 leaderboard.json
+function applyData(d){
+  if(!d || !d.entries) return false;
+  UPDATED = d.updated_at || 0;
+  LIST = d.entries.slice().sort(function(a, b){
+    if((b.level||0) !== (a.level||0)) return (b.level||0) - (a.level||0);
+    return (b.kills||0) - (a.kills||0);
+  });
+  document.getElementById('err').textContent = '';
+  render();
+  return true;
+}
 
 function fmtTime(ts){
   if(!ts) return '';
@@ -129,25 +143,36 @@ function render(){
   meta.textContent = '共 ' + LIST.length + ' 位玩家' + (UPDATED ? ' · 更新于 ' + fmtTime(UPDATED) : '');
 }
 
-function load(){
-  document.getElementById('err').textContent = '';
-  fetch('leaderboard.json?t=' + Date.now(), {cache:'no-store'})
+function loadFromPages(){
+  return fetch('leaderboard.json?t=' + Date.now(), {cache:'no-store'})
     .then(function(r){
       if(!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
-    .then(function(d){
-      UPDATED = d.updated_at || 0;
-      LIST = (d.entries || []).slice().sort(function(a, b){
-        if((b.level||0) !== (a.level||0)) return (b.level||0) - (a.level||0);
-        return (b.kills||0) - (a.kills||0);
-      });
-      render();
-    })
+    .then(function(d){ applyData(d); })
     .catch(function(e){
-      document.getElementById('err').textContent = '榜单加载失败：' + e.message;
-      document.getElementById('meta').textContent = '';
+      if(!LIST.length){
+        document.getElementById('err').textContent = '榜单加载失败：' + e.message;
+        document.getElementById('meta').textContent = '';
+      }
     });
+}
+
+function load(){
+  document.getElementById('err').textContent = '';
+  // 1) 有 API 根地址 → 直接问 bot（实时，没有 CDN 缓存）
+  if(API_BASE){
+    fetch(API_BASE + '/api/leaderboard?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(d){
+        if(applyData(d)) return;
+        loadFromPages();
+      })
+      .catch(function(){ loadFromPages(); });
+    return;
+  }
+  // 2) 没有（比如单独打开这个页面）→ 走 Pages
+  loadFromPages();
 }
 
 var _refreshBtn = document.getElementById('btnRefresh');
@@ -159,7 +184,7 @@ if(_refreshBtn){
   });
 }
 
-// 接收游戏外壳传来的「我的成绩 / 我的 id」→ 高亮对应行
+// 接收游戏外壳传来的「我的成绩 / 我的 id / 最新榜单」
 window.addEventListener('message', function(e){
   var d = e.data;
   if(!d) return;
@@ -169,6 +194,11 @@ window.addEventListener('message', function(e){
   } else if(d.type === 'my_id'){
     MY_ID = d.id || 0;
     render();
+  } else if(d.type === 'board'){
+    // 外壳手里已经是刚拉到的实时榜 → 立刻渲染，不用自己再请求
+    if(applyData(d.data)) document.getElementById('err').textContent = '';
+  } else if(d.type === 'api_base'){
+    if(d.base && d.base !== API_BASE){ API_BASE = d.base; load(); }
   }
 });
 
