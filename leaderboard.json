@@ -1,5 +1,5 @@
 {
- "updated_at": 1793119155,
+ "updated_at": 1793119204,
  "entries": [
   {
    "id": "5648491503",
@@ -7,13 +7,6 @@
    "level": 6,
    "kills": 19,
    "runs": 7
-  },
-  {
-   "id": "991122335",
-   "name": "自检",
-   "level": 3,
-   "kills": 7,
-   "runs": 1
   }
  ],
  "bot_username": "yu7_bot",
