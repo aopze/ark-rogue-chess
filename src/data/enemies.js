@@ -91,13 +91,14 @@ function pickEnemyType(level) {
   return pool[0].type;
 }
 
-/* 伤害骰：dice 形如 [n, sides]。未定义时退回面板常量的兜底。 */
+/* 伤害骰：dice 形如 [n, sides]。未定义时退回面板常量的兜底。
+ * 狂暴词缀的 +1 在掷骰之后叠加（ISSUE-20261028-05），保证「骰子本体不变、只是更疼」。 */
 function rollEnemyDamage(e, kind) {
   const dd = kind === 'ranged' ? e.rangedDice : e.meleeDice;
-  if (!dd) return kind === 'ranged' ? e.rangedDmg : e.meleeDmg;
+  if (!dd) return (kind === 'ranged' ? e.rangedDmg : e.meleeDmg) + enemyDamageBonus(e);
   let total = 0;
   for (let i = 0; i < dd.n; i++) total += 1 + randInt(dd.s);
-  return total;
+  return total + enemyDamageBonus(e);
 }
 
 /* 骰子期望值（面板展示 / AI 估算用）：n × (sides+1) / 2，四舍五入且至少 1。 */
@@ -159,4 +160,122 @@ function computeEnemyGrowth(type, level, idx, runSeed) {
     if (lv % LEVELUP_EVERY_N_LEVELS === 0) hpBonus += Math.max(0, abilityMod(a.con));
   }
   return { abilities: a, maxHp: a.con + hpBonus, level: Math.floor(level / LEVELUP_EVERY_N_LEVELS), hpBonus };
+}
+
+/* =========================================================
+ * ★ 词缀与精英（ISSUE-20261028-05）
+ *
+ * 目的：让第 13 关之后不再只是「同一件事数字变大」。词缀给敌人多一个**行为维度**，
+ * 精英给单关一个**记忆点**。
+ *
+ * ★ 随机源：复用 enemyGrowthRng 工厂但换偏移量，**绝不用全局 rng()**
+ *   （全局有滚动状态，用它会导致每次重绘面板词缀抖动，违反「意图可预判」）。
+ *   种子含 level —— 与成长不同，这里不需要前缀稳定，只需要「同一 RUN_SEED 同一关一致」。
+ *
+ * ★ 首轮不做「分裂」词缀：它会在结算中途新增数组元素，破坏 enemyPathOrder 的落位顺序
+ *   与 enemies[i].id 的稳定性（历史上「敌人永久罚站」的 bug 就源于落位顺序）。
+ * ========================================================= */
+const AFFIX_DEFS = {
+  shield: { name: '护盾', short: '盾', icon: '🛡' },
+  swift:  { name: '迅捷', short: '疾', icon: '💨' },
+  frenzy: { name: '狂暴', short: '暴', icon: '🔥' },
+  thorns: { name: '荆棘', short: '棘', icon: '🌵' },
+};
+const AFFIX_ORDER = ['shield', 'swift', 'frenzy', 'thorns'];
+/* L5–L9 只放这两个（护盾/迅捷是"读得懂、不劝退"的），L10+ 再放开狂暴/荆棘 */
+const AFFIX_POOL_EARLY = ['shield', 'swift'];
+const AFFIX_POOL_LATE  = ['shield', 'swift', 'frenzy', 'thorns'];
+const AFFIX_LATE_FROM_LEVEL = 10;
+const AFFIX_CHANCE_EARLY = 0.30;
+const AFFIX_CHANCE_LATE  = 0.45;
+
+const ELITE_FROM_LEVEL = 5;      // L5 起每关至少 1 个精英
+const ELITE_HP_MUL = 1.5;        // 精英 HP 上限 ×1.5（向上取整）
+const ELITE_AFFIX_COUNT = 2;     // 精英必带 2 个词缀
+const AFFIX_SEED_OFFSET = 104729;
+
+/* 词缀/精英的专用随机工厂（与成长序列互不干扰） */
+function affixRng(level, idx, runSeed, tag) {
+  return enemyGrowthRng((((runSeed >>> 0) + level * 613 + idx * 3571 + tag * 8191 + AFFIX_SEED_OFFSET) >>> 0));
+}
+
+/* 本关精英是第几只（-1 = 本关没有精英）。确定性：同 RUN_SEED 同一关恒定。 */
+function eliteIndexFor(level, count, runSeed) {
+  if (level < ELITE_FROM_LEVEL || count <= 0) return -1;
+  const r = affixRng(level, 0, runSeed, 1)();
+  return Math.min(count - 1, Math.floor(r * count));
+}
+
+/* 生成第 level 关第 idx 只敌人的词缀方案：{ isElite, affixes[] } */
+function rollEnemyAffixPlan(level, idx, count, runSeed) {
+  const isElite = idx === eliteIndexFor(level, count, runSeed);
+  const late = level >= AFFIX_LATE_FROM_LEVEL;
+  const pool = (late ? AFFIX_POOL_LATE : AFFIX_POOL_EARLY).slice();
+  const rnd = affixRng(level, idx, runSeed, 2);
+  let want;
+  if (isElite) want = ELITE_AFFIX_COUNT;
+  else want = rnd() < (late ? AFFIX_CHANCE_LATE : AFFIX_CHANCE_EARLY) ? 1 : 0;
+  want = Math.min(want, pool.length);
+  const affixes = [];
+  for (let i = 0; i < want; i++) affixes.push(pool.splice(Math.floor(rnd() * pool.length), 1)[0]);
+  return { isElite, affixes };
+}
+
+function enemyHasAffix(e, id) {
+  return !!(e && e.affixes && e.affixes.indexOf(id) >= 0);
+}
+/* 狂暴：HP 严格低于一半时才生效（= 一半时还不生效，边界明确好测） */
+function enemyIsFrenzied(e) {
+  return enemyHasAffix(e, 'frenzy') && e.hp > 0 && e.hp * 2 < e.maxHp;
+}
+/* 实际移动力：基础 + 迅捷(+2) + 狂暴(+2)。AI 寻路与面板都读这个，别直接读 e.move。 */
+function enemyMoveOf(e) {
+  if (!e) return 1;
+  let m = e.move || 1;
+  if (enemyHasAffix(e, 'swift')) m += 2;
+  if (enemyIsFrenzied(e)) m += 2;
+  return m;
+}
+function enemyDamageBonus(e) {
+  return enemyIsFrenzied(e) ? 1 : 0;
+}
+
+/* 词缀给玩家看的短标签，如「精英 🛡盾 💨疾」 */
+function enemyAffixLabel(e) {
+  if (!e || !e.affixes || e.affixes.length === 0) return '';
+  return e.affixes.map(id => `${AFFIX_DEFS[id].icon}${AFFIX_DEFS[id].short}`).join(' ');
+}
+
+/* 玩家对敌人造成伤害的统一入口（护盾词缀在这里吃掉第一击）。
+ * 返回实际扣掉的血量（0 = 被护盾完全吸收）。 */
+function enemyTakeDamage(e, dmg) {
+  if (!e || dmg <= 0) return 0;
+  if (e.shieldLeft > 0) {
+    e.shieldLeft -= 1;
+    floatText(e.x, e.y, '护盾 -0', '#7fd1ff');
+    ringFx(e.x, e.y, '#7fd1ff');
+    log(`🛡 ${ENEMY_STATS[e.type].name}${e.id + 1} 的护盾吸收了 ${dmg} 点伤害，护盾破碎。`);
+    refreshUnits();
+    return 0;
+  }
+  e.hp -= dmg;
+  return dmg;
+}
+
+/* 荆棘：被近战命中后反弹 1 点给玩家（被打死的不反弹）。
+ * 返回 true 表示玩家因此阵亡。 */
+function enemyThornsReflect(e) {
+  if (!enemyHasAffix(e, 'thorns')) return false;
+  if (!e.alive || e.hp <= 0) return false;          // 这一击已经打死它 → 不反弹
+  if (!player || !player.alive) return false;
+  const res = damagePlayer(1, '荆棘');
+  if (res.dmg > 0) {
+    log(`🌵 ${ENEMY_STATS[e.type].name}${e.id + 1} 的荆棘反弹 1 点伤害。`);
+    floatText(player.x, player.y, '荆棘 -1', '#c77dff');
+    updateStats();
+  } else if (res.shielded) {
+    log(`🌵 荆棘反弹被护盾抵消。`);
+  }
+  if (player.hp <= 0) { player.alive = false; refreshUnits(); endGame(); return true; }
+  return false;
 }
