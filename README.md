@@ -7,11 +7,42 @@
 |---|---|
 | 仓库 | `aopze/ark-rogue-chess`（GitHub Pages 静态托管，`main` / 根目录） |
 | 线上入口 | <https://aopze.github.io/ark-rogue-chess/>（DLC 外壳）· 游戏本体 `/game.html` |
-| 代码基线 | `game.html` @ `0e0b7200`（246,695 B / 5,427 行） |
+| 代码基线 | `game.html` @ `4cb46640`（261,228 B）· build `20261028b`（2026-10-28 02:22 玩法发版，**拆分基线已变更，见下方通告**） |
 | 当前阶段 | **0.1 原型整理**（未启动，任务见 §5.1） |
-| 文档版本 | v2.8 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
+| 文档版本 | v3.0 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
 | 参与方 | 人类维护者 + 多个 AI 协作代理（并行开发） |
 | **改动入口** | **`issues/` 目录 —— 想改游戏就写文件进去，不要直接改 `game.html`（见 §0.0）** |
+
+---
+
+> ## 🚨 基线变更通告（2026-10-28 02:22，人类维护者授权的「版本更新」）
+>
+> `game.html` 已由 **249,421 B / `1a86858d`** 变为 **261,228 B / `4cb46640`**（build `20261028a` → `20261028b`），
+> 人类维护者说「版本更新」后一次性实施了 `issues/` 中的 2 份需求（实施后已删除）：
+>
+> 1. **属性成长重做**：玩家属性点不再每关给 1 点，改为**每 3 关升级时给 2 点**；敌人改为**每关随机 +1 项属性**
+>    （只从当时最高的 4 项里选、相邻两次不重复、每关都涨）+ **每 3 关升级**（HP 加成同角色算法）；幽灵取消 `hpFixed: 2`（HP 2 → 6）。
+>    新增 `computeEnemyGrowth()` / `enemyGrowthRng()` / `RUN_SEED`，`ENEMY_STATS` 降级为「L1 基础面板」。
+> 2. **风笛「高效冲击」**：冲锋距离与攻击次数都改为 **= 本回合剩余移动步数**（`player.move - countMoveSteps(...)`），
+>    冲几格打几次；被没秒掉的敌人挡住后剩余次数**不作废**，改为追击**朝向前方 3 格内**的敌人。
+>
+> ### ⚠️ 对 `P0.1-4` 机械拆分的影响（必读）
+>
+> §0.5 看板里 `P0.1-4` 的拆分基线是**旧版** `game.html`（249,421 B / 第 1 区 487-620 行、第 2 区 622-751 行）。
+> 本次发版**改动了第 1、2 区的代码**，`src/data/*` 与 `src/rules/*` 已与根目录 `game.html` 不一致：
+>
+> | 区域 | 本次改了什么 | 需要同步到 |
+> |---|---|---|
+> | 第 1 区·数据与常量 | `ABILITY_POINTS_PER_LEVEL` → `ABILITY_POINTS_PER_LEVELUP = 2`；`ENEMY_STATS` 去掉 `hpFixed`、注释改「L1 基础面板」；新增 `CHARGE_FINISH_RANGE` | `src/data/constants.js`、`src/data/enemies.js` |
+> | 第 2 区·运行时状态 | 新增 `RUN_SEED` / `playerChargeBudget` / `playerChargeHits` / `playerChargeDir` | `src/rules/state.js` |
+> | 第 3–15 区（仍在模板内） | `computeEnemyGrowth` 等新函数、`finishLevel` / `openLevelUp` 发点逻辑、冲锋额度与追击、日志面板按关卡动态打印 | `templates/game.html` |
+>
+> **继续拆分前必须先「重新取区」或把上表改动同步进对应模块**，否则下一次 `build/bundle.mjs` 会把这批玩法改动整体回退成旧版。
+> `build/verify.mjs` 的等价性校验（产物 vs 根目录 `game.html`）应该会因此报错 —— **那是正确行为，请以根目录新文件为基准，不要把校验「修绿」。**
+> 拿不准就先问人类维护者，不要自行 `git checkout` 旧版本。
+>
+> 平衡数据（20 局/组，`roguechess-autotest`，改动前后同脚本）：
+> 风笛正解流 平均关卡 **4.40 → 3.60**、纯风筝 **4.00 → 3.40**（−15%~−18%，未超 40% 回调线）；阿米娅 4 种玩法基本持平。
 
 ---
 
@@ -846,6 +877,7 @@ ark-rogue-chess/
 | v2.7 | 2026-10-28 | **`P0.1-3` 构建脚本落地**：新增 `build/bundle.mjs`（按 `build/manifest.json` 顺序内联 `src/**`、剥离 ESM 语法、幂等注入 `__ARK_VERSION__`）与 `build/verify.mjs`（AC-23 双 BUILD / NB-04 离线自包含 / 结构 / 产物一致性校验）；新增 `build/bundle_test.mjs` 离线单测 34 项与 `tests/fixtures/` 迷你样例。**护栏**：默认只输出到 `build/out/`，写根目录 `game.html` 被识别为发版动作，缺授权以退出码 4 中止；`index.html` 只校验不改写。`--bump` 修正了用 UTC 推 build 号导致「同日发版被误判为未来日期」的时区 bug。`docs/ARCHITECTURE.md`、`docs/RELEASE.md` 同步补命令与四步流程。**`game.html` 等红线文件零改动** |
 | v2.8 | 2026-10-28 | **`P0.1-4` 机械拆分第一批交付**：第 1 区「数据与常量」（原 `game.html` 487-620 行）搬为 `src/data/constants.js`、`src/data/characters.js`、`src/data/enemies.js`；产出 `templates/game.html`（占位符 `<!-- @inject:scripts -->` 位于原第 1 区处，第 2–15 区仍在模板内）。**等价性三层验证**：归一化后与拆分前完全一致（+698 B / 0.28%，远低于 `AC-01` 的 2%）、构建产物跑 `dom_load` 23 项与 `hook_integration` 8 项全绿、关键定义无残留重复且模块零 DOM 引用。`net/dom_load_test.mjs` 新增 `ARK_GAME_HTML` 环境变量以测构建产物。**根目录 `game.html` 未改动**（拆分产物未发布，发版需人类授权） |
 | v2.9 | 2026-10-28 | **`P0.1-4` 机械拆分第二批交付**：第 2 区「运行时状态」（原 `game.html` 622-751 行）搬为 `src/rules/state.js`（关卡/路径/技力/升级/UI 缓存的顶层 `let`）、`src/rules/buffs.js`（升级与奖励池 + `damagePlayer` 统一受伤入口）、`src/rules/sp.js`（三种角色技力系统与敌人攻击欲望系数）；`build/manifest.json` 的 `modules` 增至 6 个，顺序仍等于拆分前的出现顺序。**等价性三层验证**：归一化后与拆分前一致（+1,459 B / 0.58%，低于 `AC-01` 的 2%）、构建产物跑 `dom_load` 23 / `pvp_core` 20 / `pvp_e2e` 16 / `pvp_browser` 16 / `hook_integration` 8 项 + 联机 client 全绿、`build/bundle_test.mjs` 34 项与 `push_guard` 10 项全绿。**踩坑记录**：Windows 文本模式写文件会把 `LF` 静默转成 `CRLF`，导致产物虚增 6,095 B（2.4%）并让整个 diff 变红；已统一修正为 `LF` 并在 `src/README.md` 立下换行约定。**根目录 `game.html` 未改动**（249,421 B / `1a86858d00`） |
+| v3.0 | 2026-10-28 | **玩法发版 build `20261028b`（人类维护者授权「版本更新」，一次性实施 2 份 issue 后删除）**：① 属性成长重做——玩家属性点改为**每 3 关升级给 2 点**（`ABILITY_POINTS_PER_LEVELUP`，旧 `ABILITY_POINTS_PER_LEVEL` 移除），发放点从 `finishLevel()` 移到 `openLevelUp()`；敌人改为**每关随机 +1 项属性**（候选池 = 当时最高的 4 项、排除上一次、`ABILITY_CAP` 截断）+ **每 3 关升级**（HP 加成 = `max(0, 体质调整值)`，与角色同构），新增 `computeEnemyGrowth()` / `enemyGrowthRng()` / `RUN_SEED`（种子**不含关卡号**，保证「第 L 关敌人 = 第 1 关敌人长 L 次」前缀稳定），`ENEMY_STATS` 降级为 L1 基础面板、幽灵去掉 `hpFixed: 2`（HP 2→6）；战斗日志改为**按本关实际单位**打印面板；② 风笛「高效冲击」——冲锋距离与攻击次数都改为 **= 本回合剩余移动步数**（必须用 `countMoveSteps` 而非路径下标，等待步不耗移动力），被没秒掉的敌人挡住后剩余额度**不作废**，改为追击朝向前方 `CHARGE_FINISH_RANGE`＝3 格内的敌人。**⚠️ 本次改动了 `P0.1-4` 已拆分的第 1、2 区代码，拆分基线失效，须按顶部「基线变更通告」重新对齐 `src/` 后再继续，否则下次构建会回退本批改动。** 验证：定点单测 28/28 + 真实回合冲锋 11/11 + 竖屏 10/10 + autotest 40 局（改前/改后各 20 局，风笛正解流 4.40→3.60，未超 40% 回调线），`anom=0` / `pageErrors=0` |
 
 ---
 
