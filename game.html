@@ -25,17 +25,14 @@
   .cell.dodge.attack { box-shadow: inset 0 0 0 2px #7dd3fc, inset 0 0 0 999px rgba(192,57,43,.35); }
   .cell.attack { background:#c0392b; }
   .cell.attack.used { background:#5c2b29; }
-  /* 倾泻射击节点（阿米娅：等待 → 攻击）：金色底 + 👑 */
-  .cell.attack.burst { background:#8a6a12; box-shadow: inset 0 0 0 1px rgba(255,215,0,.55); }
-  /* 有单位压在倾泻节点上时，用右上角小皇冠提示（z-index 高于单位层） */
-  .cell.burst-mark::after {
-    content:'👑'; position:absolute; top:-1px; right:0; z-index:41;
-    font-size: calc(var(--cell) * 0.32); line-height:1;
-    text-shadow: 0 0 4px #000, 0 0 3px #000;
-  }
+  /* 技能节点（双击设置）：紫色底 + 紫描边 + ✦ */
+  .cell.skill { background:#5b3a8c; box-shadow: inset 0 0 0 2px #c9a0ff; }
+  .cell.skill.used { background:#3d2a5c; }
+  .cell.attack.skill { background: linear-gradient(135deg, #c0392b 0 45%, #5b3a8c 55% 100%); box-shadow: inset 0 0 0 2px #c9a0ff; }
+  .cell.skill.dodge { box-shadow: inset 0 0 0 2px #c9a0ff, inset 0 0 0 4px #7dd3fc; }
   /* 攻击范围：在地块上叠一层蓝色（与路径格 #3a5a8c 接近），不遮挡格子内容 */
   .cell.in-range { box-shadow: inset 0 0 0 999px rgba(58,90,140,.25); }
-  .cell.in-range.attack, .cell.in-range.attack.burst { box-shadow: inset 0 0 0 999px rgba(58,90,140,.25), inset 0 0 0 1px rgba(255,215,0,.55); }
+  .cell.in-range.attack, .cell.in-range.skill { box-shadow: inset 0 0 0 999px rgba(58,90,140,.25), inset 0 0 0 1px rgba(201,160,255,.65); }
   .cell.item-cell { background: #4a1e2f; box-shadow: inset 0 0 10px #ff6b6b; }
   .cell.blood-cell { background: #3d1515; }
   .cell.candidate { outline:2px dashed #aaa; }
@@ -45,16 +42,14 @@
   @keyframes hitflash { 0%{box-shadow: inset 0 0 0 40px rgba(255,80,80,.9);} 100%{box-shadow: inset 0 0 0 0 rgba(255,80,80,0);} }
   .item-pulse { animation: itemPulse 1.5s ease-in-out infinite; display:inline-block; }
   @keyframes itemPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }
-  .unit { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; width:100%; height:100%; pointer-events:none; position:relative; }
-  .unit .icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
-  .unit .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
-  .unit .hp-bar { width: 78%; height: 3px; background: rgba(0,0,0,0.55); border-radius: 2px; margin-top: 1px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.6); }
-  .unit .hp-fill { height: 100%; border-radius: 2px; transition: width 0.25s ease; }
-  .unit-abs { position:absolute; left:0; top:0; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; pointer-events:none; transition: transform var(--unit-move-ms) linear; will-change: transform; border-radius:2px; }
-  .unit-abs .icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
-  .unit-abs .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
-  .unit-abs .hp-bar { width: 78%; height: 3px; background: rgba(0,0,0,0.55); border-radius: 2px; margin-top: 1px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.6); }
-  .unit-abs .hp-fill { height: 100%; border-radius: 2px; transition: width 0.25s ease; }
+  /* 单位渲染（格内静态 .unit + 绝对定位 .unit-abs）共用同一套外观，避免两处分别维护 */
+  .unit, .unit-abs { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; pointer-events:none; position:relative; }
+  .unit { width:100%; height:100%; }
+  .unit-abs { position:absolute; left:0; top:0; width:auto; height:auto; transition: transform var(--unit-move-ms) linear; will-change: transform; border-radius:2px; }
+  .unit .icon, .unit-abs .icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
+  .unit .icon.ghost-icon, .unit-abs .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
+  .unit .hp-bar, .unit-abs .hp-bar { width: 78%; height: 3px; background: rgba(0,0,0,0.55); border-radius: 2px; margin-top: 1px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.6); }
+  .unit .hp-fill, .unit-abs .hp-fill { height: 100%; border-radius: 2px; transition: width 0.25s ease; }
   .unit-abs.ua-player { outline:2px solid #4ecdc4; outline-offset:-2px; }
   .unit-abs.ua-player.ua-charging { outline:3px solid #ffd700; outline-offset:-3px; box-shadow: inset 0 0 15px #ffd700; }
   .unit-abs.ua-player.ua-attacked { outline:2px dashed #ffb86b; outline-offset:-2px; }
@@ -196,12 +191,26 @@
   #logTitle { flex: 1 1 auto; white-space: nowrap; }
   #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
   #logBar button:hover { background: #3a3a5c; color: #fff; }
-  #log { max-height: 38vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px 10px; font-size: 12.5px; line-height: 1.5; color: #ddd; white-space: pre-wrap; contain: content; }
+  #log { max-height: 38vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px 10px; font-size: 12.5px; line-height: 1.55; color: #ddd; white-space: pre-wrap; contain: content; }
+  /* ---- 日志按类型着色，提升可读性 ---- */
+  #log .logline { white-space: pre-wrap; padding: 2px 0 2px 8px; border-left: 3px solid transparent; margin: 1px 0; }
+  #log .log-sep { min-height: 6px; border-left-color: transparent; }
+  #log .log-info { color: #d3d3e6; }
+  #log .log-damage { color: #ff9e7a; border-left-color: #7a3a20; }
+  #log .log-kill { color: #ff6b6b; font-weight: 700; border-left-color: #ff6b6b; }
+  #log .log-skill { color: #ffd76b; border-left-color: #b9912f; }
+  #log .log-dodge { color: #7fe3ff; border-left-color: #2f8fb9; }
+  #log .log-heal { color: #8ff0a4; border-left-color: #2f9b54; }
+  #log .log-warn { color: #ffd166; border-left-color: #b9912f; }
+  #log .log-buff { color: #ff9ad5; border-left-color: #b94f8f; }
+  #log .log-sys { color: #cfe6ff; font-weight: 800; border-left-color: #4ecdc4; background: rgba(78,205,196,.10); margin: 5px 0 3px; padding: 4px 0 4px 8px; border-radius: 0 4px 4px 0; }
   button { padding:10px 12px; font-size:14px; cursor:pointer; border:none; border-radius:4px; background:#4ecdc4; color:#111; font-weight:bold; touch-action: manipulation; }
   button:disabled { background:#555; color:#999; cursor:not-allowed; }
   .stat { font-size:13px; line-height:1.45; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   /* ---- 仪表小格 ---- */
   .kv-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:5px; }
+  /* 奇数个格子时，最后一格（动作）横跨整行 */
+  .kv-grid .kv:last-child:nth-child(odd) { grid-column: span 2; }
   .kv { display:flex; flex-direction:column; align-items:center; background:#232338; border-radius:6px; padding:4px 3px; }
   .kv b { font-size:10px; font-weight:600; color:#82829c; letter-spacing:.5px; }
   .kv span { font-size:15px; font-weight:900; color:#eaeaf5; line-height:1.2; }
@@ -370,6 +379,31 @@
 </div>
 
 <script>
+/* =========================================================================
+ * 方舟战棋 · 单文件版（无构建、无依赖，双击即可玩）
+ *
+ * 代码分区（从上到下）：
+ *   1. 数据与常量        — 角色 / 敌人 / buff / 阶段名 / 方向表
+ *   2. 运行时状态        — 关卡、路径、技力、升级、UI 缓存
+ *   3. DOM 引用与基础工具 — log / sleep / 距离 / 随机
+ *   4. 掷骰与面板        — d20 检定、AC、派生属性、敌人面板
+ *   5. 六维雷达图        — canvas 绘制 + 属性点点击热区
+ *   6. 规则判定（纯逻辑） — 路径 → 主动行动（攻击 / 技能 / 闪避节点）、技力、冲锋
+ *   7. 战斗反馈（DX）    — 浮动文字 / 粒子 / 弹道 / 受击闪烁
+ *   8. 结算工具          — 击杀、落败、通关、玩家受伤反馈（收敛重复逻辑）
+ *   9. 地图生成          — 连通区域生长 + 障碍 + 敌人 / 道具落点
+ *  10. 关卡与回合生命周期 — initLevel / initCharSelect / 重置
+ *  11. 渲染              — 棋盘、单位层、角色卡、数值面板、按钮
+ *  12. 输入              — 键盘、指针拖拽、日志窗、布局切换
+ *  13. 战斗结算          — resolveStep 及其子步骤
+ *  14. 成长与奖励        — 升级、buff、下一关
+ *  15. 启动              — initCharSelect()
+ *
+ * 约定：
+ *   - 所有跨函数状态仍为顶层 let（便于热改与调试），命名统一见第 2 区。
+ *   - 纯逻辑函数不碰 DOM；渲染函数不改战斗状态；结算函数通过返回值报告「是否致死」。
+ *   - 新增角色时，只需在 CHARACTERS 里加数据 + 在「规则判定」区加它的技能分支。
+ * ========================================================================= */
 const SPAWN_CLEAR_RADIUS = 2;
 const OBSTACLE_MAX_GROUP = 4;
 const OBSTACLE_GROUPS_TRY = 8;
@@ -378,9 +412,28 @@ const ABILITY_CAP = 20;
 const ABILITY_POINTS_PER_LEVEL = 1;
 const PLAYER_RANGE = 3;   // 远程角色的攻击节点射程（近战角色攻击节点只打相邻 1 格）
 
-const ABILITY_NAMES = { str: '力', int: '智', dex: '敏', wis: '感', con: '体', cha: '魅' };
 const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const ABILITY_FULL = { str: '力量', dex: '敏捷', con: '体质', int: '智力', wis: '感知', cha: '魅力' };
+
+/* =========================================================
+ * 全局常量：阶段名 / 方向 / 朝向符号
+ * 以前这些字面量散落在 60 多处（'planning'、[[1,0],...]、'▶' 等），
+ * 改名或调整方向顺序时极易漏改。统一收在这里。
+ * ========================================================= */
+const PHASE = Object.freeze({
+  CHAR_SELECT: 'char_select',
+  PLANNING:    'planning',
+  RESOLVING:   'resolving',
+  LEVELCLEAR:  'levelclear',
+  GAMEOVER:    'gameover',
+});
+// 四方向表。顺序会影响 BFS 的先验路径（同距离时先探哪格），因此保留两套原始顺序，勿随意合并。
+const DIR4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];      // 邻格扫描 / 连通性
+const DIR4_BFS = [[0, -1], [0, 1], [-1, 0], [1, 0]];  // 寻路展开顺序
+const KEY_DIRS = { w: { dx: 0, dy: -1 }, s: { dx: 0, dy: 1 }, a: { dx: -1, dy: 0 }, d: { dx: 1, dy: 0 } };
+const FACING_GLYPH = { '1,0': ['▶', 'r'], '-1,0': ['◀', 'l'], '0,1': ['▼', 'd'], '0,-1': ['▲', 'u'] };
+const ARROW_CHARS = { '0,-1': '↑', '0,1': '↓', '-1,0': '←', '1,0': '→', '1,-1': '↗', '1,1': '↘', '-1,-1': '↙', '-1,1': '↖' };
+const DIR_NAMES = { '0,-1': '上', '0,1': '下', '-1,0': '左', '1,0': '右' };
 
 const CHARACTERS = {
   wheelchair: {
@@ -388,12 +441,12 @@ const CHARACTERS = {
     attackType: 'melee',
     abilities: { str: 12, dex: 10, con: 10, int: 8, wis: 8, cha: 6 },
     profMelee: true, profRanged: false,
-    desc: '沿直线连续移动攒技力，满 5 点后攻击节点变冲锋「高效冲击」：直线撞穿敌人，冲锋期间免疫一切伤害。',
+    desc: '沿直线连续移动攒技力；满 5 点后在路径节点双击设置技能节点，到达该步即发动冲锋「高效冲击」。',
     tips: [
       '技力：同方向连续移动 ≥2 步获得技力',
-      '技能：攻击变为冲锋，免疫所有伤害，沿直线前进',
-      '[高效冲击]：冲锋状态未造成伤害，则撞墙后失去当前 HP 的一半',
-      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3（与攻击二选一）'
+      '技能：双击路径节点设置技能节点 → 到达该步发动「高效冲击」（占一次动作）',
+      '[高效冲击]：沿直线冲锋撞穿敌人，冲锋期间免疫一切伤害；未造成伤害就撞墙会失去一半 HP',
+      '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
     ]
   },
   vampire: {
@@ -401,13 +454,13 @@ const CHARACTERS = {
     attackType: 'ranged',
     abilities: { str: 8, dex: 10, con: 10, int: 12, wis: 8, cha: 6 },
     profMelee: false, profRanged: true,
-    desc: '远程输出，靠满地血迹回血攒技力；技力满后在起始点发动「不稳定血浆」爆发。',
+    desc: '远程输出，靠满地血迹攒技力；满 5 点后在路径节点双击设置技能节点，发动「不稳定血浆」。',
     tips: [
       '技力：获得血迹 +1 技力',
-      '技能：起始点攻击触发',
-      '[不稳定血浆]：本次战斗必定暴击，必定触发血迹，攻击后失去 1HP',
+      '技能：双击路径节点设置技能节点 → 到达该步发动（占一次动作）',
+      '[不稳定血浆]：本关内远程攻击必定命中、必定暴击、必定触发血迹，但每次攻击后失去 1 HP',
       '被动：远程攻击命中后 50% 在目标格留下血迹，战斗结束时获得全场血迹（血迹：恢复 2 HP）',
-      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3（与攻击二选一）'
+      '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
     ]
   },
   fencer: {
@@ -415,12 +468,12 @@ const CHARACTERS = {
     attackType: 'melee',
     abilities: { str: 12, dex: 8, con: 10, int: 6, wis: 8, cha: 8 },
     profMelee: true, profRanged: false,
-    desc: '用等待换反击：同格连续等待 2 次进入反击状态，挨打就回敬暴击。',
+    desc: '用技能节点进入反击：满技力后双击路径节点发动「岩崩锤」，挨打就回敬暴击。',
     tips: [
       '技力：受到攻击时 +1 技力',
-      '技能：等待 2 次触发',
-      '[岩崩锤]：免疫攻击，受到攻击时攻击周围 8 格所有单位并造成眩晕 2 回合 + 回复 1/2 最大 HP',
-      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3（与攻击二选一）；连续等待 2 次为反击技能，不算闪避'
+      '技能：双击路径节点设置技能节点 → 到达该步进入反击（占一次动作）',
+      '[岩崩锤]：反击期间免疫攻击，受到攻击时攻击周围 8 格所有单位并造成眩晕 2 回合 + 回复 1/2 最大 HP',
+      '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
     ]
   },
   amiya: {
@@ -428,13 +481,13 @@ const CHARACTERS = {
     attackType: 'ranged',
     abilities: { str: 6, dex: 8, con: 8, int: 12, wis: 10, cha: 10 },
     profMelee: false, profRanged: true,
-    desc: '击败敌人攒技力（上限 = 感知），在「等待」那格接下攻击节点即可发动「精神爆发」。',
+    desc: '击败敌人攒技力（上限 = 感知）；满技力后在路径节点双击设置技能节点，到达该步发动「精神爆发」。',
     tips: [
       '技力：每击败 1 个敌人 +2 技力，每次攻击 +1 技力',
-      '技能：等待后射击触发技能，技力未满可触发',
+      '技能：双击路径节点设置技能节点 → 到达该步倾泻全部技力（占一次动作）',
       '[精神爆发]：消耗已有技力，进行等量次数必定命中、必定暴击的远程攻击（范围同普通射程，击杀不获得技力）',
       '被动：被阿米娅攻击的单位，额外显示移动意图',
-      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3；但「等待+攻击」整段算技能节点，该等待不结算、不给 AC'
+      '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
     ]
   }
 };
@@ -482,7 +535,7 @@ const ENEMY_STATS = {
   }
 };
 
-let phase = 'char_select';
+let phase = PHASE.CHAR_SELECT;
 let charCandidates = [];
 let selectedCandidate = null;
 let isMoving = false;
@@ -497,7 +550,10 @@ let enemies = [];
 let rewardItems = [];
 let bloodDrops = [];
 let playerPath = [];
+/* 路径节点：下标 = playerPath 下标。attackIndices = 攻击节点，skillIndices = 技能节点；
+ * 同一个下标只能属于其中一种（单击攻击 / 双击技能）。 */
 let attackIndices = [];
+let skillIndices = [];
 let enemyPaths = [];
 // 寻路时的处理顺序（离玩家近的优先）。结算层必须用同一顺序落位，
 // 否则「跟到同伴刚腾出的格子」这种合法走位会因为顺序错位被误判受阻。
@@ -521,10 +577,7 @@ let playerChargeStopReason = null;
 let playerChargeCausedDamage = false;
 let pendingAttack = false;
 let pendingChargeInfo = null;
-let pendingCounterInfo = null;
 let amiyaBonusTargets = 0;
-let amiyaBurstPlan = null;
-let amiyaBurstDone = false;
 let levelHpBonus = 0;
 // 点角色卡里的「近战伤害 / 远程伤害」→ 在地块上叠蓝色显示攻击范围
 let showRangeOverlay = false;
@@ -548,7 +601,7 @@ const BUFF_POOL = [
   { id: 'sass',   name: '香草沙士', icon: '🥤', desc: '获得技力时有 30% 概率额外获得 1 点技力' },
   { id: 'kit',    name: '急救药箱', icon: '🧰', desc: '每张地图必定额外出现一个恢复地块 ❤️' },
   { id: 'pill',   name: '药枚', icon: '💊', desc: '每关开始时获得 1 层护盾（抵消一次任意伤害）' },
-  { id: 'scout',  name: '探测先锋', icon: '🔭', desc: '攻击节点 +1' },
+  { id: 'scout',  name: '探测先锋', icon: '🔭', desc: '每回合动作上限 +1（可多放一次攻击/技能/闪避）' },
 ];
 const BUFF_BY_ID = Object.fromEntries(BUFF_POOL.map(b => [b.id, b]));
 
@@ -623,7 +676,7 @@ let radarLabelHits = [];   // drawRadar 写入：六维图 6 个属性文字的�
 
 /* 点击六维图上的属性名即可加点（替换原底部按钮）；鼠标悬停在可加属性上时变手型 */
 radarCanvas.addEventListener('click', (e) => {
-  if (phase !== 'planning' && phase !== 'levelclear') return;
+  if (phase !== PHASE.PLANNING && phase !== PHASE.LEVELCLEAR) return;
   if (!playerStats || playerStats.abilityPoints <= 0) return;
   const rect = radarCanvas.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
@@ -633,7 +686,7 @@ radarCanvas.addEventListener('click', (e) => {
   render();   // 刷新六维图 + 右侧控件（通关闸门按钮随点数归零启用）
 });
 radarCanvas.addEventListener('mousemove', (e) => {
-  const can = playerStats && playerStats.abilityPoints > 0 && (phase === 'planning' || phase === 'levelclear');
+  const can = playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR);
   if (!can) { radarCanvas.style.cursor = ''; return; }
   const rect = radarCanvas.getBoundingClientRect();
   const x = e.clientX - rect.left, y = e.clientY - rect.top;
@@ -647,7 +700,43 @@ function randInt(n) { return Math.floor(Math.random() * n); }
 function dist(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
 function cheb(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
 function key(x, y) { return x + ',' + y; }
-function log(msg) { logLines.push(msg); logEl.textContent = logLines.slice(-120).join('\n'); logEl.scrollTop = logEl.scrollHeight; }
+/* 战斗日志：按类型着色，提升可读性。logLines 仍按行存字符串（兼容关卡切换时的切片逻辑）。 */
+const LOG_MAX = 600;          // 日志缓冲上限（防止长局内存无限增长）
+const LOG_VIEW_MAX = 160;     // 日志可视区 DOM 行数上限
+function autoLogType(msg) {
+  if (msg == null || msg === '') return 'sep';
+  if (/[=＝]{3,}|第\s*\d+\s*关/.test(msg)) return 'sys';
+  if (/🥤|香草沙士|奖励|升级|热水壶|护盾|💊/.test(msg)) return 'buff';
+  if (/闪避|躲避/.test(msg)) return 'dodge';
+  if (/击杀|被击败|击败|倒下|阵亡|💀|死亡/.test(msg)) return 'kill';
+  if (/⚡|✦|技力|技能|发动|就绪|高效冲击|岩崩|精神爆发|不稳定血浆|蓄力/.test(msg)) return 'skill';
+  if (/回复|恢复|治疗|❤|回血|回复HP/.test(msg)) return 'heal';
+  if (/⚠|警告|错误|失败|未命中|挥空|免疫|禁止|取消|无法|不能/.test(msg)) return 'warn';
+  if (/命中|造成|伤害|暴击/.test(msg)) return 'damage';
+  return 'info';
+}
+function makeLogLine(msg) {
+  const div = document.createElement('div');
+  div.className = 'logline log-' + autoLogType(msg);
+  div.textContent = msg;
+  return div;
+}
+function renderLogAll() {
+  logEl.innerHTML = '';
+  for (const m of logLines) logEl.appendChild(makeLogLine(m));
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function clearLog(keepN) {
+  logLines = keepN && keepN > 0 ? logLines.slice(-keepN) : [];
+  renderLogAll();
+}
+function log(msg) {
+  logLines.push(msg);
+  if (logLines.length > LOG_MAX) logLines = logLines.slice(-LOG_MAX);
+  logEl.appendChild(makeLogLine(msg));
+  while (logEl.childNodes.length > LOG_VIEW_MAX) logEl.removeChild(logEl.firstChild);
+  logEl.scrollTop = logEl.scrollHeight;
+}
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 function inBounds(x, y) { return x >= 0 && y >= 0 && x < COLS && y < ROWS; }
 function findLastIndex(arr, predicate) {
@@ -761,7 +850,7 @@ function drawRadar() {
   );
 
   let abilities = null;
-  if (phase === 'char_select') {
+  if (phase === PHASE.CHAR_SELECT) {
     if (selectedCandidate) abilities = CHARACTERS[selectedCandidate.id].abilities;
   } else if (player) {
     abilities = player.abilities;
@@ -848,7 +937,7 @@ function drawRadar() {
   // 轴名：2 字全称，按左右方向对齐向外排版（避免被画布裁切）
   ctx.font = `bold ${labelFont}px system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
-  const canAlloc = !!(playerStats && playerStats.abilityPoints > 0 && (phase === 'planning' || phase === 'levelclear'));
+  const canAlloc = !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
   for (let i = 0; i < n; i++) {
     const k = ABILITY_ORDER[i];
     const ang = -Math.PI / 2 + (Math.PI * 2 * i) / n;
@@ -856,7 +945,7 @@ function drawRadar() {
     const dist = R + pad + labelFont * 0.2;
     const lx = cx + ca * dist, ly = cy + sa * dist;
     ctx.textAlign = ca > 0.2 ? 'left' : (ca < -0.2 ? 'right' : 'center');
-    const inSelect = phase === 'char_select';
+    const inSelect = phase === PHASE.CHAR_SELECT;
     const profMelee = inSelect ? !!(selectedCandidate && CHARACTERS[selectedCandidate.id].profMelee) : !!(playerStats && playerStats.profMelee);
     const profRanged = inSelect ? !!(selectedCandidate && CHARACTERS[selectedCandidate.id].profRanged) : !!(playerStats && playerStats.profRanged);
     const profMark = abilities && ((k === 'str' && profMelee) || (k === 'int' && profRanged));
@@ -879,7 +968,7 @@ function drawRadar() {
 
   // 中心原点显示等级（选角色阶段不画）；整体偏金色黄，画布绘制不会裁切
   // 「Lv 1」同一行显示，字号略小于角色卡内「步数」数值（桌面 15px → 此处约 13px）
-  if (phase !== 'char_select') {
+  if (phase !== PHASE.CHAR_SELECT) {
     ctx.textBaseline = 'middle';
     const lf = Math.max(11, Math.min(13, Math.round(R * 0.18)));
     ctx.font = `bold ${lf}px system-ui, sans-serif`;
@@ -899,7 +988,7 @@ function drawRadar() {
  * 基础工具
  * ========================================================= */
 function isWalkable(x, y) {
-  if (phase === 'char_select') return inBounds(x, y) && selMap[y][x] === 0;
+  if (phase === PHASE.CHAR_SELECT) return inBounds(x, y) && selMap[y][x] === 0;
   return inBounds(x, y) && map[y][x] === 0;
 }
 function faceToward(from, to) {
@@ -971,18 +1060,18 @@ function wheelchairPreviewSp() {
   if (selectedChar !== 'wheelchair') return wheelchairSp;
   return Math.min(WHEELCHAIR_SP_MAX, wheelchairSp + pathSpGain(playerPath));
 }
-/* 冲锋模式：技力满 5 时，路径里第一个「移动步上的攻击节点」就是冲锋触发点，返回其路径下标。
- * sp 省略时用「预览技力」（真实值 + 当前路径将获得的量）；结算阶段要传真实值，避免重复计入增量。 */
-function findChargeAttackIndex(path, sp) {
+/* 冲锋模式：技力满 5 时，路径里第一个「移动步上的技能节点」就是冲锋触发点，返回其路径下标。
+ * sp 省略时用「预览技力」（真实值 + 当前路径将获得的量）；结算阶段传真实值，避免重复计入增量。 */
+function findChargeSkillIndex(path, sp) {
   const spNow = (sp === undefined) ? wheelchairPreviewSp() : sp;
   if (!path || spNow < WHEELCHAIR_SP_MAX) return null;
-  const idxs = [...attackIndices]
+  const idxs = [...skillIndices]
     .filter(i => i > 0 && i < path.length)
     .filter(i => !(path[i].x === path[i - 1].x && path[i].y === path[i - 1].y))
     .sort((a, b) => a - b);
   return idxs.length ? idxs[0] : null;
 }
-function pathHasCharge(path, sp) { return findChargeAttackIndex(path, sp) !== null; }
+function pathHasCharge(path, sp) { return findChargeSkillIndex(path, sp) !== null; }
 function computeStraightChargePath(path, trigger) {
   const startPos = path[trigger.endIdx];
   const dir = trigger.dir;
@@ -1002,42 +1091,34 @@ function computeStraightChargePath(path, trigger) {
   return { chargePath: result, stopReason: 'maxSafety' };
 }
 
-function canEnterCounterState(path) {
-  /* 反击（岩崩锤）需要满技力才能使用：技力未满时不进入反击状态 */
-  if (selectedChar === 'fencer' && fencerSp < FENCER_SP_MAX) return false;
-  for (let i = 0; i + 2 < path.length; i++) {
-    if (path[i].x === path[i + 1].x && path[i].y === path[i + 1].y &&
-        path[i + 1].x === path[i + 2].x && path[i + 1].y === path[i + 2].y) {
-      return true;
+/* ===== 技能节点 =====
+ * 技能节点由玩家「双击路径节点」设置，到达该步时发动各角色技能（见 resolveStep 的 triggerSkillNode）。
+ * 是否可发动只取决于角色自己的技力/状态，因此这里集中给出「当前是否就绪」的预览信息。 */
+function skillReadyInfo(path, usePreview = true) {
+  switch (selectedChar) {
+    case 'wheelchair': {
+      const sp = usePreview ? wheelchairPreviewSp() : wheelchairSp;
+      return { ready: sp >= WHEELCHAIR_SP_MAX, name: '高效冲击', spNow: sp, spMax: WHEELCHAIR_SP_MAX };
     }
+    case 'vampire':
+      return { ready: !vampireSkillActive && vampireSp >= VAMPIRE_SP_MAX, name: '不稳定血浆', spNow: vampireSp, spMax: VAMPIRE_SP_MAX };
+    case 'fencer':
+      return { ready: !fencerCounterActive && fencerSp >= FENCER_SP_MAX, name: '岩崩锤', spNow: fencerSp, spMax: FENCER_SP_MAX };
+    case 'amiya':
+      return { ready: amiyaBonusTargets > 0, name: '精神爆发', spNow: amiyaBonusTargets, spMax: amiyaSpMax() };
+    default:
+      return { ready: false, name: '技能', spNow: 0, spMax: 0 };
   }
-  return false;
 }
-function findFirstDoubleWaitIndex(path) {
-  for (let i = 0; i + 2 < path.length; i++) {
-    if (path[i].x === path[i + 1].x && path[i].y === path[i + 1].y &&
-        path[i + 1].x === path[i + 2].x && path[i + 1].y === path[i + 2].y) {
-      return i + 2;
-    }
-  }
-  return -1;
-}
-/* 阿米娅倾泻触发点：路径里「等待（同格重复的那一步）上放了攻击节点」→ 该节点变倾泻射击。
- * 返回攻击节点的路径下标；没有则 null。 */
-function amiyaBurstAttackIndex(path, sp) {
+/* 路径上有效的技能节点下标（升序、去重；下标 0 = 起点不算） */
+function skillNodesOnPath(path) {
   const p = path || playerPath;
-  const spNow = (sp === undefined) ? amiyaBonusTargets : sp;
-  if (!p || spNow <= 0) return null;
-  const idxs = [...attackIndices]
-    .filter(i => i > 0 && i < p.length)
-    .filter(i => p[i].x === p[i - 1].x && p[i].y === p[i - 1].y)
-    .sort((a, b) => a - b);
-  return idxs.length ? idxs[0] : null;
+  return [...new Set(skillIndices.filter(i => i > 0 && i < p.length))].sort((a, b) => a - b);
 }
-/* 攻击范围高亮用的路径下标（第一个攻击节点）；没有攻击节点则以角色当前位置为圆心 */
+/* 攻击范围高亮用的路径下标（第一个攻击/技能节点）；没有节点则以角色当前位置为圆心 */
 function rangeDisplayOrigin() {
   if (!player) return null;
-  const idxs = [...attackIndices].filter(i => i < playerPath.length).sort((a, b) => a - b);
+  const idxs = [...attackIndices, ...skillIndices].filter(i => i < playerPath.length).sort((a, b) => a - b);
   if (idxs.length) return playerPath[idxs[0]];
   return { x: player.x, y: player.y };
 }
@@ -1058,16 +1139,17 @@ function countWaitSteps(path) {
 }
 
 /* =========================================================
- * ★ 闪避 / 动作机制
+ * ★ 动作机制（技能触发系统重做后）
  *
- * 规则：
- *  - 路径中的「等待」= 同格重复步。
- *  - 回合内【第一次】等待 → 闪避节点：给玩家 AC 加成（闪避动作），并且占用本回合唯一的一次动作。
- *  - 之后再有等待 → 只是普通的「拖延」，不再给加成、也不再占动作。
- *  - 攻击节点 = 一次动作。
- *  - 技能节点（泥岩反击 / 风笛冲锋 / 华法琳血浆 / 阿米娅倾泻）不算额外动作。
- *  - 阿米娅特例：「等待 + 攻击」整段算一个【技能节点】，那一段等待【不结算】
- *    （不会变成闪避、不会给 AC 加成），因此阿米娅依然能一回合打出倾泻。
+ * 主动行动只有三种，共用同一份动作预算：
+ *   - 攻击：单击路径节点设攻击节点，到达该步时攻击。
+ *   - 技能：双击路径节点设技能节点，到达该步时发动角色技能。
+ *   - 闪避：路径里第一个「等待」自动成为闪避节点，AC +3。
+ * 被动行动：趁乱攻击，本 tick 有主动行动时自动结算，不占动作。
+ *
+ * 默认每回合 1 次动作（scout 的 extraAttacks 可 +1）。按路径先后先到先得，
+ * 超出预算的动作在结算时报失败并写日志。
+ * 技能节点占住第一个等待步且技能就绪时，技能优先，该步不结算闪避。
  * ========================================================= */
 const DODGE_AC_BONUS = 3;
 
@@ -1080,69 +1162,30 @@ function firstWaitIndex(path) {
   return -1;
 }
 
-// 阿米娅的「等待+攻击」段：返回该等待步下标，没有则 -1
-// 条件：等待步上放了一个攻击节点，且这一段只包含这一个攻击节点
-// 说明：这是阿米娅独有的技能机制 —— 「等待+攻击」整段算【技能节点】，
-//       该等待【不结算】（不触发闪避、不给 AC 加成），因此等待与攻击合为一次动作。
-//       技力是否足够只影响技能能否真正发动，不影响「这段是技能节点」的判定。
-function amiyaDodgeSkipIndex(path) {
-  if (selectedChar !== 'amiya') return -1;
-  const p = path || playerPath;
-  const wIdx = firstWaitIndex(p);
-  if (wIdx < 0) return -1;
-  if (!attackIndices.includes(wIdx)) return -1;
-  // 同一格可能有多步等待；只要该格上挂了攻击节点，就视为「等待+攻击」段
-  const pos = p[wIdx];
-  const onSameCell = attackIndices.filter(i => i < p.length && p[i].x === pos.x && p[i].y === pos.y);
-  if (onSameCell.length !== 1) return -1;
-  return wIdx;
-}
-
-// 泥岩的「连续等待 2 次」= 技能节点（进入反击状态），不是闪避
-// 返回该技能段的【第一个】等待下标（没有连续等待则 -1）
-function fencerSkillWaitIndex(path) {
-  if (selectedChar !== 'fencer') return -1;
-  const p = path || playerPath;
-  const act = findFirstDoubleWaitIndex(p);
-  if (act <= 0) return -1;
-  // findFirstDoubleWaitIndex 返回 act = i+2（三连同格里的最后一个），
-  // 第一次「等待」步发生在 i+1 = act-1
-  return act - 1;
-}
-
-// 本回合规划出来的「动作」占用情况：{ dodge: 是否闪避, actions: 动作数 }
-function plannedActionInfo(path, atkIdxs) {
+// 本回合规划出来的「动作」占用情况：{ dodge, dodgeIndex, actions, skillIdxs, attackCount, skillCount }
+function plannedActionInfo(path, atkIdxs, skillIdxs) {
   const p = path || playerPath;
   const atk = atkIdxs || attackIndices;
+  const sk = skillIdxs || skillIndices;
   const wIdx = firstWaitIndex(p);
-  const skipIdx = amiyaDodgeSkipIndex(p);
-  const fencerIdx = fencerSkillWaitIndex(p);
-
-  let dodge = false;
-  let actions = 0;
-  if (wIdx >= 0 && wIdx !== skipIdx && wIdx !== fencerIdx) {
-    dodge = true;
-    actions += 1;                 // 闪避占一次动作
-  }
-  // 阿米娅的「等待+攻击」整段算 1 个动作（技能节点 = 倾泻），不再单独计攻击
-  const burstIdx = skipIdx >= 0 ? skipIdx : null;
-  const realAttacks = atk.filter(i => i !== burstIdx).length;
-  actions += realAttacks;
-  if (burstIdx !== null && realAttacks === 0) {
-    actions += 1;                 // 倾泻本身占用这一次动作
-  }
+  const skOnPath = [...new Set(sk.filter(i => i > 0 && i < p.length))].sort((a, b) => a - b);
+  const skSet = new Set(skOnPath);
+  /* 技能节点占了第一个等待步：技能就绪时技能优先（这一步不闪避）；技能没就绪时仍可闪避 */
+  const dodge = wIdx >= 0 && !(skSet.has(wIdx) && skillReadyInfo(p).ready);
+  const atkOnPath = [...new Set(atk.filter(i => i > 0 && i < p.length))];
   return {
-    dodge, actions,
+    dodge,
     dodgeIndex: (dodge ? wIdx : -1),
-    burstIndex: burstIdx,
-    fencerIndex: fencerIdx
+    skillIdxs: skOnPath,
+    attackCount: atkOnPath.length,
+    skillCount: skOnPath.length,
+    actions: (dodge ? 1 : 0) + atkOnPath.length + skOnPath.length,
   };
 }
 
-// 一回合只能进行一次动作：判断再加一个动作是否超限
-function actionBudgetLeft(path, atkIdxs) {
-  const info = plannedActionInfo(path, atkIdxs);
-  return 1 - info.actions;
+// 再加一个节点会不会超出动作上限（用于设置节点时的提示）
+function nodeFitsBudget(path, atkIdxs, skillIdxs) {
+  return plannedActionInfo(path, atkIdxs, skillIdxs).actions <= maxActionsThisTurn();
 }
 
 /* 玩家当前有效 AC：闪避状态下额外 +N（闪避持续到本回合结束） */
@@ -1167,30 +1210,23 @@ function clearUnitLayer() {
   unitEls.clear();
 }
 function getUnitIcon() {
-  if (selectedChar === 'wheelchair') return '🤺';
-  if (selectedChar === 'vampire') return '🧛‍♂️';
-  if (selectedChar === 'fencer') return '⚙️';
-  if (selectedChar === 'amiya') return '🥳';
-  return '🧝';
+  const c = CHARACTERS[selectedChar];
+  return c ? c.icon : '🧝';
 }
 function getPlayerRenderFacing() {
   if (!player) return null;
-  if (phase === 'planning') {
+  if (phase === PHASE.PLANNING) {
     return previewFacing(playerPath, player.x, player.y) || player.facing;
   }
   return player.facing;
 }
 function isPlayerPreviewCharging() {
-  if (phase !== 'planning') return playerChargingThisTurn || fencerCounterActive;
-  if (selectedChar === 'wheelchair') return pathHasCharge(playerPath);
-  if (selectedChar === 'fencer') return canEnterCounterState(playerPath);
-  if (selectedChar === 'amiya') return amiyaBurstAttackIndex(playerPath) !== null;
-  if (selectedChar === 'vampire') return vampireSkillActive;
-  return false;
+  if (phase !== PHASE.PLANNING) return playerChargingThisTurn || fencerCounterActive;
+  return skillReadyInfo(playerPath).ready || vampireSkillActive;
 }
 
 function renderUnits() {
-  if (phase === 'char_select' || !player) { clearUnitLayer(); return; }
+  if (phase === PHASE.CHAR_SELECT || !player) { clearUnitLayer(); return; }
   const lr = unitLayer.getBoundingClientRect();
   const toRender = [];
   if (player.alive) {
@@ -1266,8 +1302,7 @@ function renderUnits() {
     rec.hpFill.style.width = pct + '%';
     rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : '#e74c3c';
     if (u.facing) {
-      const fmap = { '1,0': ['▶','r'], '-1,0': ['◀','l'], '0,1': ['▼','d'], '0,-1': ['▲','u'] };
-      const v = fmap[u.facing.dx + ',' + u.facing.dy];
+      const v = FACING_GLYPH[u.facing.dx + ',' + u.facing.dy];
       if (v) {
         rec.facingEl.style.display = 'flex';
         rec.facingEl.textContent = v[0];
@@ -1294,31 +1329,107 @@ function renderUnits() {
   }
 }
 
-function initCharSelect() {
-  phase = 'char_select';
-  debugMode = false;
-  lastPathSignature = '';
-  fencerCounterActive = false;
-  playerChargeStopReason = null;
-  playerChargeCausedDamage = false;
-  pendingAttack = false;
-  pendingChargeInfo = null;
-  pendingCounterInfo = null;
-  amiyaBonusTargets = 0;
-  amiyaBurstPlan = null;
-  amiyaBurstDone = false;
-  levelHpBonus = 0;
-  heroLevel = 1;
-  buffs = { kettle: 0, blade: 0, sass: 0, kit: 0, pill: 0, scout: 0 };
-  playerShield = 0;
-  levelUpOpen = false;
-  levelUpPending = false;
-  lastLevelUpConMod = 0;
+/* =========================================================
+ * ★ 状态重置：开局 / 换角色 / 通关 / 回合切换
+ * 原来同一个变量表在 initCharSelect、selectCharacter、initLevel、
+ * confirmAction、endRound 里各抄了一份，新增状态时极容易漏清。
+ * 这里按「整局 / 整轮」两级收敛。
+ * ========================================================= */
+function freshBuffs() {
+  return { kettle: 0, blade: 0, sass: 0, kit: 0, pill: 0, scout: 0 };
+}
+function clearLevelUpOverlay() {
   document.querySelectorAll('.lv-mask').forEach(m => m.remove());
+}
+/* 技力与角色专属技能状态（换角色 / 重开时清零） */
+function resetSkillState() {
   fencerSp = 0;
   wheelchairSp = 0;
   vampireSp = 0;
   vampireSkillActive = false;
+  amiyaBonusTargets = 0;
+}
+/* 整局成长：等级 / buff / 护盾 / 升级弹窗 */
+function resetRunProgress() {
+  levelHpBonus = 0;
+  heroLevel = 1;
+  buffs = freshBuffs();
+  playerShield = 0;
+  levelUpOpen = false;
+  levelUpPending = false;
+  lastLevelUpConMod = 0;
+  clearLevelUpOverlay();
+  resetSkillState();
+}
+/* 一回合内的临时状态（每回合开始 / 结束时都清）。
+ * clearCounter=true 时连反击状态一起清（回合结束时需要）。 */
+function resetTurnState({ clearCounter = false } = {}) {
+  playerChargingThisTurn = false;
+  playerAttacksDone = 0;
+  playerActionsUsed = 0;
+  playerDodging = false;
+  playerDodgeACBonus = 0;
+  dodgeTriggerIndex = -1;
+  pendingAttack = false;
+  pendingChargeInfo = null;
+  playerChargeStopReason = null;
+  playerChargeCausedDamage = false;
+  if (clearCounter) fencerCounterActive = false;
+}
+
+function createPlayerStats(charId) {
+  const char = CHARACTERS[charId];
+  return {
+    abilities: { ...char.abilities },
+    profMelee: char.profMelee,
+    profRanged: char.profRanged,
+    abilityPoints: 0,
+    currentHp: 0,
+    extraTargets: 0,
+    extraAttacks: 0,
+    critChance: 0.08,
+  };
+}
+function createPlayerUnit(start) {
+  return {
+    x: start.x, y: start.y,
+    hp: playerStats.currentHp, maxHp: playerStats.maxHp,
+    move: playerStats.move, range: PLAYER_RANGE,
+    rangedDmg: playerStats.rangedDmg,
+    meleeDmg: playerStats.meleeDmg,
+    critChance: playerStats.critChance,
+    extraTargets: playerStats.extraTargets,
+    extraAttacks: playerStats.extraAttacks,
+    visibleSteps: playerStats.visibleSteps,
+    abilities: playerStats.abilities,
+    ac: playerStats.ac,
+    prof: playerStats.prof,
+    meleeProf: playerStats.meleeProf,
+    rangedProf: playerStats.rangedProf,
+    alive: true, facing: { dx: 1, dy: 0 },
+  };
+}
+/* 加点 / 升级后把派生面板同步到战斗单位（唯一入口，避免两边字段漂移） */
+function syncPlayerFromStats() {
+  if (!player) return;
+  player.maxHp = playerStats.maxHp;
+  player.move = playerStats.move;
+  player.meleeDmg = playerStats.meleeDmg;
+  player.rangedDmg = playerStats.rangedDmg;
+  player.visibleSteps = playerStats.visibleSteps;
+  player.abilities = playerStats.abilities;
+  player.ac = playerStats.ac;
+  player.prof = playerStats.prof;
+  player.meleeProf = playerStats.meleeProf;
+  player.rangedProf = playerStats.rangedProf;
+}
+
+function initCharSelect() {
+  phase = PHASE.CHAR_SELECT;
+  debugMode = false;
+  lastPathSignature = '';
+  resetTurnState({ clearCounter: true });
+  resetRunProgress();
   isMoving = false;
   dragging = false;
   dragDownCell = null;
@@ -1340,7 +1451,7 @@ function initCharSelect() {
     { id: 'amiya', x: 4, y: 2, alive: true }
   ];
   selectedCandidate = null;
-  logLines = [];
+  clearLog();
   log('请点击选择一个角色，然后通过点击或 WASD 移动至 🚪 出口。');
   log('💡 提示：F12 切换调试模式 · X 一键重置路径');
   setTimeout(() => { updateCellSize(); render(); }, 50);
@@ -1349,33 +1460,9 @@ function initCharSelect() {
 function selectCharacter(charId) {
   selectedChar = charId;
   debugMode = false;
-  const char = CHARACTERS[charId];
-  playerStats = {
-    abilities: { ...char.abilities },
-    profMelee: char.profMelee,
-    profRanged: char.profRanged,
-    abilityPoints: 0,
-    currentHp: 0,
-    extraTargets: 0,
-    extraAttacks: 0,
-    critChance: 0.08,
-  };
+  playerStats = createPlayerStats(charId);
   level = 1;
-  levelHpBonus = 0;
-  heroLevel = 1;
-  buffs = { kettle: 0, blade: 0, sass: 0, kit: 0, pill: 0, scout: 0 };
-  playerShield = 0;
-  levelUpOpen = false;
-  levelUpPending = false;
-  lastLevelUpConMod = 0;
-  document.querySelectorAll('.lv-mask').forEach(m => m.remove());
-  amiyaBonusTargets = 0;
-  amiyaBurstPlan = null;
-  amiyaBurstDone = false;
-  fencerSp = 0;
-  wheelchairSp = 0;
-  vampireSp = 0;
-  vampireSkillActive = false;
+  resetRunProgress();
   recomputePlayerDerivedStats();
   playerStats.currentHp = playerStats.maxHp;
   initLevel();
@@ -1386,7 +1473,7 @@ function findPath(startX, startY, targetX, targetY, maxSteps = 99) {
   const queue = [{ x: startX, y: startY, path: [] }];
   const visited = new Set();
   visited.add(key(startX, startY));
-  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+  const dirs = DIR4_BFS;
   while (queue.length > 0) {
     const curr = queue.shift();
     if (curr.path.length >= maxSteps) continue;
@@ -1394,9 +1481,9 @@ function findPath(startX, startY, targetX, targetY, maxSteps = 99) {
       const nx = curr.x + dx, ny = curr.y + dy;
       if (!isWalkable(nx, ny)) continue;
       if (visited.has(key(nx, ny))) continue;
-      if (phase === 'char_select') {
+      if (phase === PHASE.CHAR_SELECT) {
         if (charCandidates.some(c => c !== selectedCandidate && c.x === nx && c.y === ny && (nx !== targetX || ny !== targetY))) continue;
-      } else if (phase === 'planning') {
+      } else if (phase === PHASE.PLANNING) {
         if (nx === player.x && ny === player.y) continue;
       }
       visited.add(key(nx, ny));
@@ -1410,12 +1497,12 @@ function findPath(startX, startY, targetX, targetY, maxSteps = 99) {
 
 function getBoundingBox() {
   let minX = COLS, maxX = -1, minY = ROWS, maxY = -1;
-  const m = phase === 'char_select' ? selMap : map;
+  const m = phase === PHASE.CHAR_SELECT ? selMap : map;
   for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
     let v = false;
     if (m[y][x] === 0) v = true;
     else if (m[y][x] === 1) {
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      for (const [dx, dy] of DIR4) {
         const nx = x + dx, ny = y + dy;
         if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && m[ny][nx] === 0) { v = true; break; }
       }
@@ -1450,8 +1537,7 @@ function unitCenter(x, y) {
 }
 function facingIndicatorHtml(facing) {
   if (!facing) return '';
-  const map = { '1,0': ['▶','r'], '-1,0': ['◀','l'], '0,1': ['▼','d'], '0,-1': ['▲','u'] };
-  const v = map[facing.dx + ',' + facing.dy];
+  const v = FACING_GLYPH[facing.dx + ',' + facing.dy];
   if (!v) return '';
   return `<div class="facing-ind ${v[1]}">${v[0]}</div>`;
 }
@@ -1512,7 +1598,7 @@ function canRangedAttack(from, target, range) {
  * 远程角色取 player.range，近战角色取相邻 1 格；视线被墙挡掉的格子不算。 */
 function playerAttackRangeCells() {
   const set = new Set();
-  if (phase !== 'planning' || !player) return set;
+  if (phase !== PHASE.PLANNING || !player) return set;
   const range = isRangedChar(selectedChar) ? (player.range || PLAYER_RANGE) : 1;
   const origin = rangeDisplayOrigin();
   if (!origin) return set;
@@ -1531,8 +1617,7 @@ function playerAttackRangeCells() {
 
 function showEnemyFirstStepArrows() {
   clearEnemyArrows();
-  if (phase !== 'planning') return;
-  const arrowChars = { '0,-1':'↑','0,1':'↓','-1,0':'←','1,0':'→','1,-1':'↗','1,1':'↘','-1,-1':'↙','-1,1':'↖' };
+  if (phase !== PHASE.PLANNING) return;
   const cellSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cell')) || 50;
   const offset = cellSize * 0.35;
   enemies.forEach((e, i) => {
@@ -1545,7 +1630,7 @@ function showEnemyFirstStepArrows() {
     for (let s = 1; s <= stepsToShow && s < path.length; s++) {
       const prev = path[s-1], curr = path[s];
       const dx = Math.sign(curr.x - prev.x), dy = Math.sign(curr.y - prev.y);
-      const ch = arrowChars[`${dx},${dy}`];
+      const ch = ARROW_CHARS[`${dx},${dy}`];
       if (!ch) continue;
       let ox = 0, oy = 0;
       if (dx === -1) ox = offset; if (dx === 1) ox = -offset;
@@ -1673,6 +1758,97 @@ function missFx(x, y) {
   floatText(x, y, 'MISS', '#bbb');
 }
 
+/* =========================================================
+ * ★ 结算收尾工具（击杀 / 落败 / 通关 / 玩家受伤反馈）
+ *
+ * 这些「收尾动作」原先在 resolveStep 里被复制了 6~8 份，
+ * 且各份细节并不一致（有的漏了阿米娅技力、有的漏了击杀特效）。
+ * 统一入口后，新增角色或调整规则只需要改一处。
+ * ========================================================= */
+const IMMUNE_CHARGE = '冲锋免疫';
+const IMMUNE_COUNTER = '满技力免疫';
+
+/* 敌人死亡：清血、标记、可选特效与日志、阿米娅击杀技力。
+ * opts.killedIds 传入本 tick 的击杀集合（相杀 / 冲锋撞击需要额外记账）。 */
+function killEnemy(e, opts = {}) {
+  if (!e || !e.alive) return false;
+  const {
+    showRing = true, showFloat = true, floatMsg = '击杀!',
+    logText = true, amiyaSp = true, killedIds = null,
+  } = opts;
+  e.alive = false;
+  if (killedIds) killedIds.add(e.id);
+  if (showRing) ringFx(e.x, e.y, '#ff6b6b');
+  if (showFloat) floatText(e.x, e.y, floatMsg, '#ff6b6b');
+  if (logText) log(logText === true ? `敌人${e.id + 1}被击败` : logText);
+  if (amiyaSp && selectedChar === 'amiya') amiyaGainKillBonus();
+  return true;
+}
+
+/* 玩家落败：统一置阶段、清箭头、写日志、重绘。 */
+function endGame(message = '你死了。游戏结束。', markDead = true) {
+  if (markDead && player) player.alive = false;
+  phase = PHASE.GAMEOVER;
+  clearEnemyArrows();
+  log(message);
+  render();
+}
+
+/* 通关：先刷新一帧让最后一次击杀可见，再进入通关结算。 */
+async function finishLevel() {
+  render();
+  await sleep(300);
+  onLevelClear();
+}
+
+/* 玩家承伤的浮动文字：调试无敌 / 护盾抵消 / 正常伤害 三态统一在这里判定。 */
+function showPlayerDamage(res, normalText, opts = {}) {
+  const { color = '#ff6b6b', crit = false, x = player.x, y = player.y } = opts;
+  const immune = debugMode;
+  floatText(x, y,
+    immune ? '无敌' : (res.shielded ? '护盾抵消' : normalText),
+    immune ? '#ffcc00' : (res.shielded ? '#ffffff' : color),
+    !immune && !res.shielded && crit);
+}
+
+/* 近战暴击判定：自然20 → 朝向 → 角色暴击率（泥岩额外 +42%）。
+ * facingMode：'cone' 用于攻击节点范围攻击（面向的 3 格扇形），'target' 用于趁乱打击（正对目标）。
+ * 注意 Math.random 的调用顺序：与旧版一致，改动会影响整局随机序列。 */
+function meleeCritTag(target, atk, facingMode = 'target') {
+  if (atk.nat20) return '自然20暴击';
+  const facing = facingMode === 'cone' ? isInFacingCone(player, target) : isFacingTarget(player, target);
+  if (facing) return '朝向暴击';
+  const chance = selectedChar === 'fencer' ? player.critChance + 0.42 : player.critChance;
+  return Math.random() < chance ? '暴击' : '';
+}
+
+/* 玩家当前是否处于「免疫本次伤害」的状态（风笛冲锋 / 泥岩满技力反击）。 */
+function playerImmuneState() {
+  if (selectedChar === 'wheelchair' && playerChargingThisTurn) return IMMUNE_CHARGE;
+  if (selectedChar === 'fencer' && fencerCounterActive && fencerSp >= FENCER_SP_MAX) return IMMUNE_COUNTER;
+  return null;
+}
+
+/* 免疫命中时的统一表现（日志文案按来源传入，保持原有措辞）。
+ * 泥岩的免疫同样要结算一次反击，否则会「满技力→免疫→不反击→技力永不清零」死锁。 */
+function tryPlayerImmuneHit(state, chargeLabel, counterLabel, hitTag) {
+  if (!state) return false;
+  const tag = hitTag ? `（${hitTag}）` : '';
+  log(state === IMMUNE_CHARGE
+    ? `${chargeLabel}${tag}，冲锋状态免疫所有伤害！`
+    : `${counterLabel}${tag}，但泥岩反击状态+满技力，免疫所有攻击！`);
+  floatText(player.x, player.y, state, '#ffd700');
+  if (state === IMMUNE_COUNTER && player.hp > 0) triggerFencerCounter();
+  return true;
+}
+
+/* 敌人攻击玩家：泥岩反击状态下敌人掷骰取劣势。 */
+function rollEnemyAttack(attackerMod, prof, targetAC) {
+  return (selectedChar === 'fencer' && fencerCounterActive)
+    ? attackRollDisadvantage(attackerMod, prof, targetAC)
+    : attackRoll(attackerMod, prof, targetAC);
+}
+
 function triggerFencerCounter() {
   if (selectedChar !== 'fencer' || !fencerCounterActive) return;
   if (!player || !player.alive || player.hp <= 0) return;
@@ -1734,28 +1910,17 @@ async function executeAmiyaBurst(count) {
     const target = targets[0];
     const atk = attackRoll(intMod, player.rangedProf || 0, target.ac);
     /* 精神爆发：必定命中 + 必定暴击（不吃 d20，自然 1 与高 AC 也照样打中） */
-    const forcedHit = !atk.hit;
-    if (forcedHit) { atk.hit = true; atk.forcedHit = true; }
-    const isCrit = atk.hit;
-    /* 只要出手（即使 MISS）就能看到目标意图 */
+    atk.hit = true;
+    const isCrit = true;
+    /* 只要出手就能看到目标意图 */
     amiyaMarkReveal(target);
     await animateBullet({ x: player.x, y: player.y }, 'enemy-' + target.id, target, isCrit, false, 'player');
-    if (atk.hit) {
-      const dmg = player.rangedDmg * (isCrit ? 2 : 1);
-      target.hp -= dmg;
-      /* 精神爆发的击杀不给技力（否则倾泻过程中边杀边攒，会滚雪球） */
-      if (target.hp <= 0) target.alive = false;
-      if (isCrit) {
-        hitFx(target.x, target.y, dmg, true, '爆发暴击');
-        log(`「精神爆发」${i + 1}/${count}：暴击敌人${target.id + 1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)}${forcedHit ? ' · 必定命中' : ''} · 必定暴击)`);
-      } else {
-        hitFx(target.x, target.y, dmg, false);
-        log(`「精神爆发」${i + 1}/${count}：命中敌人${target.id + 1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)}${forcedHit ? ' · 必定命中' : ''})`);
-      }
-    } else {
-      missFx(target.x, target.y);
-      log(`「精神爆发」${i + 1}/${count}：未命中 (${fmtRoll(atk, target.ac)})`);
-    }
+    const dmg = player.rangedDmg * 2;
+    target.hp -= dmg;
+    /* 精神爆发的击杀不给技力（否则倾泻过程中边杀边攒，会滚雪球） */
+    if (target.hp <= 0) target.alive = false;
+    hitFx(target.x, target.y, dmg, true, '爆发暴击');
+    log(`「精神爆发」${i + 1}/${count}：必定命中·必定暴击，对敌人${target.id + 1}造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
     refreshUnits();
     await sleep(180);
   }
@@ -1811,7 +1976,7 @@ function bfsReachable(m, sx, sy) {
   visited.add(key(sx, sy));
   while (q.length) {
     const [x, y] = q.shift();
-    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    for (const [dx, dy] of DIR4) {
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
       if (m[ny][nx] !== 0) continue;
@@ -1839,7 +2004,7 @@ function growRegion(startX, startY, target) {
   }
   function openCell(x, y) {
     m[y][x] = 0; region.add(key(x, y));
-    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    for (const [dx, dy] of DIR4) {
       const nx = x + dx, ny = y + dy;
       if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
       const k = key(nx, ny);
@@ -1903,7 +2068,7 @@ function placeObstacles(m, spawnX, spawnY) {
       if (m[y][x] !== 0) continue;
       if (Math.abs(x - spawnX) + Math.abs(y - spawnY) <= SPAWN_CLEAR_RADIUS) continue;
       let ao = 0;
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if (obstacleCells.has(key(x + dx, y + dy))) ao++;
+      for (const [dx, dy] of DIR4) if (obstacleCells.has(key(x + dx, y + dy))) ao++;
       if (ao > 0) continue;
       candidates.push({ x, y });
     }
@@ -1916,14 +2081,14 @@ function placeObstacles(m, spawnX, spawnY) {
     obstacleCells.add(key(seed.x, seed.y));
     for (let i = 1; i < size; i++) {
       const frontier = [];
-      for (const c of group) for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      for (const c of group) for (const [dx, dy] of DIR4) {
         const nx = c.x + dx, ny = c.y + dy;
         if (nx < 1 || nx >= COLS - 1 || ny < 1 || ny >= ROWS - 1) continue;
         if (m[ny][nx] !== 0) continue;
         if (localSet.has(key(nx, ny))) continue;
         if (Math.abs(nx - spawnX) + Math.abs(ny - spawnY) <= SPAWN_CLEAR_RADIUS) continue;
         let ao = 0;
-        for (const [ddx, ddy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        for (const [ddx, ddy] of DIR4) {
           const k2 = key(nx + ddx, ny + ddy);
           if (obstacleCells.has(k2) && !localSet.has(k2)) ao++;
         }
@@ -1965,7 +2130,7 @@ function generateMap(numEnemies, targetWalkable) {
         if (m[y][x] !== 0) continue;
         if (Math.abs(x - playerStart.x) + Math.abs(y - playerStart.y) <= SPAWN_CLEAR_RADIUS) continue;
         let cnt = 0;
-        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) if (m[y+dy][x+dx] === 0) cnt++;
+        for (const [dx, dy] of DIR4) if (m[y+dy][x+dx] === 0) cnt++;
         if (cnt <= 1) { m[y][x] = 1; changed = true; }
       }
     }
@@ -2001,7 +2166,7 @@ function generateMap(numEnemies, targetWalkable) {
         if (Math.abs(c.x - playerStart.x) + Math.abs(c.y - playerStart.y) <= SPAWN_CLEAR_RADIUS) continue;
         if (enemyStarts.some(es => es.x === c.x && es.y === c.y)) continue;
         let wc = 0;
-        for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        for (const [dx, dy] of DIR4) {
           const nx = c.x + dx, ny = c.y + dy;
           if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS || m[ny][nx] === 1) wc++;
         }
@@ -2040,9 +2205,6 @@ function initLevel() {
     clearUnitLayer();
     pendingAttack = false;
     pendingChargeInfo = null;
-    pendingCounterInfo = null;
-    amiyaBurstPlan = null;
-    amiyaBurstDone = false;
     vampireSkillActive = false;   // 不稳定血浆只在本关内持续
     const numEnemies = Math.min(3 + Math.floor((level - 1) / 2), 6);
     const targetWalkable = 70 + numEnemies * 8;
@@ -2060,23 +2222,7 @@ function initLevel() {
     playerShield = buffs.pill;
     if (playerStats.currentHp > playerStats.maxHp) playerStats.currentHp = playerStats.maxHp;
     if (playerStats.currentHp <= 0) playerStats.currentHp = playerStats.maxHp;
-    player = {
-      x: gen.playerStart.x, y: gen.playerStart.y,
-      hp: playerStats.currentHp, maxHp: playerStats.maxHp,
-      move: playerStats.move, range: PLAYER_RANGE,
-      rangedDmg: playerStats.rangedDmg,
-      meleeDmg: playerStats.meleeDmg,
-      critChance: playerStats.critChance,
-      extraTargets: playerStats.extraTargets,
-      extraAttacks: playerStats.extraAttacks,
-      visibleSteps: playerStats.visibleSteps,
-      abilities: playerStats.abilities,
-      ac: playerStats.ac,
-      prof: playerStats.prof,
-      meleeProf: playerStats.meleeProf,
-      rangedProf: playerStats.rangedProf,
-      alive: true, facing: { dx: 1, dy: 0 }
-    };
+    player = createPlayerUnit(gen.playerStart);
     enemies = [];
     for (let i = 0; i < numEnemies; i++) {
       const s = gen.enemyStarts[i];
@@ -2104,14 +2250,17 @@ function initLevel() {
     }
     playerPath = [{ x: player.x, y: player.y }];
     attackIndices = [];
+    skillIndices = [];
+    lastClick = null;
     enemyPaths = [];
     lastPathSignature = '';
-    phase = 'planning';
+    phase = PHASE.PLANNING;
     playerChargingThisTurn = false; playerAttacksDone = 0; fencerCounterActive = false;
     playerChargeStopReason = null;
     playerChargeCausedDamage = false;
     logLines = logLines.slice(-5);
     if (logLines.length > 0) logLines.push('');
+    renderLogAll();   // 保留上一关最近 5 行作为上下文，再重绘可视区
     const charName = CHARACTERS[selectedChar] ? CHARACTERS[selectedChar].name : '未知';
     log(`=== 第 ${level} 关　角色：${charName}　地图 ${COLS}×${ROWS}　敌人 ${numEnemies} 个 ===`);
     if (selectedChar === 'amiya' && amiyaBonusTargets > 0) {
@@ -2143,10 +2292,10 @@ function initLevel() {
     setTimeout(() => { updateCellSize(); render(); }, 50);
   } catch (err) {
     console.error(err);
-    logLines = [];
+    clearLog();
     log('初始化错误：' + (err && err.message ? err.message : err));
     log(String(err && err.stack ? err.stack : ''));
-    phase = 'gameover';
+    phase = PHASE.GAMEOVER;
     try { render(); } catch (e) {}
   }
 }
@@ -2211,7 +2360,7 @@ function endSideDrag() {
   if (sideDragRaf) { cancelAnimationFrame(sideDragRaf); sideDragRaf = 0; sideDragFlush(); }
   const cur = parseFloat(sidebarEl.style.width) || sidebarEl.offsetWidth;
   applySidebarWidth(cur, true);
-  if (player || phase === 'char_select') render();
+  if (player || phase === PHASE.CHAR_SELECT) render();
 }
 dragHandle.addEventListener('pointerup', endSideDrag);
 dragHandle.addEventListener('pointercancel', endSideDrag);
@@ -2228,12 +2377,12 @@ window.addEventListener('resize', () => {
       radarCanvas.style.height = '';
       updateCellSize();
     }
-    if (player || phase === 'char_select') render();
+    if (player || phase === PHASE.CHAR_SELECT) render();
   }, 100);
 });
 
 function updateCellSize() {
-  const m = phase === 'char_select' ? selMap : map;
+  const m = phase === PHASE.CHAR_SELECT ? selMap : map;
   if (!m || m.length === 0) return;
   const bbox = getBoundingBox();
   const bc = bbox.maxX - bbox.minX + 1;
@@ -2250,8 +2399,7 @@ function updateCellSize() {
 }
 
 function logEnemyMainDirections() {
-  if (phase !== 'planning') return;
-  const dirNames = { '0,-1': '上', '0,1': '下', '-1,0': '左', '1,0': '右' };
+  if (phase !== PHASE.PLANNING) return;
   enemies.forEach((e, i) => {
     if (!e.alive) return;
     if (e.stunTurns > 0) { log(`敌人${i+1} 眩晕中（无意图）`); return; }
@@ -2260,7 +2408,7 @@ function logEnemyMainDirections() {
     const counts = {};
     for (let j = 1; j < path.length; j++) {
       const dx = path[j].x - path[j-1].x, dy = path[j].y - path[j-1].y;
-      const d = dirNames[`${dx},${dy}`] || '?';
+      const d = DIR_NAMES[`${dx},${dy}`] || '?';
       counts[d] = (counts[d] || 0) + 1;
     }
     let max = 0, main = [];
@@ -2272,29 +2420,24 @@ function logEnemyMainDirections() {
 function buildBoardHtml() {
   let html = '';
   const bbox = getBoundingBox();
-  const m = phase === 'char_select' ? selMap : map;
-  let previewCounter = false;
-  let attackSuppressFromIdx = Infinity;
-  if (phase === 'planning') {
-    if (selectedChar === 'fencer') {
-      previewCounter = canEnterCounterState(playerPath);
-    }
-  }
-  /* 攻击范围高亮 / 阿米娅倾泻节点 / 闪避节点（只在规划阶段生效） */
-  const rangeSet = (phase === 'planning' && showRangeOverlay) ? playerAttackRangeCells() : null;
-  const burstIdx = (phase === 'planning' && selectedChar === 'amiya') ? amiyaBurstAttackIndex(playerPath) : null;
-  const planInfo = (phase === 'planning') ? plannedActionInfo(playerPath, attackIndices) : null;
+  const m = phase === PHASE.CHAR_SELECT ? selMap : map;
+  /* 攻击节点 / 技能节点 / 闪避节点 / 攻击范围（只在规划阶段生效） */
+  const isAttackStep = (idx) => attackIndices.includes(idx);
+  const isSkillStep = (idx) => skillIndices.includes(idx);
+  const rangeSet = (phase === PHASE.PLANNING && showRangeOverlay) ? playerAttackRangeCells() : null;
+  const planInfo = (phase === PHASE.PLANNING) ? plannedActionInfo(playerPath, attackIndices, skillIndices) : null;
   const dodgeIdx = planInfo ? planInfo.dodgeIndex : -1;
+  const nodeReady = (phase === PHASE.PLANNING) ? skillReadyInfo(playerPath).ready : false;
   for (let y = bbox.minY; y <= bbox.maxY; y++) {
     for (let x = bbox.minX; x <= bbox.maxX; x++) {
       let cls = 'cell';
       let content = '';
       if (m[y][x] === 1) {
-        const hw = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => isWalkable(x+dx, y+dy));
+        const hw = DIR4.some(([dx,dy]) => isWalkable(x+dx, y+dy));
         if (hw) cls += ' wall'; else cls += ' void';
       } else cls += ' empty';
       if (rangeSet && rangeSet.has(key(x, y))) cls += ' in-range';
-      if (phase === 'char_select') {
+      if (phase === PHASE.CHAR_SELECT) {
         if (selExit.x === x && selExit.y === y) { cls += ' exit-cell'; content = '🚪'; }
         else {
           const cand = charCandidates.find(c => c.x === x && c.y === y);
@@ -2305,14 +2448,11 @@ function buildBoardHtml() {
         playerPath.forEach((p, idx) => { if (p.x === x && p.y === y) stepsAtCell.push(idx); });
         if (stepsAtCell.length > 0) {
           cls += ' path';
-          const hasAttack = !previewCounter && stepsAtCell.some(idx =>
-            attackIndices.includes(idx) && idx < attackSuppressFromIdx
-          );
-          if (hasAttack) {
-            cls += ' attack';
-            if (burstIdx !== null && stepsAtCell.includes(burstIdx)) cls += ' burst';
-            if (playerAttacksDone >= 1 + player.extraAttacks) cls += ' used';
-          }
+          const hasAttack = stepsAtCell.some(isAttackStep);
+          const hasSkill = stepsAtCell.some(isSkillStep);
+          if (hasAttack) cls += ' attack';
+          if (hasSkill) cls += ' skill';
+          if (playerAttacksDone >= maxActionsThisTurn()) cls += ' used';
           /* 闪避节点：第一次等待 → 蓝色标记 */
           if (dodgeIdx >= 0 && stepsAtCell.includes(dodgeIdx)) cls += ' dodge';
         }
@@ -2320,8 +2460,7 @@ function buildBoardHtml() {
         const enemyHere = enemies.find(e => e.alive && e.x === x && e.y === y);
         const bloodHere = bloodDrops.some(b => b.x === x && b.y === y);
         if (playerHere || enemyHere) {
-          /* 有单位站在这格时看不见格内文字：倾泻节点改用右上角小皇冠标记 */
-          if (burstIdx !== null && stepsAtCell.includes(burstIdx)) cls += ' burst-mark';
+          /* 有单位站在这格时看不见格内文字，节点靠底色 + 描边提示 */
         } else if (rewardItems.some(r => r.x === x && r.y === y)) {
           cls += ' item-cell';
           content = `<span class="item-pulse" style="font-size:calc(var(--cell)*0.5);">❤️</span>`;
@@ -2330,12 +2469,10 @@ function buildBoardHtml() {
           content = `<span class="item-pulse" style="font-size:calc(var(--cell)*0.5);">🩸</span>`;
         } else if (stepsAtCell.length > 0) {
           const lastIdx = stepsAtCell[stepsAtCell.length - 1];
-          const hasAttack = !previewCounter && stepsAtCell.some(idx =>
-            attackIndices.includes(idx) && idx < attackSuppressFromIdx
-          );
-          if (hasAttack) {
-            content = (burstIdx !== null && attackIndices.includes(burstIdx)) ? '👑' : '🎯';
-          }
+          const atkIdx = stepsAtCell.find(isAttackStep);
+          const sklIdx = stepsAtCell.find(isSkillStep);
+          if (sklIdx !== undefined) content = nodeReady ? '✦' : '✧';
+          else if (atkIdx !== undefined) content = '🎯';
           else if (dodgeIdx >= 0 && stepsAtCell.includes(dodgeIdx)) content = '💨';
           else if (stepsAtCell.length > 1) content = `⏳${lastIdx}`;
           else if (lastIdx > 0) content = `${lastIdx}`;
@@ -2415,9 +2552,9 @@ function renderTips(tips) {
   }).join('');
 }
 
-/* 点角色卡仪表格：步数 = 等待 · 攻击 = 攻击节点 · 伤害 = 显示攻击范围 */
+/* 点角色卡仪表格：步数 = 等待 · 攻击 = 攻击节点 · 技能 = 技能节点 · 伤害 = 显示攻击范围 */
 function handleKvAction(action) {
-  if (phase !== 'planning' || isMoving || !player) return;
+  if (phase !== PHASE.PLANNING || isMoving || !player) return;
   if (action === 'wait') {
     if (countWaitSteps(playerPath) >= player.move) { log('等待次数已用完（等待上限 = 移动力）。'); return; }
     const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
@@ -2427,6 +2564,10 @@ function handleKvAction(action) {
     if (playerPath.length === 0) return;
     toggleAttack(playerPath.length - 1);
     refreshBoardOnly();
+  } else if (action === 'skill') {
+    if (playerPath.length < 2) { log('先规划至少一步移动，再在路径节点上设置技能节点。'); return; }
+    toggleSkill(playerPath.length - 1);
+    refreshBoardOnly();
   } else if (action === 'range') {
     showRangeOverlay = !showRangeOverlay;
     log(showRangeOverlay ? '📐 显示攻击范围（蓝色地块）。' : '关闭攻击范围显示。');
@@ -2435,60 +2576,61 @@ function handleKvAction(action) {
 }
 
 function renderAbilityAllocator() {
-  if ((phase !== 'planning' && phase !== 'levelclear') || playerStats.abilityPoints <= 0) return '';
-  const tip = (phase === 'levelclear')
+  if ((phase !== PHASE.PLANNING && phase !== PHASE.LEVELCLEAR) || playerStats.abilityPoints <= 0) return '';
+  const tip = (phase === PHASE.LEVELCLEAR)
     ? `⚠️ 请先点击左侧六维图上的属性名，分配完 ${playerStats.abilityPoints} 点属性才能进入下一关`
     : `点击左侧六维图上的属性名加点（剩余 ${playerStats.abilityPoints} 点）`;
   return `<div class="stat" style="color:#ffd700">${tip}</div>`;
 }
 
-function updateStats() {
-  drawRadar();
-
-  /* ---------- 选角色 ---------- */
-  if (phase === 'char_select') {
-    if (!selectedCandidate) {
-      renderHero({
-        name: '选择角色', tag: '', hp: 0, maxHp: 0, hpText: '—',
-        kvHtml: renderKvGrid([
-          ['移动', '—', 'dim'], ['AC', '—', 'dim'],
-          ['伤害', '—', 'dim'], null,
-        ]),
-      });
-      statsEl.innerHTML = `<div class="mini">点击地图上的角色，然后移动至 🚪 出口。六维图中<b style="color:#8fe28a">绿色</b> = 熟练项与最高属性。</div>`;
-      return;
-    }
-    const char = CHARACTERS[selectedCandidate.id];
-    const a = char.abilities;
-    const mv = Math.max(1, Math.floor(a.dex / 2));
-    /* 每个角色只有一种伤害方式（攻击节点类型决定），四格只显示对应的那一个伤害 */
-    const selRanged = isRangedChar(selectedCandidate.id);
-    const selDmg = selRanged ? Math.max(1, 1 + abilityMod(a.int)) : Math.max(1, 1 + abilityMod(a.str));
-    const selDmgProf = selRanged ? char.profRanged : char.profMelee;
-    /* 选角阶段预览技力槽：泥岩/风笛/华法琳 5、阿米娅上限 = 感知，其余角色无技力机制 */
-    const spPreview = selectedCandidate.id === 'fencer' || selectedCandidate.id === 'wheelchair' || selectedCandidate.id === 'vampire'
-      ? { cur: 0, max: FENCER_SP_MAX }
-      : (selectedCandidate.id === 'amiya' ? { cur: 0, max: Math.max(1, a.wis) } : null);
+/* 选角阶段的右侧面板：角色六维 + 技能说明 */
+function renderCharSelectStats() {
+  if (!selectedCandidate) {
     renderHero({
-      name: `${char.name} ${char.icon}`,
-      tag: '待选择',
-      hp: a.con, maxHp: a.con,
-      sp: spPreview,
+      name: '选择角色', tag: '', hp: 0, maxHp: 0, hpText: '—',
       kvHtml: renderKvGrid([
-        ['移动', `${mv}`, ''],
-        ['AC', `${computeAC(a)}`, ''],
-        [charDmgLabel(selectedCandidate.id), `${selDmg}`, selDmgProf ? 'prof' : ''],
-        null,   // 角色只有一种伤害方式 → 另一格留空，保持 2×2
+        ['移动', '—', 'dim'], ['AC', '—', 'dim'],
+        ['伤害', '—', 'dim'], null,
       ]),
     });
-    statsEl.innerHTML = `
-      <div class="card">
-        <div class="card-title">技能说明</div>
-        <div class="card-meta">${char.desc}</div>
-        <ul class="tips">${renderTips(char.tips)}</ul>
-      </div>`;
+    statsEl.innerHTML = `<div class="mini">点击地图上的角色，然后移动至 🚪 出口。六维图中<b style="color:#8fe28a">绿色</b> = 熟练项与最高属性。</div>`;
     return;
   }
+  const char = CHARACTERS[selectedCandidate.id];
+  const a = char.abilities;
+  const mv = Math.max(1, Math.floor(a.dex / 2));
+  /* 每个角色只有一种伤害方式（攻击节点类型决定），四格只显示对应的那一个伤害 */
+  const selRanged = isRangedChar(selectedCandidate.id);
+  const selDmg = selRanged ? Math.max(1, 1 + abilityMod(a.int)) : Math.max(1, 1 + abilityMod(a.str));
+  const selDmgProf = selRanged ? char.profRanged : char.profMelee;
+  /* 选角阶段预览技力槽：泥岩/风笛/华法琳 5、阿米娅上限 = 感知，其余角色无技力机制 */
+  const spPreview = selectedCandidate.id === 'fencer' || selectedCandidate.id === 'wheelchair' || selectedCandidate.id === 'vampire'
+    ? { cur: 0, max: FENCER_SP_MAX }
+    : (selectedCandidate.id === 'amiya' ? { cur: 0, max: Math.max(1, a.wis) } : null);
+  renderHero({
+    name: `${char.name} ${char.icon}`,
+    tag: '待选择',
+    hp: a.con, maxHp: a.con,
+    sp: spPreview,
+    kvHtml: renderKvGrid([
+      ['移动', `${mv}`, ''],
+      ['AC', `${computeAC(a)}`, ''],
+      [charDmgLabel(selectedCandidate.id), `${selDmg}`, selDmgProf ? 'prof' : ''],
+      null,   // 角色只有一种伤害方式 → 另一格留空，保持 2×2
+    ]),
+  });
+  statsEl.innerHTML = `
+    <div class="card">
+      <div class="card-title">技能说明</div>
+      <div class="card-meta">${char.desc}</div>
+      <ul class="tips">${renderTips(char.tips)}</ul>
+    </div>`;
+  return;
+}
+
+function updateStats() {
+  drawRadar();
+  if (phase === PHASE.CHAR_SELECT) { renderCharSelectStats(); return; }
 
   /* ---------- 对局中 ---------- */
   if (!player) return;
@@ -2501,20 +2643,27 @@ function updateStats() {
   /* 角色卡：左六维图 / 右上 HP+技力 / 右下 2×2 仪表 */
   const moveUsed = countMoveSteps(playerPath);
   const atkNodes = attackIndices.length;
+  const skillNodes = skillIndices.length;
   /* 角色只有一种伤害方式（攻击节点类型决定），只显示对应的那一个，另一格留空保持 2×2 */
   const dmgVal = isRanged ? player.rangedDmg : player.meleeDmg;
   const dmgProf = isRanged ? player.rangedProf : player.meleeProf;
   /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = 1（scout 奖励可 +1） */
-  const planInfo = plannedActionInfo(playerPath, attackIndices);
+  const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
   const actionUsed = planInfo.actions;
-  const actionMax = 1 + (player.extraAttacks || 0);
-  const actionLabel = planInfo.dodge ? '闪避' : ((planInfo.burstIndex !== null || planInfo.fencerIndex >= 0) ? '技能' : (actionUsed > 0 ? '攻击' : '—'));
+  const actionMax = maxActionsThisTurn();
+  const actionKinds = [];
+  if (planInfo.dodge) actionKinds.push('闪避');
+  if (planInfo.attackCount) actionKinds.push(`攻击×${planInfo.attackCount}`);
+  if (planInfo.skillCount) actionKinds.push(`技能×${planInfo.skillCount}`);
+  const actionLabel = actionKinds.length
+    ? `${actionKinds.join('+')}${actionMax > 1 ? ` ${actionUsed}/${actionMax}` : ''}`
+    : '—';
   const kvGrid = renderKvGrid([
     ['步数', `${moveUsed}/${player.move}`, moveUsed >= player.move ? 'hi' : '', 'wait'],
     ['攻击', `${atkNodes}`, atkNodes > 0 ? 'on' : 'dim', 'attack'],
+    ['技能', `${skillNodes}`, skillNodes > 0 ? 'on' : (skillReadyInfo(playerPath).ready ? 'hi' : 'dim'), 'skill'],
     [charDmgLabel(selectedChar), `${dmgVal}`, dmgProf ? 'prof' : '', 'range', showRangeOverlay],
-    ['动作', `${actionLabel}${actionMax > 1 ? ` (${actionUsed}/${actionMax})` : ''}`,
-      actionUsed > actionMax ? 'hi' : (actionUsed > 0 ? 'on' : 'dim')],
+    ['动作', actionLabel, actionUsed > actionMax ? 'hi' : (actionUsed > 0 ? 'on' : 'dim')],
   ]);
   /* 技力槽：泥岩固定上限 5；阿米娅上限 = 感知；风笛上限 5（沿直线移动积累，规划时预览增量）；华法琳上限 5（捡血迹） */
   let spInfo = null;
@@ -2533,50 +2682,50 @@ function updateStats() {
 
   /* 状态徽章 */
   const badges = [];
+  const skillInfo = skillReadyInfo(playerPath);
   if (selectedChar === 'fencer' && fencerCounterActive) {
     badges.push('<span class="badge gold">反击状态 · 禁攻击节点</span>');
-  } else if (selectedChar === 'fencer' && canEnterCounterState(playerPath)) {
-    badges.push('<span class="badge gold">第二次等待后进入反击</span>');
-  } else if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-    badges.push('<span class="badge gold">冲锋中 · 禁攻击/趁乱</span>');
+  } else if (selectedChar === 'fencer' && fencerSp >= FENCER_SP_MAX) {
+    badges.push('<span class="badge gold">⚙️ 岩崩锤就绪 · 双击路径节点发动</span>');
   }
-  if (selectedChar === 'wheelchair' && !playerChargingThisTurn) {
+  if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
+    badges.push('<span class="badge gold">冲锋中 · 禁攻击/趁乱</span>');
+  } else if (selectedChar === 'wheelchair') {
     if (pathHasCharge(playerPath)) {
-      badges.push('<span class="badge gold">冲锋就绪 · 攻击节点已变冲锋</span>');
+      badges.push('<span class="badge gold">冲锋就绪 · 技能节点已变冲锋</span>');
     } else if (wheelchairPreviewSp() >= WHEELCHAIR_SP_MAX) {
-      badges.push('<span class="badge gold">技力满 · 规划攻击节点可发动「高效冲击」</span>');
+      badges.push('<span class="badge gold">技力满 · 双击移动节点发动「高效冲击」</span>');
     }
   }
-  if (selectedChar === 'amiya' && amiyaBonusTargets >= amiyaSpMax()) {
-    badges.push('<span class="badge gold">技力满 · 精神爆发就绪 👑</span>');
-  } else if (selectedChar === 'amiya' && amiyaBonusTargets > 0) {
-    badges.push(`<span class="badge gold">技力 ${amiyaBonusTargets} · 等待后接攻击可发动精神爆发</span>`);
+  if (selectedChar === 'amiya') {
+    if (amiyaBonusTargets >= amiyaSpMax()) {
+      badges.push('<span class="badge gold">技力满 · 双击路径节点发动「精神爆发」</span>');
+    } else if (amiyaBonusTargets > 0) {
+      badges.push(`<span class="badge gold">技力 ${amiyaBonusTargets}/${amiyaSpMax()} · 双击路径节点发动精神爆发</span>`);
+    }
   }
   if (selectedChar === 'vampire') {
     if (vampireSkillActive) {
       badges.push('<span class="badge gold">不稳定血浆 · 必定命中/暴击/留血迹（每次 -1 HP）</span>');
     } else if (vampireSp >= VAMPIRE_SP_MAX) {
-      badges.push('<span class="badge gold">技力满 · 起始点攻击可发动「不稳定血浆」</span>');
+      badges.push('<span class="badge gold">技力满 · 双击路径节点发动「不稳定血浆」</span>');
     }
-  }
-  if (isFencer && fencerSp >= FENCER_SP_MAX) {
-    badges.push(fencerCounterActive
-      ? '<span class="badge gold">岩崩锤就绪 · 免疫一切攻击</span>'
-      : '<span class="badge gold">岩崩锤就绪 · 反击时眩晕 + 回血</span>');
   }
   if (playerShield > 0) badges.push(`<span class="badge white">🛡 护盾 ×${playerShield}</span>`);
   if (levelHpBonus > 0) badges.push(`<span class="badge teal">升级 +${levelHpBonus} HP</span>`);
   /* 闪避 / 技能节点 / 动作冲突 提示 */
-  if (phase === 'planning' && planInfo) {
-    if (planInfo.burstIndex !== null) {
-      badges.push('<span class="badge teal">👑 技能节点 · 等待不结算</span>');
-    } else if (planInfo.fencerIndex >= 0) {
-      badges.push('<span class="badge teal">⚙️ 技能节点 · 反击准备</span>');
-    } else if (planInfo.dodge) {
+  if (phase === PHASE.PLANNING && planInfo) {
+    if (planInfo.skillCount > 0) {
+      badges.push(`<span class="badge teal">✦ 技能节点 ×${planInfo.skillCount} · 到达才发动</span>`);
+    }
+    if (planInfo.dodge) {
       badges.push(`<span class="badge teal">💨 闪避节点 · AC +${DODGE_AC_BONUS}</span>`);
     }
-    if (planInfo.dodge && atkNodes > 0) {
-      badges.push('<span class="badge red">⚠️ 闪避与攻击只能二选一</span>');
+    if (actionUsed > actionMax) {
+      badges.push(`<span class="badge red">⚠️ 动作 ${actionUsed}/${actionMax} · 超出部分不执行</span>`);
+    }
+    if (skillNodes > 0 && !skillInfo.ready) {
+      badges.push(`<span class="badge white">技能未就绪（${skillInfo.spNow}/${skillInfo.spMax}）</span>`);
     }
   }
   if (playerDodging) {
@@ -2589,20 +2738,17 @@ function updateStats() {
     ? `<div class="stat">${badges.join('')}${buffChips}</div>` : '';
 
   /* 底部信息 */
-  const phaseText = phase === 'planning' ? '规划' : phase === 'resolving' ? '结算' : phase === 'levelclear' ? '通关' : '结束';
+  const phaseText = phase === PHASE.PLANNING ? '规划' : phase === PHASE.RESOLVING ? '结算' : phase === PHASE.LEVELCLEAR ? '通关' : '结束';
   const footParts = [`回合 ${battleRound}`, `敌人 ${enemies.filter(e => e.alive).length}`, `阶段 ${phaseText}`, `格 ${countWalkable(map)}`];
   if (isRanged) footParts.push(`射程 ${player.range}`);
   const foot = `<div class="mini">${footParts.join(' · ')}</div>`;
 
   statsEl.innerHTML = `${badgeRow}${renderAbilityAllocator()}`;
   if (footEl) footEl.innerHTML = foot;
-  statsEl.querySelectorAll('[data-alloc]').forEach(btn => {
-    btn.onclick = () => allocateAbilityPoint(btn.dataset.alloc);
-  });
 }
 
 function allocateAbilityPoint(abilityKey) {
-  if (phase !== 'planning' && phase !== 'levelclear') return;
+  if (phase !== PHASE.PLANNING && phase !== PHASE.LEVELCLEAR) return;
   if (playerStats.abilityPoints <= 0) return;
   if (playerStats.abilities[abilityKey] >= ABILITY_CAP) return;
   playerStats.abilities[abilityKey] += 1;
@@ -2617,23 +2763,12 @@ function allocateAbilityPoint(abilityKey) {
     playerStats.currentHp = Math.min(playerStats.currentHp, playerStats.maxHp);
     if (player && player.alive) player.hp = Math.min(player.hp, playerStats.maxHp);
   }
-  if (player) {
-    player.maxHp = playerStats.maxHp;
-    player.move = playerStats.move;
-    player.meleeDmg = playerStats.meleeDmg;
-    player.rangedDmg = playerStats.rangedDmg;
-    player.visibleSteps = playerStats.visibleSteps;
-    player.abilities = playerStats.abilities;
-    player.ac = playerStats.ac;
-    player.prof = playerStats.prof;
-    player.meleeProf = playerStats.meleeProf;
-    player.rangedProf = playerStats.rangedProf;
-  }
+  if (player) syncPlayerFromStats();
   refreshBoardOnly();
 }
 
 function updateStartBtn() {
-  if (phase !== 'planning') return;
+  if (phase !== PHASE.PLANNING) return;
   // 开始行动按钮可能位于 #controls（横屏）或 #actionSlot（竖屏，放在六维图上方）
   const btn = controlsEl.querySelector('.start-btn') || (actionSlotEl ? actionSlotEl.querySelector('.start-btn') : null);
   if (btn) btn.disabled = playerPath.length === 0;
@@ -2645,7 +2780,7 @@ function renderControls() {
   /* 竖屏（layout-v）：「开始行动」按钮放到六维图上方的 #actionSlot；横屏则留在底部 #controls */
   const vertical = document.body.classList.contains('layout-v');
   const btnHost = (vertical && actionSlotEl) ? actionSlotEl : controlsEl;
-  if (phase === 'planning') {
+  if (phase === PHASE.PLANNING) {
     const confirm = document.createElement('button');
     confirm.className = 'start-btn';
     confirm.textContent = '⚔️ 开始行动';
@@ -2656,16 +2791,16 @@ function renderControls() {
     tip.style.cssText = 'font-size:12px; color:#888; text-align:center; padding:2px; line-height:1.35; white-space:pre-wrap;';
     const isMobile = window.innerWidth <= 760;
     tip.textContent = isMobile
-      ? '点击移动 · 点卡面「步数」等待 · 「攻击」切攻击 · 点伤害看范围\n长按地块也可追加等待 · 空格确认 · X 重置路径\n一回合一次动作：第一次等待=闪避(AC+3) 或 攻击，二选一'
-      : 'WASD/点击移动 · E 攻击 · Q 等待 · 空格确认\n点卡面「步数」=等待 · 「攻击」=攻击节点 · 点伤害=显示攻击范围\n长按追加等待 · 点击路径节点切换攻击 · X 重置路径 · F12 调试模式\n一回合一次动作：第一次等待=闪避(AC+3) 或 攻击，二选一';
+      ? '点击移动 · 单击路径节点=攻击 · 双击=技能 · 长按地块=等待\n点卡面「攻击」「技能」切末尾节点 · 空格确认 · X 重置路径\n主动行动三选一：攻击 / 技能 / 闪避（第一个等待）'
+      : 'WASD/点击移动 · 单击路径节点=攻击 · 双击=技能 · 长按地块=等待\nE=攻击 · R=技能 · Q=等待 · 空格确认 · X 重置路径 · F12 调试模式\n主动行动三选一：攻击 / 技能 / 闪避（第一个等待）· 被动：趁乱攻击';
     controlsEl.appendChild(tip);
-  } else if (phase === 'gameover') {
+  } else if (phase === PHASE.GAMEOVER) {
     const btn = document.createElement('button');
     btn.className = 'start-btn';
     btn.textContent = '重新开始';
     btn.onclick = () => initCharSelect();
     btnHost.appendChild(btn);
-  } else if (phase === 'levelclear') {
+  } else if (phase === PHASE.LEVELCLEAR) {
     const tip = document.createElement('div');
     tip.style.cssText = 'font-size:13px; color:#ffd700; text-align:center; padding:4px;';
     if (levelUpPending) {
@@ -2689,8 +2824,8 @@ function renderControls() {
       }
       btnHost.appendChild(btn);
     } else {
-      // 保险：定时器万一被清掉，也不会卡在通关界面
-      setTimeout(() => openLevelUp(), 400);
+      // 保险：定时器万一被清掉，也不会卡在通关界面（已选过奖励 / 已进入下一关时不再弹）
+      setTimeout(() => { if (phase === PHASE.LEVELCLEAR && levelUpPending) openLevelUp(); }, 400);
     }
   }
   controlsEl.dataset.phase = phase;
@@ -2701,39 +2836,37 @@ function syncControlsIfNeeded() {
     renderControls();
     return;
   }
-  if (phase === 'planning') updateStartBtn();
+  if (phase === PHASE.PLANNING) updateStartBtn();
+}
+
+/* 敌人意图只在「玩家规划路径 / 敌人位置」变化时重算（否则箭头每帧抖动） */
+function syncEnemyIntent() {
+  if (phase !== PHASE.PLANNING) return;
+  if (calcPathSignature() !== lastPathSignature) generateEnemyPaths();
+}
+
+/* 棋盘格 + 单位层 + 意图箭头的统一绘制 */
+function paintBoard() {
+  boardEl.innerHTML = buildBoardHtml();
+  renderUnits();
+  if (phase === PHASE.PLANNING) showEnemyFirstStepArrows();
+  else clearEnemyArrows();
 }
 
 function render(skipControls = false) {
-  if (phase === 'planning') {
-    const sig = calcPathSignature();
-    if (sig !== lastPathSignature) generateEnemyPaths();
-  }
+  syncEnemyIntent();
   const bbox = getBoundingBox();
-  const bc = bbox.maxX - bbox.minX + 1;
   updateStats();
-  boardEl.style.gridTemplateColumns = `repeat(${bc}, var(--cell))`;
-  boardEl.innerHTML = buildBoardHtml();
-  renderUnits();
-  if (phase === 'planning') showEnemyFirstStepArrows();
-  else clearEnemyArrows();
+  boardEl.style.gridTemplateColumns = `repeat(${bbox.maxX - bbox.minX + 1}, var(--cell))`;
+  paintBoard();
   if (skipControls) return;
   renderControls();
 }
 
 function refreshBoardOnly() {
-  if (phase === 'planning') {
-    const sig = calcPathSignature();
-    if (sig !== lastPathSignature) generateEnemyPaths();
-  }
+  syncEnemyIntent();
   updateStats();
-  boardEl.innerHTML = buildBoardHtml();
-  renderUnits();
-  if (phase === 'planning') {
-    showEnemyFirstStepArrows();
-  } else {
-    clearEnemyArrows();
-  }
+  paintBoard();
   syncControlsIfNeeded();
 }
 
@@ -2764,21 +2897,19 @@ function handleKeyDown(e) {
     render();
     return;
   }
-  if (['w','a','s','d','e','q','x'].includes(k) || isSpace) e.preventDefault();
+  if (['w','a','s','d','e','q','x','r'].includes(k) || isSpace) e.preventDefault();
   if (isMoving) return;
-  if (phase === 'char_select') {
+  if (phase === PHASE.CHAR_SELECT) {
     if (selectedCandidate && ['w','a','s','d'].includes(k)) {
-      const dirs = { 'w': {dx:0, dy:-1}, 's': {dx:0, dy:1}, 'a': {dx:-1, dy:0}, 'd': {dx:1, dy:0} };
-      const dir = dirs[k];
+      const dir = KEY_DIRS[k];
       const nx = selectedCandidate.x + dir.dx, ny = selectedCandidate.y + dir.dy;
       if (isWalkable(nx, ny) && !charCandidates.some(c => c !== selectedCandidate && c.x === nx && c.y === ny)) moveCandidate([{x: nx, y: ny}]);
     }
     return;
   }
-  if (phase !== 'planning') return;
+  if (phase !== PHASE.PLANNING) return;
   if (['w','a','s','d'].includes(k)) {
-    const dirs = { 'w': {dx:0, dy:-1}, 's': {dx:0, dy:1}, 'a': {dx:-1, dy:0}, 'd': {dx:1, dy:0} };
-    const dir = dirs[k];
+    const dir = KEY_DIRS[k];
     const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
     const nx = last.x + dir.dx, ny = last.y + dir.dy;
     const idx = findLastIndex(playerPath, p => p.x === nx && p.y === ny);
@@ -2787,6 +2918,7 @@ function handleKeyDown(e) {
       if (idx < playerPath.length - 1) {
         playerPath = playerPath.slice(0, idx + 1);
         attackIndices = attackIndices.filter(i => i < playerPath.length);
+        skillIndices = skillIndices.filter(i => i < playerPath.length);
         refreshBoardOnly();
       }
       return;
@@ -2806,11 +2938,16 @@ function handleKeyDown(e) {
   if (k === 'e') {
     if (playerPath.length > 0) { toggleAttack(playerPath.length - 1); refreshBoardOnly(); }
   }
-  // X：重置路径（回到起点，清空攻击节点）
+  // R：切换末尾路径节点的技能节点（等价双击）
+  if (k === 'r') {
+    if (playerPath.length > 1) { toggleSkill(playerPath.length - 1); refreshBoardOnly(); }
+  }
+  // X：重置路径（回到起点，清空攻击 / 技能节点）
   if (k === 'x') {
-    if (playerPath.length > 1 || attackIndices.length > 0) {
+    if (playerPath.length > 1 || attackIndices.length > 0 || skillIndices.length > 0) {
       playerPath = [{ x: player.x, y: player.y }];
       attackIndices = [];
+      skillIndices = [];
       refreshBoardOnly();
     }
   }
@@ -2821,6 +2958,8 @@ function handleKeyDown(e) {
 document.addEventListener('keydown', handleKeyDown);
 
 let dragging = false, dragDownCell = null, hasDragged = false, pressTimer = null;
+/* 双击识别：记录上一次单击的路径下标、时间与当时的节点快照 */
+let lastClick = null;
 
 function getCellFromEvent(clientX, clientY) {
   const el = document.elementFromPoint(clientX, clientY);
@@ -2834,7 +2973,7 @@ function getCellFromEvent(clientX, clientY) {
 }
 
 function toggleAttack(idx) {
-  if (idx < 0) return;
+  if (idx < 1) return;
   if (selectedChar === 'fencer' && fencerCounterActive) {
     log('反击状态不能设置攻击节点。');
     return;
@@ -2843,24 +2982,41 @@ function toggleAttack(idx) {
     log('冲锋中不能设置攻击节点（冲锋会自动撞击前方敌人）。');
     return;
   }
+  if (skillIndices.includes(idx)) {
+    log('该节点是技能节点：双击（或再按 R）可取消技能节点。');
+    return;
+  }
   const ai = attackIndices.indexOf(idx);
   if (ai >= 0) {
     attackIndices.splice(ai, 1);
-  } else {
-    /* ★ 动作预算：一回合只能进行一次动作（闪避 / 攻击 / 技能）
-     * 已有攻击节点时，额外攻击需要 scout 奖励（额外攻击次数）才允许。 */
-    const maxAttacks = 1 + player.extraAttacks;
-    if (attackIndices.length >= maxAttacks) {
-      log(`本回合最多 ${maxAttacks} 个攻击节点（动作上限），无法再添加。`);
-      return;
-    }
-    /* 已有闪避节点 → 闪避与攻击二选一，提示但不强制阻止（结算时攻击不生效） */
-    const cur = plannedActionInfo(playerPath, attackIndices);
-    if (cur.dodge) {
-      log('⚠️ 本回合已规划闪避：闪避与攻击只能二选一，这个攻击节点将不会生效。');
-    }
-    attackIndices.push(idx);
+    return;
   }
+  if (!nodeFitsBudget(playerPath, [...attackIndices, idx], skillIndices)) {
+    log(`动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过上限。`);
+    return;
+  }
+  attackIndices.push(idx);
+  log(`🎯 攻击节点：第 ${idx} 步（占一次动作）。`);
+}
+
+/* ★ 技能节点：双击路径节点设置 / 取消（与攻击节点互斥，同一格只能有一种） */
+function toggleSkill(idx) {
+  if (idx < 1 || idx >= playerPath.length) return;
+  const si = skillIndices.indexOf(idx);
+  if (si >= 0) {
+    skillIndices.splice(si, 1);
+    log(`✧ 已取消第 ${idx} 步的技能节点。`);
+    return;
+  }
+  const nextAtk = attackIndices.filter(i => i !== idx);
+  if (!nodeFitsBudget(playerPath, nextAtk, [...skillIndices, idx])) {
+    log(`动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过上限。`);
+    return;
+  }
+  attackIndices = nextAtk;
+  skillIndices.push(idx);
+  const info = skillReadyInfo(playerPath);
+  log(`✦ 技能节点：第 ${idx} 步（占一次动作，到达该步才发动）${info.ready ? ` ·「${info.name}」就绪` : ` ·「${info.name}」未就绪`}。`);
 }
 function tryExtendPath(x, y) {
   if (countMoveSteps(playerPath) >= player.move) return false;
@@ -2879,6 +3035,8 @@ function handleCellDrag(x, y) {
     if (idx < playerPath.length - 1) {
       playerPath = playerPath.slice(0, idx + 1);
       attackIndices = attackIndices.filter(i => i < playerPath.length);
+      skillIndices = skillIndices.filter(i => i < playerPath.length);
+      lastClick = null;
       refreshBoardOnly();
     }
     return;
@@ -2896,12 +3054,14 @@ function killEnemyByDebug(enemy) {
 }
 
 document.addEventListener('pointerdown', (e) => {
-  if (phase !== 'planning' || isMoving) return;
+  if (phase !== PHASE.PLANNING || isMoving) return;
   if (e.target.closest('button') || e.target.closest('#heroKv') || e.target.closest('#logPanel')) return;
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) {
     playerPath = [{ x: player.x, y: player.y }];
     attackIndices = [];
+    skillIndices = [];
+    lastClick = null;
     refreshBoardOnly();
   }
 });
@@ -2910,7 +3070,7 @@ boardEl.addEventListener('pointerdown', (e) => {
   if (isMoving) return;
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) return;
-  if (phase === 'char_select') {
+  if (phase === PHASE.CHAR_SELECT) {
     const cand = charCandidates.find(c => c.x === cell.x && c.y === cell.y);
     if (cand) { selectedCandidate = cand; render(); e.preventDefault(); return; }
     if (selectedCandidate) {
@@ -2921,7 +3081,7 @@ boardEl.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     return;
   }
-  if (phase !== 'planning') return;
+  if (phase !== PHASE.PLANNING) return;
   if (debugMode) {
     const enemy = enemies.find(en => en.alive && en.x === cell.x && en.y === cell.y);
     if (enemy) { killEnemyByDebug(enemy); e.preventDefault(); return; }
@@ -2930,7 +3090,7 @@ boardEl.addEventListener('pointerdown', (e) => {
   try { boardEl.setPointerCapture(e.pointerId); } catch (_) {}
   clearTimeout(pressTimer);
   pressTimer = setTimeout(() => {
-    if (dragging && !hasDragged && phase === 'planning') {
+    if (dragging && !hasDragged && phase === PHASE.PLANNING) {
       if (countWaitSteps(playerPath) < player.move) {
         const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
         playerPath.push({ x: last.x, y: last.y });
@@ -2943,7 +3103,7 @@ boardEl.addEventListener('pointerdown', (e) => {
 }, { passive: false });
 
 boardEl.addEventListener('pointermove', (e) => {
-  if (!dragging || phase !== 'planning') return;
+  if (!dragging || phase !== PHASE.PLANNING) return;
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) return;
   if (dragDownCell && cell.x === dragDownCell.x && cell.y === dragDownCell.y) return;
@@ -2957,10 +3117,24 @@ boardEl.addEventListener('pointerup', (e) => {
   clearTimeout(pressTimer);
   if (!dragging) return;
   dragging = false;
-  if (!hasDragged && dragDownCell && phase === 'planning') {
+  if (!hasDragged && dragDownCell && phase === PHASE.PLANNING) {
     const x = dragDownCell.x, y = dragDownCell.y;
     const idx = findLastIndex(playerPath, p => p.x === x && p.y === y);
-    if (idx >= 0) { toggleAttack(idx); refreshBoardOnly(); }
+    if (idx >= 0) {
+      /* ★ 单击 = 攻击节点；双击（340ms 内点同一格）= 技能节点。
+       * 双击时第一次点击可能已经把攻击节点切换掉，所以先还原快照再设技能。 */
+      const now = Date.now();
+      if (lastClick && lastClick.idx === idx && now - lastClick.time <= 340) {
+        attackIndices = [...lastClick.atk];
+        skillIndices = [...lastClick.sk];
+        lastClick = null;
+        toggleSkill(idx);
+      } else {
+        toggleAttack(idx);
+        lastClick = { idx, time: now, atk: [...attackIndices], sk: [...skillIndices] };
+      }
+      refreshBoardOnly();
+    }
     else if (isWalkable(x, y) && !(x === player.x && y === player.y)) {
       const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
       if (dist(last, {x, y}) > 1) {
@@ -2983,125 +3157,85 @@ boardEl.addEventListener('pointercancel', () => {
   dragging = false; dragDownCell = null; hasDragged = false;
 });
 
-function confirmAction() {
-  phase = 'resolving';
-  playerChargingThisTurn = false;
-  playerAttacksDone = 0;
-  playerActionsUsed = 0;
-  playerDodging = false;
-  playerDodgeACBonus = 0;
-  dodgeTriggerIndex = -1;
-  pendingAttack = false;
-  pendingChargeInfo = null;
-  pendingCounterInfo = null;
-  amiyaBurstPlan = null;
-  amiyaBurstDone = false;
-  clearEnemyArrows();
-  playerChargeStopReason = null;
+/* =========================================================
+ * ★ 确认行动前的预结算（只处理「必须提前改写路径」的技能）
+ *
+ * 技能触发系统重做后，绝大多数技能都在玩家走到技能节点时结算（triggerSkillNode）。
+ * 唯一的例外是风笛的「高效冲击」：冲锋会延长路径，必须在生成敌人意图之前算出来。
+ * ========================================================= */
+/* 风笛：结算直线移动技力；满技力时把第一个移动步上的技能节点改写成冲锋并延长路径。 */
+function prepareWheelchairCharge() {
+  if (selectedChar !== 'wheelchair') return null;
+  /* 1) 结算本回合直线移动获得的技力（等待/转向会断开一段） */
+  const gain = pathSpGain(playerPath);
+  if (gain > 0) {
+    const sass = sassExtraSp();
+    const before = wheelchairSp;
+    wheelchairSp = Math.min(WHEELCHAIR_SP_MAX, wheelchairSp + gain + sass);
+    log(`风笛直线移动 ${gain} 步：技力 +${gain + sass}（${before} → ${wheelchairSp}/${WHEELCHAIR_SP_MAX}）${sass ? '　🥤 香草沙士 +1' : ''}`);
+    if (before < WHEELCHAIR_SP_MAX && wheelchairSp >= WHEELCHAIR_SP_MAX) {
+      log('风笛技力已满：双击路径里的移动节点设置技能节点，即可发动「高效冲击」。');
+    }
+  }
+  /* 2) 技力满 5 → 第一个「移动步上的技能节点」变成冲锋触发点（沿该步方向直线冲到底） */
+  const chargeIdx = findChargeSkillIndex(playerPath, wheelchairSp);
+  if (chargeIdx === null) {
+    if (wheelchairSp >= WHEELCHAIR_SP_MAX) {
+      log('风笛技力已满：双击一个移动路径节点设置技能节点，即可发动「高效冲击」。');
+    }
+    return null;
+  }
+  const fromPos = playerPath[chargeIdx - 1];
+  const toPos = playerPath[chargeIdx];
+  const trigger = { endIdx: chargeIdx, dir: { dx: Math.sign(toPos.x - fromPos.x), dy: Math.sign(toPos.y - fromPos.y) } };
+  const { chargePath, stopReason } = computeStraightChargePath(playerPath, trigger);
+  if (chargePath.length === 0) {
+    log('「高效冲击」无法发动：技能节点正前方就是墙（技力保留）。');
+    return null;
+  }
+  playerPath = [...playerPath.slice(0, chargeIdx + 1), ...chargePath];
+  attackIndices = attackIndices.filter(idx => idx < chargeIdx);
+  /* 只保留到达冲锋点之前的技能节点（含冲锋触发节点本身），其余随路径改写丢弃 */
+  skillIndices = skillIndices.filter(idx => idx <= chargeIdx);
+  pendingChargeInfo = { startIdx: chargeIdx + 1, triggerIdx: chargeIdx };
+  playerChargeStopReason = stopReason;
   playerChargeCausedDamage = false;
+  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（停止：${stopReason}）。冲锋期间免疫伤害，禁用攻击节点与趁乱攻击。`);
+  floatText(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '高效冲击', '#ffd700');
+  ringFx(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '#ffd700');
+  return chargeIdx;
+}
 
-  /* ★ 动作规划（必须在技能改写 attackIndices 之前算）：
-   * 闪避节点 / 攻击节点 / 技能节点 —— 一回合只能进行一次动作 */
-  const plan = plannedActionInfo(playerPath, attackIndices);
+function confirmAction() {
+  phase = PHASE.RESOLVING;
+  resetTurnState();
+  clearEnemyArrows();
+
+  /* ★ 动作规划（必须在风笛改写路径之前算）：闪避 / 攻击 / 技能 共用动作预算 */
+  const plan = plannedActionInfo(playerPath, attackIndices, skillIndices);
   dodgeTriggerIndex = plan.dodgeIndex;
 
-  if (attackIndices.includes(0)) {
-    pendingAttack = true;
+  if (attackIndices.includes(0)) pendingAttack = true;
+
+  /* 唯一需要提前改写路径的技能（冲锋）。冲锋会把「冲锋节点」之后的所有路径节点丢弃（设计如此） */
+  const chargeApplied = prepareWheelchairCharge();
+  /* 若闪避节点原本排在冲锋之后，它已被冲锋吞掉：把 dodge 标记归位，避免指向改写后路径的错误格子 */
+  if (chargeApplied !== null && dodgeTriggerIndex > chargeApplied) {
+    log('⚠️ 闪避节点位于「高效冲击」之后，已被冲锋吞掉，本次闪避不生效。');
+    dodgeTriggerIndex = -1;
   }
 
-  if (selectedChar === 'amiya' && amiyaBonusTargets > 0) {
-    /* 倾泻触发：路径里「等待」（同格重复的那一步）上放了攻击节点 → 该节点变成倾泻射击 */
-    const burstIdx = amiyaBurstAttackIndex(playerPath, amiyaBonusTargets);
-    if (burstIdx !== null) {
-      amiyaBurstPlan = { triggerIdx: burstIdx };
-      attackIndices = attackIndices.filter(i => i !== burstIdx);  // 该节点改为倾泻，不再单独射击
-      log(`阿米娅「精神爆发」：第 ${burstIdx} 步（等待后接攻击 👑）将倾泻 ${amiyaBonusTargets} 点技力，进行连续远程攻击！`);
-      floatText(playerPath[burstIdx].x, playerPath[burstIdx].y, '精神爆发', '#ffd700');
-    } else if (countWaitSteps(playerPath) > 0) {
-      log('阿米娅：在「等待」的那一格放一个攻击节点才能发动「精神爆发」（显示为 👑）。');
-    }
-  }
-
-  if (selectedChar === 'vampire') {
-    if (!vampireSkillActive && vampireSp >= VAMPIRE_SP_MAX && attackIndices.includes(0)) {
-      vampireSkillActive = true;
-      vampireSp = 0;
-      log('华法琳发动技能「不稳定血浆」：本关内远程攻击必定命中、必定暴击、必定留血迹，但每次攻击后自身失去 1 HP（技力清零）。');
-      floatText(player.x, player.y, '不稳定血浆', '#ff6b6b');
-      ringFx(player.x, player.y, '#ff6b6b');
-    } else if (!vampireSkillActive && vampireSp >= VAMPIRE_SP_MAX) {
-      log('华法琳技力已满：在起始点（第 0 步）放一个攻击节点即可发动「不稳定血浆」。');
-    }
-  }
-
-  if (selectedChar === 'wheelchair') {
-    /* 1) 结算本回合直线移动获得的技力（等待/转向会断开一段） */
-    const gain = pathSpGain(playerPath);
-    if (gain > 0) {
-      const sass = sassExtraSp();
-      const before = wheelchairSp;
-      wheelchairSp = Math.min(WHEELCHAIR_SP_MAX, wheelchairSp + gain + sass);
-      log(`风笛直线移动 ${gain} 步：技力 +${gain + sass}（${before} → ${wheelchairSp}/${WHEELCHAIR_SP_MAX}）${sass ? '　🥤 香草沙士 +1' : ''}`);
-      if (before < WHEELCHAIR_SP_MAX && wheelchairSp >= WHEELCHAIR_SP_MAX) {
-        log('风笛技力已满：路径里的攻击节点将变为「高效冲击」！');
-      }
-    }
-    /* 2) 技力满 5 → 第一个攻击节点变成冲锋触发点（沿当前朝向直线冲到底，消耗全部技力） */
-    const chargeIdx = findChargeAttackIndex(playerPath, wheelchairSp);
-    if (chargeIdx !== null) {
-      const fromPos = playerPath[chargeIdx - 1];
-      const toPos = playerPath[chargeIdx];
-      const trigger = { endIdx: chargeIdx, dir: { dx: Math.sign(toPos.x - fromPos.x), dy: Math.sign(toPos.y - fromPos.y) } };
-      const { chargePath, stopReason } = computeStraightChargePath(playerPath, trigger);
-      if (chargePath.length > 0) {
-        playerPath = [...playerPath.slice(0, chargeIdx + 1), ...chargePath];
-        attackIndices = attackIndices.filter(idx => idx < chargeIdx);
-        pendingChargeInfo = { startIdx: chargeIdx + 1 };
-        playerChargeStopReason = stopReason;
-        playerChargeCausedDamage = false;
-        wheelchairSp = 0;   // 冲锋消耗全部技力
-        log(`风笛发动「高效冲击」！技力清零，从第 ${chargeIdx} 步后沿直线冲锋 ${chargePath.length} 步（停止：${stopReason}）。冲锋期间免疫所有伤害（除撞墙），禁用攻击节点与趁乱攻击。`);
-        floatText(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '高效冲击', '#ffd700');
-        ringFx(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '#ffd700');
-      } else {
-        log('「高效冲击」无法发动：攻击节点正前方就是墙（技力保留）。');
-      }
-    } else if (wheelchairSp >= WHEELCHAIR_SP_MAX) {
-      log('风笛技力已满：在路径里规划一个攻击节点即可发动「高效冲击」。');
-    }
-  }
-  if (selectedChar === 'fencer') {
-    const activateIdx = findFirstDoubleWaitIndex(playerPath);
-    if (activateIdx > 0) {
-      if (fencerSp >= FENCER_SP_MAX) {
-        pendingCounterInfo = { activateIdx };
-        log('泥岩路径中包含连续等待，将在第二次等待完成后进入反击状态！');
-      } else {
-        fencerCounterActive = false;
-        pendingCounterInfo = null;
-        log(`泥岩技力不足（${fencerSp}/${FENCER_SP_MAX}）：反击「岩崩锤」需要技力满 ${FENCER_SP_MAX} 才能使用（每次受击 +1）。`);
-      }
-    } else {
-      fencerCounterActive = false;
-      pendingCounterInfo = null;
-    }
-  }
   /* =========================================================
    * ★ 动作结算说明（plan 已在函数开头算好）
    * ========================================================= */
   if (plan.dodge) {
-    log(`⚡ 闪避节点：本回合的第一次等待视为闪避动作（AC +${DODGE_AC_BONUS}，持续到回合结束），占用本回合唯一的一次动作。`);
-  } else if (plan.burstIndex !== null) {
-    /* 阿米娅特例：等待+攻击 = 技能节点，等待不结算（不触发闪避） */
-    log('👑 技能节点：等待+攻击 合为「精神爆发」，该等待不再结算为闪避。');
+    log(`⚡ 闪避节点：第一个等待视为闪避动作（AC +${DODGE_AC_BONUS}，持续到回合结束），占一次动作。`);
   }
-
-  // 攻击节点占用动作：闪避与攻击二选一（scout 的额外攻击次数可放宽上限）
-  const realAttackCount = attackIndices.filter(i => i !== plan.burstIndex).length;
-  if (realAttackCount > 0 && plan.dodge) {
-    log(`⚠️ 本回合同时规划了闪避与攻击：闪避与攻击只能二选一，攻击将不会生效。`);
-  } else if (realAttackCount > maxActionsThisTurn()) {
-    log(`⚠️ 本回合规划了 ${realAttackCount} 个攻击节点，超出动作上限（${maxActionsThisTurn()}），多余的攻击不会生效。`);
+  if (plan.skillCount > 0) {
+    log(`✦ 技能节点 ×${plan.skillCount}：到达对应路径步时发动技能（每个占一次动作）。`);
+  }
+  if (plan.actions > maxActionsThisTurn()) {
+    log(`⚠️ 本回合规划了 ${plan.actions} 个动作（闪避/攻击/技能），超出上限 ${maxActionsThisTurn()}：按路径顺序先到先得，后面的不会生效。`);
   }
 
   render();
@@ -3176,7 +3310,7 @@ function bfsPathTo(startX, startY, targetX, targetY, maxSteps, isOccupiedAtFn, i
   prev.set(key(startX, startY), null);
   const q = [{ x: startX, y: startY, t: 0, d: Math.abs(startX - targetX) + Math.abs(startY - targetY) }];
   let best = { x: startX, y: startY, t: 0, d: q[0].d };
-  const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
+  const dirs = DIR4_BFS;
   // ★ 修复「敌人永远不靠近」：原来 BFS 只展开 maxSteps 步，且 best 只按「曼哈顿距离更近」更新。
   //   遇到必须绕路的地形（例如玩家上方/侧面是墙），绕路第一步必然离目标更远 →
   //   best 永远停在起点 → 返回只有起点的路径 → 敌人原地站桩、永远不去玩家位置。
@@ -3211,7 +3345,7 @@ function bfsPathTo(startX, startY, targetX, targetY, maxSteps, isOccupiedAtFn, i
 }
 
 function generateEnemyPaths() {
-  if (phase !== 'planning') return;
+  if (phase !== PHASE.PLANNING) return;
   enemyPaths = [];
   for (let i = 0; i < enemies.length; i++) enemyPaths.push([]);
 
@@ -3361,41 +3495,422 @@ function tryPickup() {
   }
 }
 
-async function resolveStep(pIdxIn, eIdx) {
-  let pIdx = pIdxIn;
-  if (phase !== 'resolving') return;
-  if (!player.alive || player.hp <= 0) { phase = 'gameover'; clearEnemyArrows(); log('你死了。游戏结束。'); render(); return; }
-  if (enemies.filter(e => e.alive).length === 0) { clearEnemyArrows(); onLevelClear(); return; }
+/* =========================================================
+ * ★ 结算子步骤（resolveStep 拆出来的可独立阅读的单元）
+ * 约定：会改玩家状态的函数返回 true = 玩家阵亡 / 对局结束，
+ *       调用方必须立刻 return，避免在「已死」状态下继续结算。
+ * ========================================================= */
 
-  if (selectedChar === 'amiya' && amiyaBurstPlan && !amiyaBurstDone && player.alive && player.hp > 0) {
-    const plan = amiyaBurstPlan;
-    const trigPos = playerPath[plan.triggerIdx];
-    const atTrigger = trigPos && player.x === trigPos.x && player.y === trigPos.y;
-    if (atTrigger && pIdx >= plan.triggerIdx) {
-      amiyaBurstDone = true;
-      amiyaBurstPlan = null;
+/* 每个 tick 收尾：判负 / 判胜。返回 true 表示对局已结束。 */
+async function settleTick() {
+  if (player.hp <= 0) { endGame(); return true; }
+  if (enemies.filter(e => e.alive).length === 0) { await finishLevel(); return true; }
+  return false;
+}
+
+/* 敌人落位：按寻路顺序（离玩家近的优先）依次结算。
+ * 先把自己从占位表里拿掉再查目标格 —— 这样「跟到同伴本 tick 腾出的格子」合法，
+ * 「撞上还没走的同伴」仍然会被拦住。 */
+function applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds) {
+  const taken = new Map();
+  for (const e of enemies) if (e.alive) taken.set(key(e.x, e.y), e);
+
+  const orderIndex = new Map(enemyPathOrder.map((idx, i) => [idx, i]));
+  const moveQueue = enemyMoves.slice().sort((a, b) => {
+    const ia = orderIndex.has(a.enemyIdx) ? orderIndex.get(a.enemyIdx) : 999;
+    const ib = orderIndex.has(b.enemyIdx) ? orderIndex.get(b.enemyIdx) : 999;
+    return ia - ib;
+  });
+
+  for (const em of moveQueue) {
+    if (killedEnemyIds.has(em.enemyIdx)) { taken.delete(key(em.from.x, em.from.y)); continue; }
+    if (!em.unit.alive) continue;
+    if (em.unit.stunTurns > 0) continue;
+    const u = em.unit;
+
+    // 走到玩家身上 → 相杀（交给相杀逻辑处理，这里不落位，仍占自己的格）
+    if (em.to.x === player.x && em.to.y === player.y) {
+      u.facing = faceToward(u, player);
+      if (enemyPaths[em.enemyIdx]) {
+        enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
+      }
+      continue;
+    }
+    if (em.to.x === u.x && em.to.y === u.y) continue;
+
+    const destKey = key(em.to.x, em.to.y);
+    taken.delete(key(u.x, u.y));
+    if (taken.has(destKey)) {
+      taken.set(key(u.x, u.y), u);   // 走不了，把格子放回去
+      if (enemyPaths[em.enemyIdx]) {
+        enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
+      }
+      log(`敌人${u.id + 1}移动受阻，停止前进`);
+      continue;
+    }
+    u.x = em.to.x;
+    u.y = em.to.y;
+    taken.set(destKey, u);
+
+    const dx = Math.sign(em.to.x - em.from.x);
+    const dy = Math.sign(em.to.y - em.from.y);
+    if (dx || dy) u.facing = { dx, dy };
+  }
+}
+
+/* 攻击节点结算：近战范围攻击 / 远程射击。返回 true = 玩家阵亡。 */
+async function resolvePlayerAttack() {
+  const maxAttacks = 1 + player.extraAttacks;
+
+  if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
+    log('冲锋状态禁止攻击节点，本次攻击取消。');
+    floatText(player.x, player.y, '禁止攻击', '#bbb');
+    return false;
+  }
+  if (selectedChar === 'fencer' && fencerCounterActive) {
+    log('反击状态禁止攻击节点，本次攻击取消。');
+    floatText(player.x, player.y, '禁止攻击', '#bbb');
+    return false;
+  }
+
+  /* ---- 近战：周围 1 格全部目标 ---- */
+  if (selectedChar === 'wheelchair' || selectedChar === 'fencer') {
+    if (!(playerAttacksDone < maxAttacks && canPerformAttackAction())) return false;
+    playerAttacksDone++;
+    playerActionsUsed++;   // 攻击占用一次动作
+    const targets = enemies.filter(e => e.alive && cheb(e, player) === 1);
+    if (targets.length === 0) {
+      log('近战范围攻击挥空，未命中任何敌人。');
+      floatText(player.x, player.y, '挥空', '#bbb');
+      refreshUnits();
+      await sleep(200);
+      return false;
+    }
+    const strMod = abilityMod(player.abilities.str);
+    for (const target of targets) {
+      if (target.hp <= 0) continue;
+      const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
+      if (!atk.hit) {
+        missFx(target.x, target.y);
+        log(`近战范围攻击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
+        refreshUnits();
+        await sleep(120);
+        continue;
+      }
+      let dmg = player.meleeDmg;
+      if (selectedChar === 'wheelchair' && playerChargingThisTurn) dmg *= 2;
+      const critTag = meleeCritTag(target, atk, 'cone');
+      const isCrit = !!critTag;
+      if (isCrit) dmg *= 2;
+      target.hp -= dmg;
+      if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
+      if (selectedChar === 'amiya') amiyaMarkReveal(target);
+      slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
+      hitFlashCell(target.x, target.y);
+      if (isCrit) {
+        ringFx(target.x, target.y, '#ff4500');
+        floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
+        log(`近战范围${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+      } else {
+        ringFx(target.x, target.y, '#ffb86b');
+        floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
+        log(`近战范围命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+      }
+      if (target.hp <= 0) killEnemy(target, { showRing: false });
+      refreshUnits();
+      await sleep(200);
+    }
+    return false;
+  }
+
+  /* ---- 远程：射程 + 视线，一次攻击可覆盖多个目标 ---- */
+  if (playerChargingThisTurn) {
+    log('冲锋中无法远程攻击。');
+    return false;
+  }
+  if (!(playerAttacksDone < maxAttacks && canPerformAttackAction())) return false;
+  playerAttacksDone++;
+  playerActionsUsed++;   // 远程攻击占用一次动作（打空同样消耗，与近战一致）
+
+  const fromPos = { x: player.x, y: player.y, range: player.range };
+  let targets = enemies.filter(e => e.alive && canRangedAttack(fromPos, e));
+  if (targets.length === 0) {
+    log('远程攻击节点无视线内目标，挥空（已消耗攻击次数）。');
+    floatText(player.x, player.y, '挥空', '#bbb');
+    refreshUnits();
+    await sleep(160);
+    return false;
+  }
+  targets.sort((a, b) => cheb(a, fromPos) - cheb(b, fromPos));
+  targets = targets.slice(0, 1 + player.extraTargets);
+  const intMod = abilityMod(player.abilities.int);
+  /* 不稳定血浆：本关内远程攻击必定命中 + 必定暴击 */
+  const vampPlasma = selectedChar === 'vampire' && vampireSkillActive;
+  const actionCrit = vampPlasma || Math.random() < player.critChance;
+  if (vampPlasma) log('「不稳定血浆」：本次攻击必定命中、必定暴击、必定留血迹！');
+  else if (actionCrit) log('本次攻击行动触发暴击，所有目标共享！');
+
+  const hits = [];
+  const bulletPromises = [];
+  for (const target of targets) {
+    if (target.hp <= 0) continue;
+    const atk = attackRoll(intMod, player.rangedProf || 0, target.ac);
+    if (vampPlasma && !atk.hit) { atk.hit = true; atk.forcedHit = true; }
+    const isCrit = atk.hit && (atk.nat20 || actionCrit);
+    hits.push({ target, hit: atk.hit, isCrit, atk });
+    bulletPromises.push(animateBullet(fromPos, 'enemy-' + target.id, target, isCrit, false, 'player'));
+  }
+  if (hits.length > 0) {
+    await Promise.all(bulletPromises);
+    await sleep(80);
+    for (const { target, hit, isCrit, atk } of hits) {
+      /* 只要出手（即使 MISS）就能看到目标意图 */
+      if (selectedChar === 'amiya') amiyaMarkReveal(target);
+      /* 华法琳：血迹只由远程攻击产生 —— 不稳定血浆生效时必定留，平时命中后 50% */
+      if (selectedChar === 'vampire' && hit && (vampPlasma || Math.random() < 0.5)) {
+        addBloodAt(target.x, target.y);
+      }
+      if (hit) {
+        const dmg = player.rangedDmg * (isCrit ? 2 : 1);
+        const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
+        target.hp -= dmg;
+        if (target.hp <= 0) {
+          killEnemy(target, { showRing: true, showFloat: true, logText: `敌人${target.id+1}被击败（远程击杀）` });
+        }
+        if (isCrit) {
+          hitFx(target.x, target.y, dmg, true, '暴击');
+          log(`玩家远程暴击敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
+        } else {
+          hitFx(target.x, target.y, dmg, false);
+          log(`玩家远程命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
+        }
+      } else {
+        missFx(target.x, target.y);
+        log(`玩家远程未命中 (${fmtRoll(atk, target.ac)})`);
+      }
+    }
+  }
+  /* 阿米娅：每次攻击（攻击节点出手，无论命中与否）+1 技力 */
+  if (selectedChar === 'amiya') amiyaGainAttackSp();
+  /* 不稳定血浆的代价：每次远程攻击后自身 -1 HP（护盾可抵消） */
+  if (selectedChar === 'vampire' && vampireSkillActive) {
+    const selfRes = damagePlayer(1, '不稳定血浆');
+    showPlayerDamage(selfRes, '-1 HP');
+    log(`不稳定血浆：攻击后失去 1 HP${debugMode ? '（调试：玩家无敌）' : (selfRes.shielded ? '（护盾抵消）' : `（剩 ${player.hp}）`)}。`);
+    updateStats();
+    if (player.hp <= 0) { endGame('不稳定血浆耗尽了生命。游戏结束。'); return true; }
+  }
+  playerAttacksDone++;
+  playerActionsUsed++;   // 攻击占用一次动作（闪避与攻击二选一）
+  refreshUnits();
+  await sleep(220);
+  return false;
+}
+
+/* 趁乱攻击：本 tick 有动作时，对相邻敌人自动补刀（不消耗攻击次数）。 */
+async function resolveScuffleAttacks(playerActionThisTick) {
+  if (!playerActionThisTick || playerChargingThisTurn || !player.alive || player.hp <= 0) return;
+  const autoTargets = enemies.filter(e => e.alive && dist(e, player) === 1);
+  /* 远程角色没有近战输出手段：被贴身时的趁乱打击固定 1 点保底伤害，
+     不吃暴击 / 冲锋倍率，也不读取近战伤害面板。 */
+  const scuffleFlatDmg = isRangedChar(selectedChar);
+  if (autoTargets.length > 0) {
+    log(`⚡ 趁乱攻击：对 ${autoTargets.length} 个相邻敌人发起攻击！${scuffleFlatDmg ? '（远程角色，1 点保底伤害）' : ''}`);
+  }
+  for (const target of autoTargets) {
+    if (!target.alive) continue;
+    const strMod = abilityMod(player.abilities.str);
+    const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
+    /* 只要出手（即使 MISS）就能看到目标意图 */
+    if (selectedChar === 'amiya') amiyaMarkReveal(target);
+    if (!atk.hit) {
+      missFx(target.x, target.y);
+      log(`趁乱攻击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
+      refreshUnits();
+      await sleep(180);
+      continue;
+    }
+    let dmg = scuffleFlatDmg ? (1 + buffMeleeBonus()) : player.meleeDmg;
+    if (selectedChar === 'wheelchair' && playerChargingThisTurn) { dmg *= 2; log('玩家冲锋撞击，伤害翻倍！'); }
+    const critTag = scuffleFlatDmg ? '' : meleeCritTag(target, atk);
+    const isCrit = !!critTag;
+    if (isCrit) dmg *= 2;
+    target.hp -= dmg;
+    if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
+    slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
+    hitFlashCell(target.x, target.y);
+    if (isCrit) {
+      ringFx(target.x, target.y, '#ff4500');
+      floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
+      log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+    } else {
+      ringFx(target.x, target.y, '#ffb86b');
+      floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
+      log(`趁乱攻击命中敌人${target.id+1}，造成${dmg}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
+    }
+    if (target.hp <= 0) killEnemy(target, { showRing: false });
+    refreshUnits();
+    await sleep(240);
+  }
+  /* 注：趁乱打击不属于「正常攻击」，不触发不稳定血浆的任何效果（不暴击、不留血迹、不扣血） */
+}
+
+/* 冲锋结束时的撞墙伤害（只在没撞到敌人时结算）。返回 true = 玩家阵亡。 */
+function resolveChargeWallDamage(chargeWillEnd, playerBlocked) {
+  if (!chargeWillEnd) return false;
+  let willHitWall = false;
+  if (!playerBlocked && playerChargeStopReason === 'wall' && player.hp > 0) {
+    willHitWall = DIR4.some(([dx, dy]) => {
+      const nx = player.x + dx, ny = player.y + dy;
+      return !inBounds(nx, ny) || map[ny][nx] === 1;
+    });
+  }
+  if (!willHitWall) return false;
+
+  if (playerChargeCausedDamage) {
+    floatText(player.x, player.y, '减免撞墙', '#4ecdc4');
+    log('冲锋过程中已造成过伤害，本次撞墙免伤。');
+    return false;
+  }
+  const oldHp = player.hp;
+  const wallDmg = oldHp - Math.floor(oldHp / 2);
+  const wallRes = damagePlayer(wallDmg, '冲锋撞墙');
+  showPlayerDamage(wallRes, '撞墙 -' + wallDmg);
+  ringFx(player.x, player.y, '#ff6b6b');
+  hitFlashCell(player.x, player.y);
+  log(`冲锋撞墙，失去一半 HP${debugMode ? '（调试：玩家无敌）' : (wallRes.shielded ? '（护盾抵消）' : '（-' + wallDmg + '，剩 ' + player.hp + '）')}`);
+  if (player.hp <= 0) { player.alive = false; refreshUnits(); endGame(); return true; }
+  return false;
+}
+
+/* 冲锋走完路径后收尾：退出冲锋状态。 */
+function finishChargeState(chargeWillEnd) {
+  if (!chargeWillEnd) return;
+  log('冲锋结束，失去冲锋状态。');
+  playerChargingThisTurn = false;
+  playerChargeStopReason = null;
+  playerChargeCausedDamage = false;
+}
+
+/* 相邻敌人的近战反击（每回合每个敌人一次）。 */
+async function resolveEnemyMeleeAttacks() {
+  if (!(player.hp > 0)) return;
+  for (let i = 0; i < enemies.length; i++) {
+    if (player.hp <= 0) break;
+    const e = enemies[i];
+    if (!e.alive || e.type === 'alien') continue;
+    if (e.stunTurns > 0) continue;
+    if (dist(e, player) !== 1 || e.attackedThisRound) continue;
+    e.attackedThisRound = true;
+    gainFencerSp(1);
+    const eStrMod = abilityMod(e.abilities.str);
+    const pAC = playerEffectiveAC();
+    const atk = rollEnemyAttack(eStrMod, e.prof, pAC);
+    slashFx(player.x, player.y, '#ff6b6b');
+    hitFlashCell(player.x, player.y);
+    if (atk.hit) {
+      let ed = e.meleeDmg;
+      let critTag = '';
+      if (atk.nat20) { ed *= 2; critTag = '自然20暴击'; }
+      else if (isFacingTarget(e, player)) { ed *= 2; critTag = '朝向暴击'; }
+      if (tryPlayerImmuneHit(playerImmuneState(), `敌人${i+1}近战攻击`, `敌人${i+1}近战命中`, critTag)) {
+        refreshUnits();
+        await sleep(240);
+        continue;
+      }
+      const meleeRes = damagePlayer(ed, '敌人近战');
+      showPlayerDamage(meleeRes, (critTag ? critTag + ' -' : '-') + ed, {
+        color: critTag ? '#ffd700' : '#ff6b6b', crit: !!critTag,
+      });
+      log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}${debugMode ? '（调试：玩家无敌）' : (meleeRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
+      if (player.hp > 0) triggerFencerCounter();
+    } else {
+      missFx(player.x, player.y);
+      log(`敌人${i+1}近战未命中 (${fmtRoll(atk, pAC)})`);
+    }
+    refreshUnits();
+    await sleep(240);
+  }
+}
+
+/* 兜底清扫：任何渠道把敌人打到 0 HP 却没标记死亡的，在这里补结算。 */
+function sweepDeadEnemies() {
+  for (const e of enemies) {
+    if (e.alive && e.hp <= 0) killEnemy(e);
+  }
+}
+
+/* =========================================================
+ * ★ 技能节点触发：玩家实际走到该路径步时发动角色技能
+ * 统一入口 —— 先校验「节点存在 / 技能就绪 / 动作预算」，再按角色发动。
+ * 被敌人挡住（没走到）不会触发；返回 true 表示技能已发动（动作已消耗）。
+ * ========================================================= */
+async function triggerSkillNode(pathIdx) {
+  if (!player || !player.alive || player.hp <= 0) return false;
+  if (!skillIndices.includes(pathIdx)) return false;
+  const here = playerPath[pathIdx];
+  const prev = playerPath[pathIdx - 1];
+  const isWaitStep = !!prev && here.x === prev.x && here.y === prev.y;
+  /* 风笛的冲锋只能沿移动方向前进，放在等待步上无效 */
+  if (selectedChar === 'wheelchair' && isWaitStep) {
+    log(`✦ 技能节点（第 ${pathIdx} 步）：风笛的「高效冲击」需要放在移动节点上，等待步不发动。`);
+    floatText(player.x, player.y, '需移动节点', '#bbb');
+    return false;
+  }
+  const info = skillReadyInfo(playerPath, false);
+  if (!info.ready) {
+    log(`✦ 技能节点（第 ${pathIdx} 步）：「${info.name}」尚未就绪（${info.spNow}/${info.spMax}），本次未发动。`);
+    floatText(player.x, player.y, '技能未就绪', '#bbb');
+    return false;
+  }
+  if (playerActionsUsed >= maxActionsThisTurn()) {
+    const spentOnDodge = pathIdx === dodgeTriggerIndex && playerDodging;
+    log(spentOnDodge
+      ? `✦ 技能节点（第 ${pathIdx} 步）：这一步已经用于闪避，动作已用完，「${info.name}」未能发动。`
+      : `✦ 技能节点（第 ${pathIdx} 步）：本回合动作已用完（${playerActionsUsed}/${maxActionsThisTurn()}），「${info.name}」未能发动。`);
+    floatText(player.x, player.y, '动作已用完', '#bbb');
+    return false;
+  }
+
+  playerActionsUsed += 1;
+  switch (selectedChar) {
+    case 'wheelchair':
+      wheelchairSp = 0;   // 技力在真正发动时清零（未走到就不浪费）
+      log('风笛发动「高效冲击」！技力清零，下一步沿直线开始冲锋。');
+      floatText(player.x, player.y, '高效冲击！', '#ffd700');
+      ringFx(player.x, player.y, '#ffd700');
+      break;
+    case 'vampire':
+      vampireSkillActive = true;
+      vampireSp = 0;
+      log('华法琳发动技能「不稳定血浆」：本关内远程攻击必定命中、必定暴击、必定留血迹，但每次攻击后自身失去 1 HP（技力清零）。');
+      floatText(player.x, player.y, '不稳定血浆', '#ff6b6b');
+      ringFx(player.x, player.y, '#ff6b6b');
+      break;
+    case 'fencer':
+      fencerCounterActive = true;
+      log('泥岩发动技能「岩崩锤」：进入反击状态（本回合受击免疫并反击）。');
+      floatText(player.x, player.y, '反击就绪！', '#ffd700');
+      ringFx(player.x, player.y, '#ffd700');
+      break;
+    case 'amiya': {
       const count = amiyaBonusTargets;
       amiyaBonusTargets = 0;
       log(`阿米娅发动「精神爆发」！倾泻 ${count} 点技力，进行连续远程攻击！`);
       floatText(player.x, player.y, '精神爆发！', '#ffd700');
       ringFx(player.x, player.y, '#ffd700');
       await executeAmiyaBurst(count);
-      if (player.hp <= 0) {
-        player.alive = false;
-        phase = 'gameover';
-        clearEnemyArrows();
-        log('你死了。游戏结束。');
-        render();
-        return;
-      }
-      if (enemies.filter(e => e.alive).length === 0) {
-        render();
-        await sleep(300);
-        onLevelClear();
-        return;
-      }
+      break;
     }
   }
+  return true;
+}
+
+async function resolveStep(pIdxIn, eIdx) {
+  let pIdx = pIdxIn;
+  if (phase !== PHASE.RESOLVING) return;
+  if (!player.alive || player.hp <= 0) { endGame(); return; }
+  if (enemies.filter(e => e.alive).length === 0) { clearEnemyArrows(); onLevelClear(); return; }
 
   const enemyMoves = [];
   enemies.forEach((e, i) => {
@@ -3477,14 +3992,7 @@ async function resolveStep(pIdxIn, eIdx) {
         if (selectedChar === 'amiya') amiyaMarkReveal(em.unit);
         floatText(ex, ey, '暴击 -' + pd, '#ffd700', true);
         log(`相杀！玩家对敌人${em.unit.id+1}造成暴击${pd}伤害`);
-        if (em.unit.hp <= 0) {
-          em.unit.alive = false;
-          killedEnemyIds.add(em.enemyIdx);
-          ringFx(ex, ey, '#ff6b6b');
-          floatText(ex, ey, '击杀!', '#ff6b6b');
-          log(`敌人${em.unit.id+1}被击败`);
-          if (selectedChar === 'amiya') amiyaGainKillBonus();
-        }
+        if (em.unit.hp <= 0) killEnemy(em.unit, { killedIds: killedEnemyIds });
         em.unit.attackedThisRound = true;
       }
       gainFencerSp(shootouts.length);
@@ -3510,20 +4018,11 @@ async function resolveStep(pIdxIn, eIdx) {
           continue;
         }
         const dmgRes = damagePlayer(ed, '相杀');
-        floatText(playerFrom.x, playerFrom.y,
-          debugMode ? '无敌' : (dmgRes.shielded ? '护盾抵消' : '暴击 -' + ed),
-          debugMode ? '#ffcc00' : (dmgRes.shielded ? '#ffffff' : '#ffd700'), !debugMode && !dmgRes.shielded);
+        showPlayerDamage(dmgRes, '暴击 -' + ed, { color: '#ffd700', crit: true, x: playerFrom.x, y: playerFrom.y });
         log(`相杀！敌人${em.unit.id+1}对玩家造成暴击${debugMode ? '（调试：无敌）' : (dmgRes.shielded ? '（护盾抵消）' : ' ' + ed + '伤害')}`);
       }
       if (shootouts.length > 0 && player.hp > 0) triggerFencerCounter();
-      if (player.hp <= 0) {
-        player.alive = false;
-        phase = 'gameover';
-        clearEnemyArrows();
-        log('你在相杀中阵亡。游戏结束。');
-        render();
-        return;
-      }
+      if (player.hp <= 0) { endGame('你在相杀中阵亡。游戏结束。'); return; }
       const anySurvivor = shootouts.some(em => em.unit.alive);
       if (!anySurvivor) {
         const dx = Math.sign(targetPos.x - playerFrom.x);
@@ -3567,11 +4066,11 @@ async function resolveStep(pIdxIn, eIdx) {
           floatText(blockingEnemy.x, blockingEnemy.y, '冲锋撞击 -' + dmg, '#ffd700', true);
           log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmg}点伤害！`);
           if (blockingEnemy.hp <= 0) {
-            blockingEnemy.alive = false;
-            killedEnemyIds.add(blockingEnemy.id);
-            floatText(blockingEnemy.x, blockingEnemy.y, '击杀!', '#ff6b6b');
-            log(`敌人${blockingEnemy.id+1}被撞飞`);
-            if (selectedChar === 'amiya') amiyaGainKillBonus();
+            killEnemy(blockingEnemy, {
+              showRing: false,
+              killedIds: killedEnemyIds,
+              logText: `敌人${blockingEnemy.id+1}被撞飞`,
+            });
             const dx = Math.sign(targetPos.x - playerFrom.x);
             const dy = Math.sign(targetPos.y - playerFrom.y);
             player.x = targetPos.x; player.y = targetPos.y;
@@ -3609,407 +4108,44 @@ async function resolveStep(pIdxIn, eIdx) {
     if (playerBlocked) pIdx = playerPath.length;
     else pIdx++;
 
-    if (pendingCounterInfo && pathIdx >= pendingCounterInfo.activateIdx && !fencerCounterActive
-        && fencerSp >= FENCER_SP_MAX) {
-      fencerCounterActive = true;
-      pendingCounterInfo = null;
-      log('泥岩完成第二次等待，进入反击状态！（本回合禁止攻击节点）');
-      floatText(player.x, player.y, '反击就绪！', '#ffd700');
-      ringFx(player.x, player.y, '#ffd700');
+    /* ★ 技能节点：玩家实际到达该步才触发（被挡住不触发），移动结算之后、敌人行动之前 */
+    if (!playerBlocked && skillIndices.includes(pathIdx)) {
+      await triggerSkillNode(pathIdx);
+      if (await settleTick()) return;
     }
   }
 
-  // 结算顺序 = 寻路顺序（离玩家近的优先）。
-  // 规划层是「先算近的，远的先按原地不动预留」，结算层用同一顺序落位才能完全对上：
-  // 「跟到刚腾出的格子」合法，「撞上还没走的同伴」仍被拦住。
-  const taken = new Map();
-  for (const e of enemies) if (e.alive) taken.set(key(e.x, e.y), e);
-
-  const moveQueue = enemyMoves.slice().sort((a, b) => {
-    const ia = enemyPathOrder.indexOf(a.enemyIdx);
-    const ib = enemyPathOrder.indexOf(b.enemyIdx);
-    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
-  });
-
-  for (const em of moveQueue) {
-    if (killedEnemyIds.has(em.enemyIdx)) { taken.delete(key(em.from.x, em.from.y)); continue; }
-    if (!em.unit.alive) continue;
-    if (em.unit.stunTurns > 0) continue;
-    const u = em.unit;
-
-    // 走到玩家身上 → 相杀（交给相杀逻辑处理，这里不落位，仍占自己的格）
-    if (em.to.x === player.x && em.to.y === player.y) {
-      u.facing = faceToward(u, player);
-      if (enemyPaths[em.enemyIdx]) {
-        enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
-      }
-      continue;
-    }
-
-    if (em.to.x === u.x && em.to.y === u.y) continue;
-
-    // 关键：先把自己从占位表里拿掉，再查目标格。
-    // 这样「跟到同伴本 tick 腾出的格子」是合法的；旧版反过来先查后放，
-    // 结果窄走廊里幽灵被前方骷髅永久堵死（实测 4 回合全员冻结）。
-    const destKey = key(em.to.x, em.to.y);
-    taken.delete(key(u.x, u.y));
-    if (taken.has(destKey)) {
-      taken.set(key(u.x, u.y), u);   // 走不了，把格子放回去
-      if (enemyPaths[em.enemyIdx]) {
-        enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
-      }
-      log(`敌人${u.id + 1}移动受阻，停止前进`);
-      continue;
-    }
-
-    u.x = em.to.x;
-    u.y = em.to.y;
-    taken.set(destKey, u);
-
-    const dx = Math.sign(em.to.x - em.from.x);
-    const dy = Math.sign(em.to.y - em.from.y);
-    if (dx || dy) u.facing = { dx, dy };
-  }
+  // 结算顺序 = 寻路顺序（离玩家近的优先），与规划层保持一致
+  applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds);
 
   refreshUnits();
   await sleep(UNIT_MOVE_MS);
   clearEnemyArrows();
 
-  if (player.hp <= 0) { player.alive = false; phase = 'gameover'; log('你死了。游戏结束。'); render(); return; }
-  if (enemies.filter(e => e.alive).length === 0) { render(); await sleep(300); onLevelClear(); return; }
+  if (await settleTick()) return;
 
   // ★ 外星人特殊攻击：只在「它已经停下的格子」开火。
   // 每个 tick 都判一次，但还在移动途中的外星人会被 resolveAlienShots 跳过，
   // 所以它必须走完本回合的落点才会开枪；此时冲锋 / 反击状态仍然有效，免疫能正常生效。
   await resolveAlienShots(eIdx);
-  if (player.hp <= 0) { player.alive = false; phase = 'gameover'; clearEnemyArrows(); log('你死了。游戏结束。'); render(); return; }
-  if (enemies.filter(e => e.alive).length === 0) { render(); await sleep(300); onLevelClear(); return; }
+  if (await settleTick()) return;
 
   if (didAttackThisTick && player.alive) {
-    if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-      log('冲锋状态禁止攻击节点，本次攻击取消。');
-      floatText(player.x, player.y, '禁止攻击', '#bbb');
-    } else if (selectedChar === 'fencer' && fencerCounterActive) {
-      log('反击状态禁止攻击节点，本次攻击取消。');
-      floatText(player.x, player.y, '禁止攻击', '#bbb');
-    } else if (selectedChar === 'wheelchair' || selectedChar === 'fencer') {
-      const maxAttacks = 1 + player.extraAttacks;
-      if (playerAttacksDone < maxAttacks && canPerformAttackAction()) {
-        playerAttacksDone++;
-        playerActionsUsed++;   // 攻击占用一次动作
-        const targets = enemies.filter(e => e.alive && cheb(e, player) === 1);
-        if (targets.length === 0) {
-          log('近战范围攻击挥空，未命中任何敌人。');
-          floatText(player.x, player.y, '挥空', '#bbb');
-          refreshUnits();
-          await sleep(200);
-        } else {
-          const strMod = abilityMod(player.abilities.str);
-          for (const target of targets) {
-            if (target.hp <= 0) continue;
-            const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
-            if (!atk.hit) {
-              missFx(target.x, target.y);
-              log(`近战范围攻击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
-              refreshUnits();
-              await sleep(120);
-              continue;
-            }
-            let dmg = player.meleeDmg;
-            if (selectedChar === 'wheelchair' && playerChargingThisTurn) dmg *= 2;
-            let isCrit = atk.nat20;
-            let critTag = atk.nat20 ? '自然20暴击' : '';
-            if (!isCrit && isInFacingCone(player, target)) { isCrit = true; critTag = '朝向暴击'; }
-            if (!isCrit && Math.random() < (selectedChar === 'fencer' ? player.critChance + 0.42 : player.critChance)) { isCrit = true; critTag = '暴击'; }
-            if (isCrit) dmg *= 2;
-            target.hp -= dmg;
-            if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
-            if (selectedChar === 'amiya') amiyaMarkReveal(target);
-            slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
-            hitFlashCell(target.x, target.y);
-            if (isCrit) {
-              ringFx(target.x, target.y, '#ff4500');
-              floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
-              log(`近战范围${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
-            } else {
-              ringFx(target.x, target.y, '#ffb86b');
-              floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
-              log(`近战范围命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
-            }
-            if (target.hp <= 0) {
-              target.alive = false;
-              floatText(target.x, target.y, '击杀!', '#ff6b6b');
-              log(`敌人${target.id+1}被击败`);
-              if (selectedChar === 'amiya') amiyaGainKillBonus();
-            }
-            refreshUnits();
-            await sleep(200);
-          }
-        }
-      }
-    } else {
-      const maxAttacks = 1 + player.extraAttacks;
-      if (playerChargingThisTurn) {
-        log('冲锋中无法远程攻击。');
-      } else {
-        if (playerAttacksDone < maxAttacks && canPerformAttackAction()) {
-          const fromPos = { x: player.x, y: player.y, range: player.range };
-          let targets = enemies.filter(e => e.alive && canRangedAttack(fromPos, e));
-          if (targets.length > 0) {
-            targets.sort((a, b) => cheb(a, fromPos) - cheb(b, fromPos));
-            targets = targets.slice(0, 1 + player.extraTargets);
-            const intMod = abilityMod(player.abilities.int);
-            /* 不稳定血浆：本关内远程攻击必定命中 + 必定暴击 */
-            const vampPlasma = selectedChar === 'vampire' && vampireSkillActive;
-            const actionCrit = vampPlasma || Math.random() < player.critChance;
-            if (vampPlasma) log('「不稳定血浆」：本次攻击必定命中、必定暴击、必定留血迹！');
-            else if (actionCrit) log('本次攻击行动触发暴击，所有目标共享！');
-            const hits = [];
-            const bulletPromises = [];
-            for (const target of targets) {
-              if (target.hp <= 0) continue;
-              const atk = attackRoll(intMod, player.rangedProf || 0, target.ac);
-              /* 不稳定血浆：必定命中（自然 1 / AC 过高也照样命中） */
-              if (vampPlasma && !atk.hit) { atk.hit = true; atk.forcedHit = true; }
-              const isCrit = atk.hit && (atk.nat20 || actionCrit);
-              hits.push({ target, hit: atk.hit, isCrit, atk });
-              bulletPromises.push(animateBullet(fromPos, 'enemy-' + target.id, target, isCrit, false, 'player'));
-            }
-            if (hits.length > 0) {
-              await Promise.all(bulletPromises);
-              await sleep(80);
-              for (const { target, hit, isCrit, atk } of hits) {
-                /* 只要出手（即使 MISS）就能看到目标意图 */
-                if (selectedChar === 'amiya') amiyaMarkReveal(target);
-                /* 华法琳：血迹只由远程攻击产生 —— 不稳定血浆生效时必定留，平时命中后 50% */
-                if (selectedChar === 'vampire' && hit && (vampPlasma || Math.random() < 0.5)) {
-                  addBloodAt(target.x, target.y);
-                }
-                if (hit) {
-                  const dmg = player.rangedDmg * (isCrit ? 2 : 1);
-                  const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
-                  target.hp -= dmg;
-                  if (target.hp <= 0) {
-                    target.alive = false;
-                    if (selectedChar === 'amiya') amiyaGainKillBonus();
-                  }
-                  if (isCrit) {
-                    hitFx(target.x, target.y, dmg, true, '暴击');
-                    log(`玩家远程暴击敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
-                  } else {
-                    hitFx(target.x, target.y, dmg, false);
-                    log(`玩家远程命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})${forcedTag}`);
-                  }
-                } else {
-                  missFx(target.x, target.y);
-                  log(`玩家远程未命中 (${fmtRoll(atk, target.ac)})`);
-                }
-              }
-            }
-            /* 阿米娅：每次攻击（攻击节点出手，无论命中与否）+1 技力 */
-            if (selectedChar === 'amiya') amiyaGainAttackSp();
-            /* 不稳定血浆的代价：每次远程攻击后自身 -1 HP（护盾可抵消） */
-            if (selectedChar === 'vampire' && vampireSkillActive) {
-              const selfRes = damagePlayer(1, '不稳定血浆');
-              floatText(player.x, player.y,
-                debugMode ? '无敌' : (selfRes.shielded ? '护盾抵消' : '-1 HP'),
-                debugMode ? '#ffcc00' : (selfRes.shielded ? '#ffffff' : '#ff6b6b'));
-              log(`不稳定血浆：攻击后失去 1 HP${debugMode ? '（调试：玩家无敌）' : (selfRes.shielded ? '（护盾抵消）' : `（剩 ${player.hp}）`)}。`);
-              updateStats();
-              if (player.hp <= 0) {
-                player.alive = false;
-                phase = 'gameover';
-                clearEnemyArrows();
-                log('不稳定血浆耗尽了生命。游戏结束。');
-                render();
-                return;
-              }
-            }
-            playerAttacksDone++;
-            playerActionsUsed++;   // 攻击占用一次动作（闪避与攻击二选一）
-            refreshUnits();
-            await sleep(220);
-          } else {
-            log('攻击节点无视线内目标（不消耗攻击次数）');
-            refreshUnits();
-            await sleep(160);
-          }
-        }
-      }
-    }
+    if (await resolvePlayerAttack()) return;
   }
 
-  if (playerActionThisTick && !playerChargingThisTurn && player.alive && player.hp > 0) {
-    const autoTargets = enemies.filter(e => e.alive && dist(e, player) === 1);
-    /* 远程角色没有近战输出手段：被贴身时的趁乱打击固定 1 点保底伤害，
-       不吃暴击 / 冲锋倍率，也不读取近战伤害面板。 */
-    const scuffleFlatDmg = isRangedChar(selectedChar);
-    if (autoTargets.length > 0) {
-      log(`⚡ 趁乱攻击：对 ${autoTargets.length} 个相邻敌人发起攻击！${scuffleFlatDmg ? '（远程角色，1 点保底伤害）' : ''}`);
-    }
-    for (const target of autoTargets) {
-      if (!target.alive) continue;
-      const strMod = abilityMod(player.abilities.str);
-      const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
-      /* 只要出手（即使 MISS）就能看到目标意图 */
-      if (selectedChar === 'amiya') amiyaMarkReveal(target);
-      if (!atk.hit) {
-        missFx(target.x, target.y);
-        log(`趁乱攻击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
-        refreshUnits();
-        await sleep(180);
-        continue;
-      }
-      let dmg = scuffleFlatDmg ? (1 + buffMeleeBonus()) : player.meleeDmg;
-      if (selectedChar === 'wheelchair' && playerChargingThisTurn) { dmg *= 2; log('玩家冲锋撞击，伤害翻倍！'); }
-      let isCrit = false;
-      let critTag = '';
-      if (!scuffleFlatDmg) {
-        isCrit = atk.nat20;
-        critTag = atk.nat20 ? '自然20暴击' : '';
-        if (!isCrit && isFacingTarget(player, target)) { isCrit = true; critTag = '朝向暴击'; }
-        if (!isCrit && Math.random() < (selectedChar === 'fencer' ? player.critChance + 0.42 : player.critChance)) { isCrit = true; critTag = '暴击'; }
-        if (isCrit) dmg *= 2;
-      }
-      target.hp -= dmg;
-      if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
-      slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
-      hitFlashCell(target.x, target.y);
-      if (isCrit) {
-        ringFx(target.x, target.y, '#ff4500');
-        floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
-        log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
-      } else {
-        ringFx(target.x, target.y, '#ffb86b');
-        floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
-        log(`趁乱攻击命中敌人${target.id+1}，造成${dmg}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
-      }
-      if (target.hp <= 0) {
-        target.alive = false;
-        floatText(target.x, target.y, '击杀!', '#ff6b6b');
-        log(`敌人${target.id+1}被击败`);
-        if (selectedChar === 'amiya') amiyaGainKillBonus();
-      }
-      refreshUnits();
-      await sleep(240);
-    }
-    /* 注：趁乱打击不属于「正常攻击」，不触发不稳定血浆的任何效果（不暴击、不留血迹、不扣血） */
-  }
+  await resolveScuffleAttacks(playerActionThisTick);
 
-  let chargeWillEnd = false;
-  if (playerChargingThisTurn && (playerBlocked || pIdx >= playerPath.length)) {
-    chargeWillEnd = true;
-    let willHitWall = false;
-    if (!playerBlocked && playerChargeStopReason === 'wall' && player.hp > 0) {
-      const adjWall = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx, dy]) => {
-        const nx = player.x + dx, ny = player.y + dy;
-        return !inBounds(nx, ny) || map[ny][nx] === 1;
-      });
-      willHitWall = adjWall;
-    }
-    if (willHitWall) {
-      if (playerChargeCausedDamage) {
-        floatText(player.x, player.y, '减免撞墙', '#4ecdc4');
-        log('冲锋过程中已造成过伤害，本次撞墙免伤。');
-      } else {
-        const oldHp = player.hp;
-        const wallDmg = oldHp - Math.floor(oldHp / 2);
-        const wallRes = damagePlayer(wallDmg, '冲锋撞墙');
-        const txt = debugMode ? '无敌' : (wallRes.shielded ? '护盾抵消' : '撞墙 -' + wallDmg);
-        floatText(player.x, player.y, txt, debugMode ? '#ffcc00' : (wallRes.shielded ? '#ffffff' : '#ff6b6b'), false);
-        ringFx(player.x, player.y, '#ff6b6b');
-        hitFlashCell(player.x, player.y);
-        log(`冲锋撞墙，失去一半 HP${debugMode ? '（调试：玩家无敌）' : (wallRes.shielded ? '（护盾抵消）' : '（-' + wallDmg + '，剩 ' + player.hp + '）')}`);
-        if (player.hp <= 0) player.alive = false;
-      }
-    }
-    if (player.hp <= 0) {
-      refreshUnits();
-      phase = 'gameover';
-      clearEnemyArrows();
-      log('你死了。游戏结束。');
-      render();
-      return;
-    }
-  }
+  const chargeWillEnd = playerChargingThisTurn && (playerBlocked || pIdx >= playerPath.length);
+  if (resolveChargeWallDamage(chargeWillEnd, playerBlocked)) return;
 
-  if (player.hp > 0) {
-    for (let i = 0; i < enemies.length; i++) {
-      if (player.hp <= 0) break;
-      const e = enemies[i];
-      if (!e.alive || e.type === 'alien') continue;
-      if (e.stunTurns > 0) continue;
-      if (dist(e, player) === 1 && !e.attackedThisRound) {
-        e.attackedThisRound = true;
-        gainFencerSp(1);
-        const eStrMod = abilityMod(e.abilities.str);
-        const eProf = (e.type !== 'alien') ? e.prof : 0;
-        const useDefenseAdvantage = selectedChar === 'fencer' && fencerCounterActive;
-        const pAC = playerEffectiveAC();
-        const atk = useDefenseAdvantage
-          ? attackRollDisadvantage(eStrMod, eProf, pAC)
-          : attackRoll(eStrMod, eProf, pAC);
-        slashFx(player.x, player.y, '#ff6b6b');
-        hitFlashCell(player.x, player.y);
-        if (atk.hit) {
-          let ed = e.meleeDmg;
-          let critTag = '';
-          if (atk.nat20) { ed *= 2; critTag = '自然20暴击'; }
-          else if (isFacingTarget(e, player)) { ed *= 2; critTag = '朝向暴击'; }
-          if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-            log(`敌人${i+1}近战攻击${critTag ? '（' + critTag + '）' : ''}，冲锋状态免疫所有伤害！`);
-            floatText(player.x, player.y, '冲锋免疫', '#ffd700');
-            refreshUnits();
-            await sleep(240);
-            continue;
-          }
-          if (selectedChar === 'fencer' && fencerCounterActive && fencerSp >= FENCER_SP_MAX) {
-            log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}，但泥岩反击状态+满技力，免疫所有攻击！`);
-            floatText(player.x, player.y, '满技力免疫', '#ffd700');
-            // ★ 关键修复：免疫后必须仍然结算这次反击。
-            // 旧版这里直接 continue，跳过了 triggerFencerCounter()，于是「满技力 → 免疫 → 不反击 → 技力不清零
-            // → 永远满技力永远免疫 → 眩晕/回血永远不触发」形成死锁。免疫本身就该算作一次「承伤触发的反击」。
-            if (player.hp > 0) triggerFencerCounter();
-            refreshUnits();
-            await sleep(240);
-            continue;
-          }
-          const meleeRes = damagePlayer(ed, '敌人近战');
-          floatText(player.x, player.y,
-            debugMode ? '无敌' : (meleeRes.shielded ? '护盾抵消' : ((critTag ? critTag + ' -' : '-') + ed)),
-            debugMode ? '#ffcc00' : (meleeRes.shielded ? '#ffffff' : (critTag ? '#ffd700' : '#ff6b6b')),
-            !debugMode && !meleeRes.shielded && !!critTag);
-          log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}${debugMode ? '（调试：玩家无敌）' : (meleeRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
-          if (player.hp > 0) triggerFencerCounter();
-        } else {
-          missFx(player.x, player.y);
-          log(`敌人${i+1}近战未命中 (${fmtRoll(atk, pAC)})`);
-        }
-        refreshUnits();
-        await sleep(240);
-      }
-    }
-  }
+  await resolveEnemyMeleeAttacks();
 
-  if (chargeWillEnd) {
-    log('冲锋结束，失去冲锋状态。');
-    playerChargingThisTurn = false;
-    playerChargeStopReason = null;
-    playerChargeCausedDamage = false;
-  }
+  finishChargeState(chargeWillEnd);
 
   if (player.hp <= 0) player.alive = false;
-  enemies.forEach(e => {
-    if (e.alive && e.hp <= 0) {
-      e.alive = false;
-      ringFx(e.x, e.y, '#ff6b6b');
-      floatText(e.x, e.y, '击杀!', '#ff6b6b');
-      log(`敌人${e.id+1}被击败`);
-      if (selectedChar === 'amiya') amiyaGainKillBonus();
-    }
-  });
-  if (player.hp <= 0) { phase = 'gameover'; clearEnemyArrows(); log('你死了。游戏结束。'); render(); return; }
-  if (enemies.filter(e => e.alive).length === 0) { render(); await sleep(300); onLevelClear(); return; }
+  sweepDeadEnemies();
+  if (await settleTick()) return;
 
   const playerFinished = pIdx >= playerPath.length && !pendingAttack;
   const enemiesFinished = enemies.every((e, i) => {
@@ -4045,36 +4181,22 @@ async function resolveAlienShots(eIdx) {
     e.attackedThisRound = true;
     gainFencerSp(1);
     const intMod = abilityMod(e.abilities.int);
-    const useDefenseAdvantage = selectedChar === 'fencer' && fencerCounterActive;
     const pAC = playerEffectiveAC();
-    const atk = useDefenseAdvantage
-      ? attackRollDisadvantage(intMod, e.prof, pAC)
-      : attackRoll(intMod, e.prof, pAC);
+    const atk = rollEnemyAttack(intMod, e.prof, pAC);
     await animateBullet({ x: e.x, y: e.y }, 'player', player, atk.nat20, true, 'enemy-' + e.id);
     if (atk.hit) {
       let ed = e.rangedDmg;
       if (atk.nat20) ed *= 2;
-      if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-        log(`外星人${i+1}远程命中${atk.nat20 ? '（自然20暴击）' : ''}，冲锋状态免疫所有伤害！`);
-        floatText(player.x, player.y, '冲锋免疫', '#ffd700');
-        refreshUnits();
-        await sleep(240);
-        continue;
-      }
-      if (selectedChar === 'fencer' && fencerCounterActive && fencerSp >= FENCER_SP_MAX) {
-        log(`外星人${i+1}远程命中${atk.nat20 ? '（自然20暴击）' : ''}，但泥岩反击状态+满技力，免疫所有攻击！`);
-        floatText(player.x, player.y, '满技力免疫', '#ffd700');
-        // 免疫不等于跳过反击，否则满技力会永久锁死、眩晕永远不触发
-        if (player.hp > 0) triggerFencerCounter();
+      // 免疫不等于跳过反击，否则满技力会永久锁死、眩晕永远不触发（见 tryPlayerImmuneHit）
+      if (tryPlayerImmuneHit(playerImmuneState(), `外星人${i+1}远程命中`, `外星人${i+1}远程命中`, atk.nat20 ? '自然20暴击' : '')) {
         refreshUnits();
         await sleep(240);
         continue;
       }
       const shotRes = damagePlayer(ed, '外星人射击');
-      floatText(player.x, player.y,
-        debugMode ? '无敌' : (shotRes.shielded ? '护盾抵消' : ((atk.nat20 ? '自然20暴击 -' : '-') + ed)),
-        debugMode ? '#ffcc00' : (shotRes.shielded ? '#ffffff' : (atk.nat20 ? '#ffd700' : '#a55eea')),
-        !debugMode && !shotRes.shielded && atk.nat20);
+      showPlayerDamage(shotRes, (atk.nat20 ? '自然20暴击 -' : '-') + ed, {
+        color: atk.nat20 ? '#ffd700' : '#a55eea', crit: atk.nat20,
+      });
       log(`外星人${i+1}远程命中${debugMode ? '（调试：玩家无敌）' : (shotRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
       if (player.hp > 0) triggerFencerCounter();
     } else {
@@ -4087,25 +4209,14 @@ async function resolveAlienShots(eIdx) {
 }
 
 async function endRound() {
-  if (player.hp <= 0) { phase = 'gameover'; clearEnemyArrows(); log('你死了。游戏结束。'); render(); return; }
+  if (player.hp <= 0) { endGame(); return; }
   clearEnemyArrows();
   enemies.forEach(e => e.attackedThisRound = false);
   playerPath = [{ x: player.x, y: player.y }];
-  attackIndices = []; enemyPaths = [];
-  playerChargingThisTurn = false; playerAttacksDone = 0; fencerCounterActive = false;
-  pendingAttack = false;
-  // 闪避状态到回合结束为止
-  playerDodging = false;
-  playerDodgeACBonus = 0;
-  dodgeTriggerIndex = -1;
-  playerActionsUsed = 0;
-  pendingChargeInfo = null;
-  pendingCounterInfo = null;
-  amiyaBurstPlan = null;
-  amiyaBurstDone = false;
-  playerChargeStopReason = null;
-  playerChargeCausedDamage = false;
-  phase = 'planning';
+  attackIndices = []; skillIndices = []; enemyPaths = [];
+  lastClick = null;
+  resetTurnState({ clearCounter: true });   // 闪避 / 冲锋 / 反击等临时状态到回合结束为止
+  phase = PHASE.PLANNING;
   battleRound++;
   log('--- 回合结束 ---');
 
@@ -4130,7 +4241,7 @@ async function endRound() {
 }
 
 function onLevelClear() {
-  if (phase === 'levelclear' || phase === 'gameover') return;   // 防止同回合被多个入口重复触发
+  if (phase === PHASE.LEVELCLEAR || phase === PHASE.GAMEOVER) return;   // 防止同回合被多个入口重复触发
   clearEnemyArrows();
   playerStats.currentHp = player.hp;
   if (selectedChar === 'vampire' && bloodDrops.length > 0) {
@@ -4164,14 +4275,15 @@ function onLevelClear() {
   level += 1;
   const willLevelUp = clearedLevel % LEVELUP_EVERY_N_LEVELS === 0;
   levelUpPending = willLevelUp;
-  phase = 'levelclear';
+  phase = PHASE.LEVELCLEAR;
   render();
 
   /* 每 3 关（第 3/6/9… 关通关）提升 1 级：HP 上限 + 体质加值、回满血，再从奖励池 3 选 1 */
+  /* 定时器加上阶段校验：玩家可能已经点了「下一关」，避免过期定时器把同一关初始化两次 */
   if (willLevelUp) {
-    setTimeout(() => openLevelUp(), 600);
+    setTimeout(() => { if (phase === PHASE.LEVELCLEAR) openLevelUp(); }, 600);
   } else {
-    setTimeout(() => enterAllocGate(), 700);
+    setTimeout(() => { if (phase === PHASE.LEVELCLEAR) enterAllocGate(); }, 700);
   }
 }
 
@@ -4186,7 +4298,7 @@ function enterAllocGate() {
 }
 /* 「下一关」按钮：仅当所有属性点分配完毕才可用 */
 function proceedNextLevel() {
-  if (phase !== 'levelclear' || playerStats.abilityPoints > 0) return;
+  if (phase !== PHASE.LEVELCLEAR || playerStats.abilityPoints > 0) return;
   initLevel();
 }
 
@@ -4194,7 +4306,7 @@ function proceedNextLevel() {
  * 升级：等级 +1 → HP 上限 + 体质加值 → 回满血 → 奖励池 3 选 1
  * ========================================================= */
 function openLevelUp() {
-  if (phase !== 'levelclear' || levelUpOpen) return;
+  if (phase !== PHASE.LEVELCLEAR || levelUpOpen) return;
   if (levelUpPending) {
     levelUpPending = false;
     heroLevel += 1;
@@ -4393,7 +4505,7 @@ function setLayout(mode, save) {
   } catch (_) {}
   setTimeout(() => {
     updateCellSize();
-    if (player || phase === 'char_select') render();
+    if (player || phase === PHASE.CHAR_SELECT) render();
   }, 30);
 }
 logRotateBtn.addEventListener('click', (e) => {
