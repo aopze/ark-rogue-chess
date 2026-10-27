@@ -1,16 +1,9 @@
 #!/usr/bin/env bash
-# 方舟战棋 → GitHub Pages 一键更新（将最新单文件推到 aopze/ark-rogue-chess 的 main 分支）
-# 前置：_publish/index.html 已是最新（即 demo_latest.html 的干净单文件版）
+# 方舟战棋 -> GitHub Pages 一键更新
+#
+# 架构：index.html = Mini App 外壳(wrapper, 永不改) / game.html = 游戏本体(只改它)
+# 本脚本只更新 game.html，并自动确保 index.html 是外壳（自愈）。
+# 桌面等价入口：发布游戏.bat
 set -e
-DEMO="/d/HuaweiMoveData/Users/huze/Desktop/游戏demo"
-GH="$DEMO/_ghpages"
-cp "$DEMO/_publish/index.html" "$GH/game.html"
-cd "$GH"
-git add -A
-if git diff --cached --quiet; then
-  echo "无变化，跳过提交。"
-else
-  git commit -q -m "更新 方舟战棋 $(date +%Y%m%d-%H%M)"
-  git push -q
-  echo "已推送 -> https://aopze.github.io/ark-rogue-chess/"
-fi
+PY="C:/Users/Admin/.workbuddy/binaries/python/envs/default/Scripts/python.exe"
+exec "$PY" "C:/Users/Admin/Desktop/publish_game.py" "$@"
