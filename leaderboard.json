@@ -1,19 +1,14 @@
 {
- "updated_at": 1793090552,
+ "updated_at": 1793099800,
  "entries": [
   {
-   "id": "111111",
-   "name": "玩家1111",
-   "level": 15,
-   "kills": 40,
-   "runs": 5
-  },
-  {
-   "id": "222222",
-   "name": "玩家2222",
-   "level": 12,
-   "kills": 9,
-   "runs": 2
+   "id": "999001",
+   "name": "我改名了",
+   "level": 7,
+   "kills": 12,
+   "runs": 1
   }
- ]
+ ],
+ "bot_username": "testbot",
+ "report_url": "https://example.com/api/score"
 }
