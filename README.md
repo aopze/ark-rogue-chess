@@ -15,58 +15,52 @@
 
 ---
 
-> ## 🚨 基线变更通告（2026-10-28 03:30，build `20261028c`）
+> ## 🚨 基线变更通告（2026-10-28 04:40，build `20261028d`）
 >
-> `game.html` 已由 **261,228 B / `4cb46640`** 变为 **272,067 B / `959b59d2`**（build `20261028b` → `20261028c`）。
-> 人类维护者说「版本更新」后，本轮批准的范围是 **ISSUE-04（敌人差异化）+ ISSUE-07（熟练加值）**；
-> 05/06 两份 ready 需求按 §0.0 第 6 步**保留在 `issues/` 等下一轮**（文件末尾已写「本轮未做」及原因）。
+> `game.html` 已由 **272,067 B / `959b59d2`** 变为 **281,705 B / `cdae8025`**（build `20261028c` → `20261028d`）。
+> 人类维护者说「版本更新」后，本轮批准的范围是 **ISSUE-05（精英与词缀）**；ISSUE-08 的拆分由协作者第七批**提前交付**、
+> 本轮核销关闭；ISSUE-02 归档删除；ISSUE-06 按维护者指示搁置（需求细节待补充）。
 >
-> 1. **熟练加值改绑角色等级**：`playerStats.prof = 4 + max(0, heroLevel - 1)`，取消「每 5 关一个档位」。
->    起手仍 +4（第 1–3 关手感不变），第 4 关起 +5 / +6 …。
-> 2. **敌人伤害骰化**：骷髅 `1d2`（期望 1.5）/ 幽灵 `1d1`（恒 1）/ 外星远程 `1d2`。
->    旧口径 `max(1, 1+力调)` 把三类全截平在 1，玩家挨打分不出是谁打的。
-> 3. **新增两类敌人**：**盾卫**（L8+，AC 11 / HP 18 / 移动 3，慢硬不疼）、
->    **自爆虫**（L12+，HP 5 / 移动 6，贴到相邻格自爆固定 4 伤害并消散；眩晕中不炸，冲锋/反击免疫可挡）。
-> 4. **类型按关解锁 + 加权**：`ENEMY_UNLOCK` / `pickEnemyType()` 取代 `ENEMY_TYPES[randInt(3)]`，
->    L1–2 只有骷髅、L3 幽灵、L5 外星、L8 盾卫、L12 自爆虫（旧版第 1 关就有 33% 外星人狙击）。
-> 5. **玩家基础 HP +4**：新增 `BASE_HP_BONUS`，对冲伤害骰化带来的承伤上升。
+> ### 05 做了什么（改动口径）
+>
+> 1. **4 个词缀**：护盾（挡下第一击，本次伤害归零并碎盾）/ 迅捷（移动 +2）/ 狂暴（HP **严格低于一半**时移动 +2、伤害 +1）/
+>    荆棘（被近战命中后反弹 1 点；**这一击已把它打死则不反弹**）。
+> 2. **精英**：L5 起每关**恰好 1 只**，`HP 上限 ×1.5`（`ELITE_HP_MUL`，向上取整）、必带 2 个词缀、
+>    击败后在死亡格留一个恢复道具 ❤️（只 push `rewardItems`，不新增单位）。
+> 3. **词缀池分档**：L5–9 只出护盾/迅捷（读得懂、不劝退），L10+ 四种全开；普通敌人按概率带 1 个（早期 30% / 后期 45%）。
+> 4. **随机源确定性**：`affixRng(level, idx, RUN_SEED, tag)` 由 `enemyGrowthRng` 派生，**绝不用全局 `rng()`**
+>    —— 全局是滚动状态，拿它选词缀会让面板每次重绘都抖动。种子含 `level`，同 `RUN_SEED` 同关卡恒定。
+> 5. **AI 请读 `enemyMoveOf(e)`，不要再读 `e.move`**：迅捷 / 狂暴的加成都收在这一层。已改 4 处寻路调用。
+> 6. **玩家打敌人的统一入口是 `enemyTakeDamage(e, dmg)`**：护盾在里层吃掉第一击并**返回 0**。已接 7 处伤害入口
+>    （泥岩反击 / 精神爆发 / 近战范围 / 远程 / 趁乱攻击 / 相杀 / 冲锋撞击）。新增伤害入口请一律走它，否则护盾会漏。
+> 7. **首轮明确不做「分裂」词缀**：它会在结算中途新增数组元素，破坏 `enemyPathOrder` 落位与 `enemies[i].id` 稳定性
+>    （历史上「敌人永久罚站」就源于落位顺序）。
 >
 > ### ⚠️ 对 `P0.1-4` 机械拆分的影响（必读）
 >
-> 本轮**不是只改产物**，而是直接改了 3 个已拆分模块 + `units.js` + 模板里后半段的代码，与 `game.html` 同步提交：
+> 本轮**以协作者第七批（21 模块 / 模板 166,663 B）为基线重建**，只改 **2 个模块 + 模板后半段**：
 >
 > | 文件 | 改了什么 |
 > |---|---|
-> | `src/data/enemies.js` | `ENEMY_TYPES` 加 `shield`/`bomber`；`ENEMY_STATS` 加 `icon`/`dice`/`explode`；新增 `ENEMY_UNLOCK` / `pickEnemyType` / `rollEnemyDamage` / `diceAvg` / `diceLabel` |
-> | `src/data/constants.js` | 新增 `BASE_HP_BONUS = 4` |
-> | `src/rules/dnd.js` | `recomputePlayerDerivedStats()` 里的 `prof` 与 `maxHp` 两行 |
-> | `src/ui/units.js` | `renderUnits()` 里敌人图标改为读 `ENEMY_STATS[type].icon`（见下方事故记录） |
-> | `templates/game.html` | 敌人生成（`pickEnemyType` + 骰子字段）、面板日志、近战 / 远程 / 相杀**三处伤害入口**、自爆虫分支、HP 日志文案。**不含 `renderUnits`** —— 第 6 区已由第五批搬走 |
+> | `src/data/enemies.js` | 新增 `AFFIX_DEFS` / `AFFIX_POOL_EARLY|LATE` / `ELITE_*` 常量，`affixRng` / `eliteIndexFor` / `rollEnemyAffixPlan` / `enemyHasAffix` / `enemyIsFrenzied` / `enemyMoveOf` / `enemyDamageBonus` / `enemyAffixLabel` / `enemyTakeDamage` / `enemyThornsReflect`；`rollEnemyDamage` 末尾叠狂暴 +1 |
+> | `src/ui/units.js` | `renderUnits()` 加 `.ua-elite` 金边类与 `.affix-tag` 右上角标签（敌人分支） |
+> | `templates/game.html` | 敌人生成（`rollEnemyAffixPlan` + 精英 HP）、面板日志（★精英 / `enemyMoveOf` / 词缀）、`killEnemy` 精英掉落、**7 处伤害入口**改走 `enemyTakeDamage`、AI 4 处 `e.move` → `enemyMoveOf(e)`。模板 **166,663 → 169,610 B** |
 >
-> #### 🩹 事故记录：03:21 一次真实的「拆分基线被覆盖」（03:35 已修复）
+> **没有改** `src/rules/mapgen.js` / `src/ui/layout.js` / `src/ui/chrome.js`（第七批刚搬走，本轮一字未动）。
 >
-> 发版时我把 `templates/game.html` **整文件**上传（223,353 B），覆盖掉了第五批的骨架化成果。
-> 第五批 03:05 已把第 6 区（`path` / `actions` / `units`）搬进 `src/`，模板本应只剩 **203,193 B**；
-> 而我手上是 03:00 拉的旧模板（那时 `manifest.json` 还只有 12 个模块），改完直接推了上去。
-> **后果**：`manifest.json`（15 模块）+ 旧模板（仍含第 6 区）→ 下次构建会把 `renderUnits` /
-> `findChargeSkillIndex` / `plannedActionInfo` 等函数注入两遍。`function` 重复声明不报错（后者静默覆盖前者），
-> 但产物语义已不可预期；若碰上 `let/const` 重复则直接 SyntaxError。
+> #### 🩹 澄清：本轮一度与第七批撞车（已丢弃，未污染仓库）
 >
-> **修复**：以第五批模板（203,193 B）为基底重放本轮改动，`renderUnits` 的图标改动改落到 `src/ui/units.js`；
-> 现模板 **205,408 B**（第五批 + 本轮后半段改动，不含第 6 区）。验证：15 模块构建成功（产物 270,653 B）、
-> 10 个关键函数在产物中各出现 **1** 次、定点单测 10/10、布局 14/14、实战一局 `anom=0 / err=0 / pageErrors=0`。
-> **`game.html` 未重发**（仍 272,067 B / `959b59d2`）—— 该产物本身自洽可跑，与重建结果的差异仅在注释，
-> 下次发版会自然收敛。
+> 我按开工时拉到的 18 模块基线（模板 188,313 B）自己做了同一批纯移动拆分（mapgen / layout / chrome），
+> 命名与 `ISSUE-20261028-08` 一致。上传前复查远程，发现协作者第七批已在 04:2x 交付**同样的三组**（并额外做了
+> 「多点注入」支持跳段拆分，比我的方案更完整）。于是**整批丢弃**，改以远程 21 模块为基底重做 05。
+> 仓库里没有任何重复拆分产物；模板 `169,610 B` = 第七批 166,663 B + 本轮 05 的后半段改动。
 >
-> #### 🔒 新增规则（`P0.1-4` 期间临时生效）
+> ### 平衡数据（80 局/版本，4 角色 × 正解流/激进贴脸 × 10 局，同脚本同口径）
 >
-> **开工前先 `GET` 一次 `build/manifest.json`，用 `modules` 数组长度确认拆分进度，再判断本地模板是新是旧。**
-> `templates/game.html` 的字节数不可靠（本轮正因如此踩坑）；`modules` 长度随每批拆分单调递增，
-> 是唯一可靠的「拆到第几区」路标。当前 **15 个模块 = 第 1–6 区已拆，第 7–15 区仍在模板内**。
->
-> 平衡数据（80 局/版本，`roguechess-autotest`，4 角色 × 正解流/激进贴脸 × 10 局）：
-> 平均通关 **1.21 → 0.94 关（−22.7%）**，未超 issue 的 40% 回调线；分角色 风笛 −27% / 泥岩 −8% / 华法琳 −42%。
-> 校准留痕：首版 1d3 为 **−68%**（严重超标）→ 1d2 为 −43% → 加 `BASE_HP_BONUS=4` 后 **−22.7%**。
+> 通关均值 **0.82 → 0.96 关（+16.7%）**，L1 死亡率 **57% → 49%**，未超 40% 回调线；
+> 分角色 风笛 +2% / 华法琳 +25% / 泥岩 +50% / 阿米娅持平。**注意样本分辨力**：80 局里只有 **4 局**活到第 5 关
+> （精英从 L5 才出现），所以这 ±17% 主要是天赋骰运噪声，**不能用来评价 05 本身的强度**——
+> 05 的强度验证靠定点单测与跨关卡扫描（见 §10.3 v3.9），不靠试玩均值。
 
 > ### 📜 历史基线通告（2026-10-28 02:22，已于 03:30 解除）
 >
@@ -260,7 +254,7 @@ issues/ISSUE-<YYYYMMDD>-<两位序号>-<英文短标签>.md
 
 | 阶段 | 状态 | 负责人 | 当前焦点 | 阻塞项 |
 |---|---|---|---|---|
-| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；`P0.1-2` 目录已落地（骨架 + `docs/ARCHITECTURE.md`，**未动 `game.html`**）；**`P0.1-3` 构建脚本已落地**（`build/bundle.mjs` + `verify.mjs` + 清单 + 34 项单测，`AC-23` 双 BUILD 由机器把关，默认只输出到 `build/out/` 不碰根目录）；**`P0.1-4` 机械拆分已交付七批**（共 **21 个模块**：`src/data/` 3 + `src/rules/` 9 + `src/ui/` 8 + `src/net/` 1），前 7 区按行号连续拆、第七批起**按热度分级**（`issues/ISSUE-20261028-08-split-by-heat.md`）；第七批搬 `src/rules/mapgen.js` / `src/ui/layout.js` / `src/ui/chrome.js` 三组低热度代码（5 段不连续区）；**为此给构建加了「多点注入」**（模块内 `/* @slot:<id> */` 切段 → 落到模板同名 `<!-- @inject:scripts:<id> -->`，跨槽位置由模板决定，求值顺序不变，这是跳段拆也能保持归一化等价的前提）；**剩余热区等 05/06/07 落地后再拆**：`initLevel`/`finishLevel`/`openLevelUp`（06 要插事件 phase）、`resolveTurn` 与敌人 AI（05 改结算）、`renderUnits`（07-icon），先拆会白拆两遍；全部拆完后 `AC-01` 方可完整验收 | 无 |
+| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；`P0.1-2` 目录已落地（骨架 + `docs/ARCHITECTURE.md`，**未动 `game.html`**）；**`P0.1-3` 构建脚本已落地**（`build/bundle.mjs` + `verify.mjs` + 清单 + 34 项单测，`AC-23` 双 BUILD 由机器把关，默认只输出到 `build/out/` 不碰根目录）；**`P0.1-4` 机械拆分已交付七批**（共 **21 个模块**：`src/data/` 3 + `src/rules/` 9 + `src/ui/` 8 + `src/net/` 1），前 7 区按行号连续拆、第七批起**按热度分级**（`ISSUE-20261028-08` 已随第七批交付**核销关闭**）；第七批搬 `src/rules/mapgen.js` / `src/ui/layout.js` / `src/ui/chrome.js` 三组低热度代码（5 段不连续区）；**为此给构建加了「多点注入」**（模块内 `/* @slot:<id> */` 切段 → 落到模板同名 `<!-- @inject:scripts:<id> -->`，跨槽位置由模板决定，求值顺序不变，这是跳段拆也能保持归一化等价的前提）；**剩余热区等 05/06/07 落地后再拆**：`initLevel`/`finishLevel`/`openLevelUp`（06 要插事件 phase）、`resolveTurn` 与敌人 AI（05 改结算）、`renderUnits`（07-icon），先拆会白拆两遍；全部拆完后 `AC-01` 方可完整验收 | 无 |
 | M0.2 规则可验证 | 🟡 未开始 | 待认领 | 依赖 M0.1 | M0.1 |
 | M0.3 内容扩展 | 🟡 未开始 | 待认领 | 依赖 M0.2 | M0.2 |
 | M0.4 联机可靠 | 🟡 未开始 | 待认领 | 可与 M0.3 并行 | M0.2 |
@@ -953,6 +947,7 @@ ark-rogue-chess/
 | v3.6 | 2026-10-28 | **`templates/game.html` 误覆盖修复（并发事故）**：发版 build `20261028c` 时以 03:00 的旧模板（12 模块）为基底改完直接整文件上传，覆盖掉第五批 03:05 的骨架化（模板 203,193 B → 223,353 B，第 6 区被还原回模板）。后果：`manifest.json`（15 模块）与模板不匹配 →下次构建会把 `renderUnits` / `findChargeSkillIndex` / `plannedActionInfo` 等注入两遍（`function` 重复不报错、静默后者覆盖前者；`let/const` 重复则 SyntaxError）。**修复**：以第五批模板为基底重放本轮改动（模板现 **205,408 B**），`renderUnits` 的图标改动改落到 `src/ui/units.js`。验证：15 模块构建成功（产物 270,653 B）、10 个关键函数各出现 1 次、定点单测 10/10、布局 14/14、实战 `anom=0/err=0/pageErrors=0`。**根目录 `game.html` 未重发**（仍 272,067 B / `959b59d2`，产物自洽，差异仅注释）。同时新增临时规则：开工前先 `GET` `build/manifest.json`，用 `modules` 长度（当前 15 = 第 1–6 区）判断拆分进度，**不要用模板字节数** |
 | v3.7 | 2026-10-28 | **`P0.1-4` 机械拆分第六批 + 新增「无重复定义」构建校验**：第 7 区「状态重置与棋盘特效」搬为 `src/rules/reset.js`（`freshBuffs`/`resetSkillState`/`resetRunProgress`/`resetTurnState`/`createPlayerStats`/`createPlayerUnit`/`syncPlayerFromStats`，20261028c 基线 1908-2003 行）、`src/ui/char-select.js`（`initCharSelect`/`selectCharacter`，2005-2050 行）、`src/ui/board-fx.js`（`findPath` BFS / 棋盘几何 / `hasLineOfSight`/`canRangedAttack`/`playerAttackRangeCells` / 敌人首步箭头 / `floatText`/`ringFx`/`slashFx`/`animateBullet`/`hitFx`/`missFx`/`refreshUnits`，2052-2340 行）；`modules` 增至 **18 个**。**防回归**：新增 `checkNoDuplicateDefinitions`（`build/verify.mjs`）——扫描 manifest 各模块的顶层定义名，要求产物中各只定义 1 次，专治 v3.6 那类「模板残留已拆代码 → 函数定义两遍」的静默事故；仅匹配行首无缩进的定义形式以免函数内同名局部变量误报，已做反向验证（把 `isWalkable` 塞回模板 → 打红 `isWalkable ×2`），并加 4 项单测（34 → 38 项）。**验证**：产物 271,481 vs 272,067 B = **−586 B**、归一化后与基线完全一致、e2e 六套件全绿。**根目录 `game.html` 未改动**（272,067 B / `959b59d2`） |
 | v3.8 | 2026-10-28 | **`P0.1-4` 机械拆分第七批（按热度分级首轮）+ 构建「多点注入」**：按 `ISSUE-20261028-08` 改「按行号顺序拆」为「按谁会改拆」，只搬低热度代码 —— `src/rules/mapgen.js`（`bfsReachable`/`growRegion`/`smoothRegion`/`clearSpawnArea`/`countWalkable`/`placeObstacles`/`generateMap`，模板 701-927 行）、`src/ui/layout.js`（竖版地图高度比例拖动 + 横竖切换，模板 **1078-1161** 与 **3382-3428** 两段）、`src/ui/chrome.js`（设置/日志面板外壳 + DLC 外壳接管，模板 **3268-3380** 与 **3893-3959** 两段）；`modules` 18 → **21**。**前置改造**：`layout`/`chrome` 各是两段不连续代码，而旧构建只有一个位于最前的占位符 —— 拼接会让第二段在模板 `const dragHandle` / `logRotateBtn` 声明之前执行（TDZ）。故 `build/bundle.mjs` 支持多槽位：模块内 `/* @slot:<id> */` 切段 → 落到模板 `<!-- @inject:scripts:<id> -->`，**每段回到原位、求值顺序不变**；`build/verify.mjs` 新增第 6 项校验「注入标记无残留」（标记未替换时 `<!--` 在 JS 里等同注释、**不会报错**，只会静默少代码）。**验证**：产物 272,787 vs 272,067 B = **+720 B / 0.26%**、归一化后完全一致；21 个关键函数在产物各 1 次、模板各 0 次；e2e 六套件（dom_load 23 / pvp_core 20 / pvp_e2e 16 / pvp_browser 16 / hook_integration 8 + 联机 client）全绿；`bundle_test` 38 → **48 项**、`push_guard` 10 项全绿；**新增 `net/layout_chrome_test.mjs`（38 项）** 覆盖横竖切换 / 竖版拖拽比例 / 设置面板开合 / DLC 外壳 iframe 接管。**根目录 `game.html` 未改动**（272,067 B / `959b59d2`） |
+| v3.9 | 2026-10-28 | **玩法发版 build `20261028d`（人类维护者授权「版本更新」，本轮范围 05）**：实施 `ISSUE-20261028-05` 精英与词缀 —— 4 词缀（护盾吸第一击 / 迅捷 move+2 / 狂暴 半血以下 move+2·伤害+1 / 荆棘 反伤 1 且被打死的不反弹），L5 起每关恰好 1 只精英（HP×1.5、必带 2 词缀、击败掉恢复道具 ❤️），词缀池 L5–9 只开护盾/迅捷、L10+ 全开。随机源走 `affixRng(level, idx, RUN_SEED)` 派生（不含全局 `rng()`，否则面板重绘会抖）。伤害统一走 `enemyTakeDamage`（护盾返回 0），AI 统一走 `enemyMoveOf`。**门禁**：定点单测 24/24（护盾两击 / 狂暴半血边界 / 迅捷+狂暴叠加 / 荆棘反伤与「已死不打」/ 精英 HP=ceil(基础×1.5) / 掉落 / DOM 金边与标签）、跨关卡扫描 20/20（L1–L16 精英唯一性、L5–9 池合法、同种子可复现、换种子精英位置会变）、布局 14/14、80 局 `anom=0 / pageErrors=0 / stalled=0`。**并发处理**：开工时基线 18 模块，上传前复查发现协作者第七批已交付同一批纯移动拆分（`ISSUE-08`），遂丢弃我方的重复拆分、以 21 模块为基底重做，仓库无重复产物。**ISSUE-05 已删除；ISSUE-08 随第七批核销；ISSUE-02 归档删除；ISSUE-06 按维护者指示搁置** |
 
 ---
 
