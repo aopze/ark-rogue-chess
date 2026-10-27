@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>方舟战棋</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
+  <style>
   html, body { margin:0; padding:0; height:100%; background:#1a1a2e; overflow:hidden; }
   #game { position:fixed; inset:0; width:100%; height:100%; border:0; }
   #loading {
@@ -13,10 +13,27 @@
     color:#eee; font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
     font-size:15px;
   }
-</style>
+  /* 提示条：说明当前入口能不能上报成绩 */
+  #hint {
+    position:fixed; left:0; right:0; top:0; z-index:9999;
+    padding:9px 12px; font-size:13px; line-height:1.5;
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#8a5a00; color:#fff; text-align:center;
+  }
+  #hint.ok { background:#1f6f3f; }
+  #hint.hide { display:none; }
+  #toast {
+    position:fixed; left:50%; bottom:14%; transform:translateX(-50%); z-index:9999;
+    max-width:86%; padding:12px 16px; border-radius:10px; font-size:14px; line-height:1.6;
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:rgba(0,0,0,.82); color:#fff; text-align:center; display:none;
+  }
+  </style>
 </head>
 <body>
 <div id="loading">游戏加载中…</div>
+<div id="hint" class="hide"></div>
+<div id="toast"></div>
 <iframe id="game" src="game.html" onload="onGameLoad()"></iframe>
 
 <!--
@@ -80,6 +97,47 @@
 </script>
 
 <script>
+// ===== 入口能力判定 =====
+// Telegram 官方规定：Telegram.WebApp.sendData **只在 keyboard button（回复键盘上的
+// web_app 按钮）入口下可用**；inline button / menu button 打开的 Mini App
+// 调 sendData 不会产生任何 web_app_data 更新（那两个入口只有 initData）。
+// 反过来 keyboard button 入口的 initData 是空的。
+// 所以：initData 为空 => 是 keyboard 入口 => 能上报；initData 非空 => 不能上报。
+var W = (window.Telegram && window.Telegram.WebApp) || null;
+var HAS_SDK = !!W;
+var HAS_INIT = !!(W && W.initData);              // 非空 = inline/menu 入口
+var CAN_REPORT = HAS_SDK && !HAS_INIT;           // keyboard 按钮入口才可上报
+var IN_TG = HAS_SDK && W.platform !== 'unknown';  // 是否在真实 Telegram 客户端里
+
+function showHint(text, ok) {
+  var h = document.getElementById('hint');
+  if (!h) return;
+  h.textContent = text;
+  h.className = ok ? 'ok' : '';
+}
+function hideHint() {
+  var h = document.getElementById('hint');
+  if (h) h.className = 'hide';
+}
+function toast(text, ms) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = text;
+  t.style.display = 'block';
+  setTimeout(function () { t.style.display = 'none'; }, ms || 6000);
+}
+
+// 入口提示
+if (IN_TG) {
+  if (CAN_REPORT) {
+    showHint('✅ 键盘入口 · 成绩会自动记录', true);
+    setTimeout(hideHint, 4000);
+  } else {
+    showHint('⚠️ 当前入口不记录成绩。请私聊 bot 发 /play，点键盘上的「▶️ 方舟战棋」进入（那个入口才能上报）', false);
+  }
+} else {
+  showHint('🌐 浏览器预览模式：成绩不会记录（需在 Telegram 内从键盘按钮进入）', false);
+}
 // ===== 游戏 iframe 加载完成后，把上报钩子注入进去 =====
 function onGameLoad() {
   var l = document.getElementById('loading');
@@ -101,26 +159,32 @@ window.addEventListener('message', function (e) {
   try {
     var d = e.data;
     if (!d || d.type !== 'rogue_score') return;
-    var W = window.Telegram && window.Telegram.WebApp;
-    if (!W || !W.sendData) return;
-    var u = (W.initDataUnsafe && W.initDataUnsafe.user) || {};
     var payload = {
       type: 'rogue_score',
       level: d.level || 0,
       kills: d.kills || 0,
-      tg_id: u.id || 0,
-      tg_name: u.username || u.first_name || '匿名',
-      initData: W.initData
+      tg_id: 0,
+      tg_name: '',
+      initData: (W && W.initData) || ''
     };
-    W.sendData(JSON.stringify(payload));
+    if (CAN_REPORT && W && W.sendData) {
+      W.sendData(JSON.stringify(payload));
+      toast('📊 成绩已提交：第 ' + payload.level + ' 层 / 击杀 ' + payload.kills, 4000);
+    } else if (IN_TG) {
+      // inline / 菜单入口：sendData 无效，明确告诉玩家怎么才能记成绩
+      toast('⚠️ 这个入口不能记录成绩。\n请私聊 bot 发 /play，点键盘上的「▶️ 方舟战棋」重开一局。', 9000);
+      showHint('⚠️ 当前入口不记录成绩 · 请用 /play 的键盘按钮进入', false);
+    } else {
+      toast('🌐 浏览器预览模式，成绩不会记录。\n（你的成绩：第 ' + payload.level + ' 层 / 击杀 ' + payload.kills + '）', 7000);
+    }
   } catch (e) {}
 });
 
 // ===== Telegram Mini App 初始化 =====
 try {
-  if (window.Telegram && window.Telegram.WebApp) {
-    Telegram.WebApp.ready();
-    Telegram.WebApp.expand();
+  if (W) {
+    W.ready();
+    W.expand();
   }
 } catch (e) {}
 </script>
