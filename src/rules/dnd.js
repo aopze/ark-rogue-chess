@@ -1,4 +1,6 @@
-/* P0.1-4 拆分 · 20261028b 基线 1110-1183 行 · 泥岩技力 + DnD 六属性与掷骰检定 */
+/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 536-609 行原样搬移
+ * （泥岩技力获取 + DnD 六属性系统：abilityMod / computeAC / attackRoll / 掷骰检定 / recomputePlayerDerivedStats / 敌人 L1 基础面板只读查询）。
+ * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
 /* =========================================================
  * 泥岩技力
  * ========================================================= */
@@ -53,13 +55,18 @@ function fmtRoll(atk, ac) {
 }
 function recomputePlayerDerivedStats() {
   const a = playerStats.abilities;
-  playerStats.maxHp = a.con + levelHpBonus + buffHpBonus();
+  playerStats.maxHp = a.con + BASE_HP_BONUS + levelHpBonus + buffHpBonus();
   playerStats.move = Math.max(1, Math.floor(a.dex / 2));
   playerStats.meleeDmg = Math.max(1, 1 + abilityMod(a.str)) + buffMeleeBonus();
   playerStats.rangedDmg = Math.max(1, 1 + abilityMod(a.int));
   playerStats.visibleSteps = 1 + Math.max(0, abilityMod(a.wis));
   playerStats.ac = computeAC(a);
-  playerStats.prof = 4 + Math.floor((level - 1) / 5);
+  /* ISSUE-20261028-07：熟练加值改为绑定**角色等级**，每级 +1。
+   * 旧口径 `4 + ⌊(关卡-1)/5⌋` 与 heroLevel（每 3 关 +1）脱钩，升级当关玩家看不到熟练变化；
+   * 新口径起手仍为 +4（heroLevel=1 → +4），第 1–3 关手感与旧版完全一致。
+   * 实测（每方案 21 万次 attackRoll）：对当时真实敌人 AC，每级 +2 会在第 4 关就全类型封顶 95%，
+   * 命中机制失效，故取 +1。 */
+  playerStats.prof = 4 + Math.max(0, heroLevel - 1);
   playerStats.meleeProf = playerStats.profMelee ? playerStats.prof : 0;
   playerStats.rangedProf = playerStats.profRanged ? playerStats.prof : 0;
 }
