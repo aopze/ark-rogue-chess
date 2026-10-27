@@ -33,18 +33,36 @@
 >
 > ### ⚠️ 对 `P0.1-4` 机械拆分的影响（必读）
 >
-> 本轮**不是只改产物**，而是直接改了 3 个已拆分模块 + 模板第 3–15 区，四者与 `game.html` 已同步提交：
+> 本轮**不是只改产物**，而是直接改了 3 个已拆分模块 + `units.js` + 模板里后半段的代码，与 `game.html` 同步提交：
 >
 > | 文件 | 改了什么 |
 > |---|---|
 > | `src/data/enemies.js` | `ENEMY_TYPES` 加 `shield`/`bomber`；`ENEMY_STATS` 加 `icon`/`dice`/`explode`；新增 `ENEMY_UNLOCK` / `pickEnemyType` / `rollEnemyDamage` / `diceAvg` / `diceLabel` |
 > | `src/data/constants.js` | 新增 `BASE_HP_BONUS = 4` |
 > | `src/rules/dnd.js` | `recomputePlayerDerivedStats()` 里的 `prof` 与 `maxHp` 两行 |
-> | `templates/game.html` | 敌人生成（`pickEnemyType` + 骰子字段）、面板日志、`renderUnits` 图标、近战 / 远程 / 相杀**三处伤害入口**、自爆虫分支、HP 日志文案 |
+> | `src/ui/units.js` | `renderUnits()` 里敌人图标改为读 `ENEMY_STATS[type].icon`（见下方事故记录） |
+> | `templates/game.html` | 敌人生成（`pickEnemyType` + 骰子字段）、面板日志、近战 / 远程 / 相杀**三处伤害入口**、自爆虫分支、HP 日志文案。**不含 `renderUnits`** —— 第 6 区已由第五批搬走 |
 >
-> **`templates/game.html` 已从 221,084 B 变为 223,353 B** —— 后续批次取区请以本次提交的模板为准，
-> 不要用旧版本。新增代码位置：`enemies.js` 约 60–110 行、模板 `initLevel` 敌人生成循环（约 1800–1850 行）、
-> `resolveEnemyMeleeAttacks`（约 3460–3520 行）、`renderUnits`（约 800–812 行）。
+> #### 🩹 事故记录：03:21 一次真实的「拆分基线被覆盖」（03:35 已修复）
+>
+> 发版时我把 `templates/game.html` **整文件**上传（223,353 B），覆盖掉了第五批的骨架化成果。
+> 第五批 03:05 已把第 6 区（`path` / `actions` / `units`）搬进 `src/`，模板本应只剩 **203,193 B**；
+> 而我手上是 03:00 拉的旧模板（那时 `manifest.json` 还只有 12 个模块），改完直接推了上去。
+> **后果**：`manifest.json`（15 模块）+ 旧模板（仍含第 6 区）→ 下次构建会把 `renderUnits` /
+> `findChargeSkillIndex` / `plannedActionInfo` 等函数注入两遍。`function` 重复声明不报错（后者静默覆盖前者），
+> 但产物语义已不可预期；若碰上 `let/const` 重复则直接 SyntaxError。
+>
+> **修复**：以第五批模板（203,193 B）为基底重放本轮改动，`renderUnits` 的图标改动改落到 `src/ui/units.js`；
+> 现模板 **205,408 B**（第五批 + 本轮后半段改动，不含第 6 区）。验证：15 模块构建成功（产物 270,653 B）、
+> 10 个关键函数在产物中各出现 **1** 次、定点单测 10/10、布局 14/14、实战一局 `anom=0 / err=0 / pageErrors=0`。
+> **`game.html` 未重发**（仍 272,067 B / `959b59d2`）—— 该产物本身自洽可跑，与重建结果的差异仅在注释，
+> 下次发版会自然收敛。
+>
+> #### 🔒 新增规则（`P0.1-4` 期间临时生效）
+>
+> **开工前先 `GET` 一次 `build/manifest.json`，用 `modules` 数组长度确认拆分进度，再判断本地模板是新是旧。**
+> `templates/game.html` 的字节数不可靠（本轮正因如此踩坑）；`modules` 长度随每批拆分单调递增，
+> 是唯一可靠的「拆到第几区」路标。当前 **15 个模块 = 第 1–6 区已拆，第 7–15 区仍在模板内**。
 >
 > 平衡数据（80 局/版本，`roguechess-autotest`，4 角色 × 正解流/激进贴脸 × 10 局）：
 > 平均通关 **1.21 → 0.94 关（−22.7%）**，未超 issue 的 40% 回调线；分角色 风笛 −27% / 泥岩 −8% / 华法琳 −42%。
@@ -932,6 +950,7 @@ ark-rogue-chess/
 | v3.3 | 2026-10-28 | **`P0.1-4` 机械拆分第四批交付**：第 4 区「掷骰与面板」与第 5 区「六维雷达图」搬为 `src/ui/tools.js`（距离/`key`/日志系统/`sleep`/`inBounds`/`findLastIndex`，489-534 行）、`src/rules/dnd.js`（泥岩技力 + DnD 六属性 `abilityMod`/`computeAC`/`attackRoll`/劣势掷骰/`recomputePlayerDerivedStats`/敌人 L1 只读查询，536-609 行）、`src/ui/radar.js`（`drawRadar` 六维图与属性文字命中框，611-776 行）；`modules` 增至 12 个。**验证**：归一化后一致（265,079 vs 261,228 B = **+3,851 B / 1.48%**，仍低于 `AC-01` 的 2%）、e2e 六套件全绿。**注意**：产物相对基线的增量会随拆分推进单调上升（每模块约 +250 B 注释头与空行），2% 预算约可容纳 15-16 个模块，超出时需在 `AC-01` 中说明或改用「构建期不写来源注释」策略。**根目录 `game.html` 未改动** |
 | v3.4 | 2026-10-28 | **`P0.1-4` 机械拆分第五批交付 + `AC-01` 体积治理**：第 6 区「规则判定」搬为 `src/rules/path.js`（路径判定 / 冲锋计算 / 步数统计，20261028b 基线 1352-1564 行）、`src/rules/actions.js`（动作机制与有效 AC，1566-1621 行）、`src/ui/units.js`（动作预算与单位渲染，1623-1768 行）。**体积治理**：15 模块时增量已达 **1.94%**（逼近 `AC-01` 的 2%），故把每个模块的 3-4 行来源注释压成 1 行、内联分隔头 `/* ---- src: x ---- */` 缩短为 `/* src: x */`，**增量回落到 0.73%**（263,129 vs 261,228 B = **+1,901 B**），为剩余 9 个区留出余量；顺带把第 3-5 批头注释里误标的「基线行号」（实为模板行号）修正为 `game.html` 真实行号。**验证**：归一化后完全一致、e2e 六套件全绿。**根目录 `game.html` 未改动**（261,228 B / `4cb46640`） |
 | v3.5 | 2026-10-28 | **`docs` 新增 Godot 正式版复刻契约（原则 11 / 红线 NB-13 / §10.4）**：明确 `src/` 源码与 `game.html` 产物作为 Godot 正式版玩法准绳的下游复刻契约，约束常量集中 / 命名对齐 / 数据表驱动 / port-map / 规则纯函数 / RNG 纪律 / PVP 标注 / 变更摘要 / 对照映射表 |
+| v3.6 | 2026-10-28 | **`templates/game.html` 误覆盖修复（并发事故）**：发版 build `20261028c` 时以 03:00 的旧模板（12 模块）为基底改完直接整文件上传，覆盖掉第五批 03:05 的骨架化（模板 203,193 B → 223,353 B，第 6 区被还原回模板）。后果：`manifest.json`（15 模块）与模板不匹配 →下次构建会把 `renderUnits` / `findChargeSkillIndex` / `plannedActionInfo` 等注入两遍（`function` 重复不报错、静默后者覆盖前者；`let/const` 重复则 SyntaxError）。**修复**：以第五批模板为基底重放本轮改动（模板现 **205,408 B**），`renderUnits` 的图标改动改落到 `src/ui/units.js`。验证：15 模块构建成功（产物 270,653 B）、10 个关键函数各出现 1 次、定点单测 10/10、布局 14/14、实战 `anom=0/err=0/pageErrors=0`。**根目录 `game.html` 未重发**（仍 272,067 B / `959b59d2`，产物自洽，差异仅注释）。同时新增临时规则：开工前先 `GET` `build/manifest.json`，用 `modules` 长度（当前 15 = 第 1–6 区）判断拆分进度，**不要用模板字节数** |
 
 ---
 
