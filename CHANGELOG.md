@@ -82,6 +82,21 @@ e2e 六套件 + `bundle_test` 34 项 + `push_guard` 10 项全绿。
 
 `build/manifest.json` 的 `modules` 增至 **9 个**。产物 264,005 B vs 261,228 B = **+2,777 B（1.06%）**。
 
+### 第四批（第 4-5 区：掷骰与面板 / 六维雷达图，20261028b 基线 489-776 行）
+
+- `src/ui/tools.js` —— 基础工具与战斗日志：`dist` / `cheb` / `key` / `LOG_MAX` / `LOG_VIEW_MAX` /
+  `autoLogType` / `makeLogLine` / `renderLogAll` / `clearLog` / `log` / `sleep` / `inBounds` / `findLastIndex`（489-534 行）
+- `src/rules/dnd.js` —— `gainFencerSp` 泥岩技力 + DnD 六属性系统：`abilityMod` / `abilityLabel` /
+  `computeAC` / `attackRoll` / `attackRollDisadvantage` / `fmtRoll` / `recomputePlayerDerivedStats`
+  + 敌人 L1 基础面板只读查询（`getEnemyAbilities` / `getEnemyProf` / `computeEnemyHp` / `computeEnemyMove`，536-609 行）
+- `src/ui/radar.js` —— 六维雷达图 `drawRadar`（canvas 绘制 + `radarLabelHits` 属性文字命中框，611-776 行）
+
+`build/manifest.json` 的 `modules` 增至 **12 个**。产物 265,079 B vs 261,228 B = **+3,851 B（1.48%）**。
+
+> 📈 **预算提示**：增量随拆分推进单调上升（每个模块约 +250 B：来源注释头 + 分隔空行）。
+> 按此速度 `AC-01` 的 2% 预算约可容纳 15-16 个模块；全部 15 区拆完预计需 20+ 个模块，
+> 届时需要么把 2% 放宽并说明理由，要么改为「构建期不写 `/* ---- src: xxx ---- */` 头」。
+
 ### 踩坑：Windows 文本模式把 LF 写成 CRLF
 
 第二批首次构建时产物虚增 **6,095 B（2.4%）** 且 `diff` 整片变红。
