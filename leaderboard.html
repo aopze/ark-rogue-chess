@@ -25,9 +25,13 @@
   header{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
   h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.5px}
   .sub{font-size:12px;color:var(--dim);margin-top:3px}
-  button.refresh{margin-left:auto;background:rgba(255,255,255,.1);border:1px solid var(--line);
-    color:var(--fg);border-radius:8px;padding:7px 13px;font-size:13px;cursor:pointer}
-  button.refresh:active{background:rgba(255,255,255,.22)}
+  /* 刷新：图标紧跟在标题右侧 */
+  button.refreshIco{margin-left:7px;padding:1px 3px;background:transparent;border:0;
+    color:var(--fg);font-size:14px;line-height:1;cursor:pointer;vertical-align:middle;
+    opacity:.85;border-radius:6px}
+  button.refreshIco:active{opacity:1;background:rgba(255,255,255,.14)}
+  button.refreshIco.spin{animation:spin .6s linear}
+  @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
   .meta{font-size:11px;color:var(--dim);margin-bottom:10px;min-height:14px}
   ol{list-style:none;margin:0;padding:0}
   li{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
@@ -54,10 +58,9 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>🏆 方舟战棋排行榜</h1>
+      <h1>🏆 方舟战棋排行榜<button class="refreshIco" id="btnRefresh" title="刷新榜单" aria-label="刷新榜单">🔄</button></h1>
       <div class="sub">按最深层数排序 · 同层数比击杀</div>
     </div>
-    <button class="refresh" id="btnRefresh">刷新</button>
   </header>
   <div class="meta" id="meta">加载中…</div>
   <ol id="list"></ol>
@@ -147,7 +150,14 @@ function load(){
     });
 }
 
-document.getElementById('btnRefresh').addEventListener('click', load);
+var _refreshBtn = document.getElementById('btnRefresh');
+if(_refreshBtn){
+  _refreshBtn.addEventListener('click', function(){
+    _refreshBtn.classList.add('spin');
+    setTimeout(function(){ _refreshBtn.classList.remove('spin'); }, 620);
+    load();
+  });
+}
 
 // 接收游戏外壳传来的「我的成绩 / 我的 id」→ 高亮对应行
 window.addEventListener('message', function(e){
