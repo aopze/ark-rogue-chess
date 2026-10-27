@@ -191,6 +191,11 @@
   #logTitle { flex: 1 1 auto; white-space: nowrap; }
   #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
   #logBar button:hover { background: #3a3a5c; color: #fff; }
+  /* ---- 「设置」面板：主页 / 联机 / 重开 / 旋转 四按钮一行 ---- */
+  #setBtns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  #setBtns button { padding: 7px 2px; font-size: 11.5px; line-height: 1.1; font-weight: 700; white-space: nowrap; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 6px; cursor: pointer; touch-action: manipulation; font-family: inherit; }
+  #setBtns button:hover { background: #3a3a5c; color: #fff; }
+  #setBtns button:active { transform: scale(.96); }
   #log { max-height: 38vh; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 12px 10px; font-size: 12.5px; line-height: 1.55; color: #ddd; white-space: pre-wrap; contain: content; }
   /* ---- 日志按类型着色，提升可读性 ---- */
   #log .logline { white-space: pre-wrap; padding: 2px 0 2px 8px; border-left: 3px solid transparent; margin: 1px 0; }
@@ -366,14 +371,18 @@
   </div>
 </div>
 
-<!-- 战斗日志：左上角悬浮窗（可拖动，标题栏右侧有 重开 / 旋转） -->
+<!-- 设置：左上角圆角方框（可拖动），内含 主页/联机/重开/旋转 四按钮 + 战斗日志 -->
 <div id="logPanel">
   <div id="logBar">
     <span id="logGrip" title="拖动移动窗口">⣿</span>
-    <span id="logTitle">战斗日志</span>
+    <span id="logTitle">设置</span>
+    <button id="logFoldBtn" title="展开 / 收起日志">▾</button>
+  </div>
+  <div id="setBtns">
+    <button id="setHomeBtn" title="返回主页">🏠 主页</button>
+    <button id="setPvpBtn" title="联机对战">⚔️ 联机</button>
     <button id="logResetBtn" title="重开游戏（回到选角界面）">⟲ 重开</button>
     <button id="logRotateBtn" title="旋转屏幕 / 切换布局">⟳ 旋转</button>
-    <button id="logFoldBtn" title="折叠 / 展开">▾</button>
   </div>
   <div id="log"></div>
 </div>
@@ -4651,7 +4660,7 @@ logFoldBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   setLogFolded(!logPanelEl.classList.contains('folded'));
 });
-setLogFolded(true);
+setLogFolded(false);
 
 // 拖动移动悬浮窗（按住标题栏）
 (function bindLogDrag() {
@@ -4706,6 +4715,19 @@ setLogFolded(true);
 logResetBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   if (window.confirm('确定重开游戏吗？当前进度将丢失。')) initCharSelect();
+});
+
+// 「主页」：嵌套在 DLC 外壳里时调用外壳的 goHome()；单文件独立运行时回到选角界面
+const setHomeBtn = document.getElementById('setHomeBtn');
+if (setHomeBtn) setHomeBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  try {
+    if (window.parent && window.parent !== window && typeof window.parent.goHome === 'function') {
+      window.parent.goHome();
+      return;
+    }
+  } catch (_) {}
+  initCharSelect();
 });
 
 // 「旋转」：切换横版（地图左/UI右）↔ 竖版（地图上/UI下）
@@ -5137,10 +5159,8 @@ function pvpInjectUI() {
   ].join('');
 
   document.head.appendChild(style);
-  const btn = document.createElement('button');
-  btn.id = 'pvpBtn';
-  btn.textContent = '⚔️ 联机';
-  document.body.appendChild(btn);
+  // 「联机」按钮已并入左上角「设置」面板（#setPvpBtn），不再生成右下角悬浮按钮
+  const btn = document.getElementById('setPvpBtn');
 
   const mask = document.createElement('div');
   mask.id = 'pvpMask';
@@ -5219,6 +5239,56 @@ function pvpClosePanel() {
   const m = document.getElementById('pvpMask');
   if (m) m.classList.remove('open');
 }
+
+/* 嵌入 DLC 外壳（同源 iframe）时，由游戏侧统一接管两处外壳 UI：
+ *  - 隐藏外壳自带的悬浮「🏠 主页」按钮（主页已并入「设置」面板，避免重复）
+ *  - 顶部绿色提示条 #hint：点击即消失 + 显示时长缩短到 ~2.2s
+ * 单文件独立运行（无父窗口 / 跨域）时自动跳过，不影响单机。 */
+(function patchDLCChrome() {
+  var P;
+  try { P = window.parent; } catch (e) { return; }
+  if (!P || P === window) return;
+  var pd;
+  try { pd = P.document; } catch (e) { return; }
+  if (!pd) return;
+
+  function hideHint() {
+    var h = null;
+    try { h = pd.getElementById('hint'); } catch (e) {}
+    if (h) h.className = 'hide';
+  }
+  function shortenHint() {
+    var h = null;
+    try { h = pd.getElementById('hint'); } catch (e) {}
+    if (!h) return;
+    h.style.cursor = 'pointer';
+    if (!h.__arkHintBound) {
+      h.__arkHintBound = 1;
+      h.addEventListener('click', hideHint);
+    }
+    if (h.className.indexOf('hide') < 0) {           // 当前可见 → 缩短为 2.2s 后消失
+      try { P.clearTimeout(P.__arkHintT); } catch (e) {}
+      P.__arkHintT = P.setTimeout(hideHint, 2200);
+    }
+  }
+
+  // 1) 隐藏外壳悬浮主页
+  try { var hb = pd.getElementById('btnHome'); if (hb) hb.style.display = 'none'; } catch (e) {}
+
+  // 2) 劫持外壳 showHint，使之后弹出的绿色提示同样变短 + 可点击
+  try {
+    if (typeof P.showHint === 'function') {
+      var origShowHint = P.showHint;
+      P.showHint = function (text, ok) {
+        origShowHint(text, ok);
+        shortenHint();
+      };
+    }
+  } catch (e) {}
+
+  // 3) 若提示条此刻已显示，也立刻缩短
+  shortenHint();
+})();
 
 initCharSelect();
 pvpInjectUI();
