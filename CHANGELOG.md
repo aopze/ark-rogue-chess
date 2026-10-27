@@ -4,6 +4,65 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
+## [未发布] — 构建脚本落地（`P0.1-3`）
+
+> 本节**不涉及产物**：`game.html` 未改动（仍 249,421 B / `1a86858d00`），线上行为零变化。
+> 构建脚本是后续所有产物的唯一出口，故单独立节记录。
+
+### 新增
+
+- `build/bundle.mjs` —— 单文件产物构建：按 `build/manifest.json` 顺序内联 `src/**`，
+  剥离 ESM 语法（`import`/`export`）后内联进同一个 `<script>` 上下文，**幂等注入** `__ARK_VERSION__`。
+- `build/verify.mjs` —— 产物校验，可独立运行：
+  AC-23 双 BUILD / NB-04 离线自包含 / 结构完整性 / 产物一致性。
+- `build/manifest.json` —— 内联清单（`modules` 待 `P0.1-4` 填充）。
+- `build/bundle_test.mjs` —— 离线单测 **34 项**。
+- `tests/fixtures/` —— 迷你模板 + 迷你清单 + 两个样例模块，供 `--self-test` 验证内联管线。
+
+### 三条护栏（设计要点）
+
+1. **默认不碰根目录 `game.html`** —— 试构建一律落在 `build/out/`。
+   写根目录被识别为发版动作（§0.0 / NB-12），缺 `--force` 或 `ARK_RELEASE_OK=1` 即以**退出码 4** 中止。
+   已实测：无授权时 `game.html` 分毫未动。
+2. **`index.html` 只校验不改写** —— 它是只读资产（NB-01）。
+   `var BUILD` 是双 BUILD 的唯一真值来源，产物 build 由它注入；不一致则构建失败并打印应改的值。
+3. **产物必须离线自包含**（NB-04）—— 检出外链 `<script src>` / `<link href>` / `import from http` 即失败。
+
+### 修复
+
+- **`--bump` 用 UTC 推日期，导致同日发版被误判为"未来日期"**。
+  人类维护 `index.html` 的 BUILD 写的是本地日期（北京时间 10-28 凌晨写 `20261028a`，此时 UTC 仍是 10-27），
+  用 UTC 会得到 `null` 而无法推导。改为本地日期，并加了 2 条**时区回归哨兵**单测。
+
+### 为何做
+
+AC-23 定下的目标是「把双 BUILD 同步从人工纪律升为机器校验」。
+根因是 2026-10-27/28 连续两次版本信息不同步（一次险些覆盖他人改动、
+一次排查"新版本没上线"实为 CDN 10 分钟缓存）。现在由脚本把关。
+
+### 产物影响
+
+无。`game.html` / `index.html` / `leaderboard.*` 全程未触碰。
+
+### 已知限制
+
+- `manifest.modules` 为空，当前为**直通模式**：以根目录 `game.html` 为基底只做版本注入与校验。
+  `AC-01`（`npm run build` 产出与线上基线字节差 < 2%）须待 `P0.1-4` 拆分出模板后才能验收。
+- `commit` 取 `git rev-parse HEAD`；本机 git 元数据可能落后远端，可用 `ARK_COMMIT=<sha>` 覆盖。
+
+### 验证（测试证据）
+
+```bash
+node build/bundle_test.mjs          # 离线单测 34 项
+node build/bundle.mjs --self-test   # 内联管线 4 项断言（顺序/剥离/注入/幂等）
+node build/bundle.mjs --prev game.html   # 真实产物试构建：AC-23 / NB-04 / 结构 / 一致性 全绿
+```
+
+- 离线单测 **34/34 通过**；`--self-test` **4/4 通过**。
+- 真实试构建：`AC-23` 通过（build = index.html BUILD = `20261028a`）、NB-04 无外部依赖、
+  结构完整性 1 对 `<script>`、**产物一致性与上版归一化后完全一致**。
+- 回归：e2e 6 套件全绿（dom_load 23 / pvp_core 20 / pvp_e2e 16 / pvp_browser 16 / hook 8 / client_test）。
+
 ## [未发布] — 工具链加固（`P0.1-7` 的一部分）
 
 > 本节**不涉及产物**：`game.html` 未改动，线上行为零变化。记在这里是因为它直接关系到"改动会不会被静默覆盖"。

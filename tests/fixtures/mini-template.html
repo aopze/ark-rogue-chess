@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!-- P0.1-3 自测用迷你模板（非发布产物，仅供 build/bundle.mjs --self-test 使用） -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>mini template</title>
+</head>
+<body>
+  <div id="setVer"></div>
+  <script>
+    /* 版本占位：构建脚本会重写或替换下列对象 */
+    window.__ARK_VERSION__ = {
+      version: 'stale',
+      build:   'stale',
+      commit:  'stale',
+      builtAt: 'stale'
+    };
+  </script>
+  <script>
+    <!-- @inject:scripts -->
+  </script>
+</body>
+</html>

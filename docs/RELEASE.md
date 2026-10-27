@@ -12,8 +12,30 @@
 
 两处值必须相同，格式 `YYYYMMDDx`（如 `20261028a`，同日多次发版顺延 `b`、`c`…）。
 
-> `P0.1-3` 落地后由构建脚本自动注入并校验（`AC-23`），不再依赖人工记忆。
-> `index.html` 是只读资产，脚本**只校验不改写** —— 不一致时构建失败并打印应改的值。
+> ✅ `P0.1-3` 已落地：`build/bundle.mjs` 自动注入 `game.html` 的 build（取自 `index.html` 的 `var BUILD`），
+> 并校验两者一致（`AC-23`）。`index.html` 是只读资产，脚本**只校验不改写** —— 不一致时构建失败并打印应改的值。
+
+## 构建 → 发布 → 回滚（四步）
+
+```bash
+# ① 改 index.html 的 BUILD（人类做；脚本不碰只读资产）
+#    下一个 build 号可用下面这行查：
+node build/bundle.mjs --bump            # 例：当前 20261028a → 输出 20261028b
+
+# ② 试构建 + 与上版比对（只写 build/out/，不碰根目录）
+node build/bundle.mjs --prev game.html
+
+# ③ 发版：写根目录产物（属发版动作，需显式授权）
+ARK_RELEASE_OK=1 node build/bundle.mjs --out game.html --prev game.html
+#   随后用 net/push_api.py 推送（带并发覆盖保护）
+python net/push_api.py --file game.html --message "..."
+
+# ④ 回滚
+git checkout <上一版提交> -- game.html && python net/push_api.py --file game.html --message "回滚 ..."
+```
+
+> 第 ② 步的 `--prev` 会做**产物一致性比对**：归一化（去注释/空白、抹平版本对象）后应与上版完全一致，
+> 否则说明拆分引入了实质改动，需人工确认。
 
 ## 发布后自检 3 步
 
