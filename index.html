@@ -90,17 +90,17 @@
     padding:12px 16px; border-radius:10px; font-size:14px; line-height:1.6; background:rgba(0,0,0,.82);
     color:#fff; text-align:center; display:none; white-space:pre-line; }
 
-  /* ===== 排行榜浮层（DLC 模块入口）===== */
-  #rankBtn { position:fixed; right:10px; bottom:14px; z-index:9998; padding:9px 14px; border-radius:22px;
-    font-size:14px; font-weight:600; background:rgba(20,22,44,.82); color:#ffd166;
-    border:1px solid rgba(255,209,102,.45); box-shadow:0 4px 16px rgba(0,0,0,.45); cursor:pointer; }
-  #rankBtn:active { transform:scale(.96); }
+  /* ===== 排行榜浮层（入口在主页「查看完整排行榜」按钮）===== */
   #rankPanel { position:fixed; inset:0; z-index:10000; display:none; background:rgba(8,9,20,.94); }
   #rankPanel.open { display:block; }
   #rankPanel iframe { position:absolute; left:0; top:0; width:100%; height:100%; border:0; }
-  #rankClose { position:absolute; right:12px; top:12px; z-index:10001; width:34px; height:34px;
-    border-radius:50%; border:1px solid rgba(255,255,255,.2); background:rgba(30,32,58,.9); color:#fff;
-    font-size:18px; line-height:1; cursor:pointer; }
+  /* 关闭：与游戏内「设置」的方形关闭按钮同格式（方形 + 圆角 + 细边） */
+  #rankClose { position:absolute; right:12px; top:12px; z-index:10001;
+    width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center;
+    border-radius:9px; border:1px solid #3a3a55; background:rgba(24,24,42,.96); color:#cfe6ff;
+    font-size:16px; line-height:1; font-family:inherit; cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,.45); }
+  #rankClose:active { transform:scale(.94); }
 </style>
 </head>
 <body>
@@ -148,9 +148,8 @@
 
 <div id="hint" class="hide"></div>
 <div id="toast"></div>
-<button id="rankBtn" hidden>🏆 排行榜</button>
 <div id="rankPanel">
-  <button id="rankClose">✕</button>
+  <button id="rankClose" title="关闭">✕</button>
   <iframe id="rankFrame" src="leaderboard.html"></iframe>
 </div>
 
@@ -216,6 +215,9 @@ var APP = {
   botUser: ''            // bot @username
 };
 var MY_SCORE = null;     // 本局成绩（用于排行榜高亮）
+
+// 构建号：每次发布 game.html 时同步改这里，iframe 用 ?v=BUILD 强制拿新版本（绕过 CDN/WebView 10 分钟缓存）
+var BUILD = '20261028a';
 
 // 默认上报地址兜底（bot 启动后会把真实地址写进 leaderboard.json，覆盖此值）
 var REPORT_URL_FALLBACK = '';
@@ -355,7 +357,7 @@ function reportScore(level, kills){
   pushMyScore();
   if(CAN_REPORT && W && W.sendData){
     W.sendData(JSON.stringify({type:'rogue_score', level:level, kills:kills, tg_id:0, tg_name:APP.myName||'', initData:''}));
-    toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
+    toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n回主页可看排行榜', 5000);
     return;
   }
   if(HAS_INIT && APP.reportUrl){
@@ -364,7 +366,7 @@ function reportScore(level, kills){
       body: JSON.stringify({kind:'score', level:level, kills:kills, name:APP.myName||'', initData: W.initData})
     }).then(function(r){ return r.json(); }).then(function(j){
       if(j && j.ok){
-        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
+        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n回主页可看排行榜', 5000);
         setTimeout(function(){ loadConfig(function(){ renderMiniBoard(); renderPlayer(); }); }, 1500);
       } else { deepLinkScore(level, kills); }
     }).catch(function(){ deepLinkScore(level, kills); });
@@ -430,15 +432,13 @@ function injectHook(){
 function startGame(){
   $('home').hidden = true;
   $('gameWrap').hidden = false;
-  $('rankBtn').hidden = true;
   var g = $('game');
-  if(!g.src || g.src.indexOf('game.html') < 0){ g.src = 'game.html'; }
+  if(!g.src || g.src.indexOf('game.html') < 0){ g.src = 'game.html?v=' + BUILD; }
   var gh = $('ghint'); gh.className='hide';
 }
 function goHome(){
   $('gameWrap').hidden = true;
   $('home').hidden = false;
-  $('rankBtn').hidden = false;
   // 停掉游戏，避免后台继续跑
   var g = $('game'); g.src = '';
   // 刷新榜单 + 玩家信息
@@ -466,7 +466,6 @@ function init(){
   $('btnFullRank').addEventListener('click', openRank);
   $('pSave').addEventListener('click', syncName);
   $('pName').addEventListener('keydown', function(e){ if(e.key==='Enter'){ syncName(); } });
-  $('rankBtn').addEventListener('click', openRank);
   $('rankClose').addEventListener('click', closeRank);
   $('rankFrame').addEventListener('load', function(){ pushMyScore(); pushMyId(); });
 
