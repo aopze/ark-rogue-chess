@@ -1,5 +1,5 @@
 {
- "updated_at": 1793130561,
+ "updated_at": 1793130598,
  "entries": [
   {
    "id": "5648491503",
@@ -26,8 +26,8 @@
    "id": "dev_a347c1a352f44b9ead745479fcfa0ac0",
    "name": "玩家0ac0",
    "level": 1,
-   "kills": 0,
-   "runs": 1
+   "kills": 1,
+   "runs": 2
   },
   {
    "id": "dev_795886eefd284d10919125f63b913f0f",
