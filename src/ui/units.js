@@ -52,6 +52,9 @@ function renderUnits() {
       icon, hp: e.hp, maxHp: e.maxHp,
       isPlayer: false, isGhost, facing: e.facing,
       stunTurns: e.stunTurns || 0,
+      /* 词缀 / 精英（ISSUE-20261028-05）：标签文字由数据层拼，渲染层只负责显示 */
+      isElite: !!e.isElite,
+      affixTag: enemyAffixLabel(e),
     });
   }
   /* 联机对战：对手是玩家控制的单位，不是敌人，单独一个渲染条目 */
@@ -73,6 +76,7 @@ function renderUnits() {
       <div class="facing-ind" style="display:none"></div>
       <div class="icon"></div>
       <div class="hp-bar"><div class="hp-fill"></div></div>
+      <div class="affix-tag" style="display:none"></div>
     `;
     unitLayer.appendChild(el);
     unitEls.set(u.key, {
@@ -80,6 +84,7 @@ function renderUnits() {
       icon: el.querySelector('.icon'),
       hpFill: el.querySelector('.hp-fill'),
       facingEl: el.querySelector('.facing-ind'),
+      affixEl: el.querySelector('.affix-tag'),
       lastPos: null,
     });
   }
@@ -113,6 +118,12 @@ function renderUnits() {
     rec.lastPos = { left: pos.left, top: pos.top };
     if (rec.icon.textContent !== u.icon) rec.icon.textContent = u.icon;
     rec.icon.classList.toggle('ghost-icon', !!u.isGhost);
+    /* 词缀标签：无词缀时藏起来，避免空格子挂一个空胶囊 */
+    if (rec.affixEl) {
+      const tagText = u.affixTag || '';
+      if (rec.affixEl.textContent !== tagText) rec.affixEl.textContent = tagText;
+      rec.affixEl.style.display = tagText ? 'flex' : 'none';
+    }
     const pct = u.maxHp > 0 ? Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100)) : 0;
     rec.hpFill.style.width = pct + '%';
     rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : (u.isPeer ? '#e8a33d' : '#e74c3c');
@@ -139,6 +150,7 @@ function renderUnits() {
       rec.el.classList.remove('ua-player', 'ua-charging', 'ua-attacked');
       rec.el.classList.toggle('ua-debug', debugMode);
       rec.el.classList.toggle('ua-stunned', u.stunTurns > 0);
+      rec.el.classList.toggle('ua-elite', !!u.isElite);
     }
   }
   const seen = new Set(toRender.map(u => u.key));
