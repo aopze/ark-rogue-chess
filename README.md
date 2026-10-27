@@ -322,6 +322,11 @@ issues/ISSUE-<YYYYMMDD>-<两位序号>-<英文短标签>.md
 1. `GET https://api.github.com/repos/aopze/ark-rogue-chess/contents/game.html`
    解码 base64 后与本地 `cmp` 比对 —— **这一步确认「服务器收到了」，与 CDN 无关**。
 2. `GET .../pages/builds/latest` 确认 `status: built`、`error.message: null`。
+   **若为 `errored` / `Page build failed.`，不要急着重传文件** —— 多发文件发布（`upload_multi.js` 是**一文件一提交**）
+   会在几秒内触发十来个 Pages 构建，GitHub 侧会因排队冲突批量失败，而仓库内容其实是好的。
+   处理：`POST /repos/aopze/ark-rogue-chess/pages/builds`（无 body）请求一次干净重建，约 50 秒后回到 `built`。
+   实测 2026-10-28 04:38 一次 10 文件的发布：10 个构建全 `errored`，手动重建后一次成功，
+   产物 281,705 B 与本地逐字节一致。**判据永远是「构建状态 built + 线上字节数对」，不是「构建没红过」。**
 3. 浏览器访问 `game.html?v=<新build>`，展开设置面板看标题栏版本号是否为新值。
    若仍是旧值：等满 10 分钟，或用无痕窗口（避免本地磁盘缓存叠加）。
 
