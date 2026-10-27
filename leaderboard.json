@@ -1,5 +1,5 @@
 {
- "updated_at": 1793119804,
+ "updated_at": 1793119906,
  "entries": [
   {
    "id": "5648491503",
@@ -9,24 +9,10 @@
    "runs": 7
   },
   {
-   "id": "dev_aabbccddeeff00112233445566778899",
-   "name": "网页改名后",
-   "level": 4,
-   "kills": 9,
-   "runs": 1
-  },
-  {
    "id": "7283974274",
    "name": "bxia",
    "level": 3,
    "kills": 6,
-   "runs": 1
-  },
-  {
-   "id": "991122336",
-   "name": "TG自检",
-   "level": 2,
-   "kills": 3,
    "runs": 1
   }
  ],
