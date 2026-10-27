@@ -9,7 +9,7 @@
 | 线上入口 | <https://aopze.github.io/ark-rogue-chess/>（DLC 外壳）· 游戏本体 `/game.html` |
 | 代码基线 | `game.html` @ `0e0b7200`（246,695 B / 5,427 行） |
 | 当前阶段 | **0.1 原型整理**（未启动，任务见 §5.1） |
-| 文档版本 | v2.3 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
+| 文档版本 | v2.4 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
 | 参与方 | 人类维护者 + 多个 AI 协作代理（并行开发） |
 
 ---
@@ -76,7 +76,7 @@
 
 | 阶段 | 状态 | 负责人 | 当前焦点 | 阻塞项 |
 |---|---|---|---|---|
-| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；下一步 `P0.1-2` 目录落地 / `P0.1-3` 构建脚本 | 无 |
+| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；下一步 `P0.1-2` 目录落地 / `P0.1-3` 构建脚本（含 `AC-23` 双 BUILD 自动注入） | 无 |
 | M0.2 规则可验证 | 🟡 未开始 | 待认领 | 依赖 M0.1 | M0.1 |
 | M0.3 内容扩展 | 🟡 未开始 | 待认领 | 依赖 M0.2 | M0.2 |
 | M0.4 联机可靠 | 🟡 未开始 | 待认领 | 可与 M0.3 并行 | M0.2 |
@@ -396,7 +396,7 @@ PvP 的 `pvpResolveTurn(state, plans, seed)` 已经是正确范式：给同样�
 |---|---|---|
 | P0.1-1 | 冻结基线 | 打 tag `v0.1.0-prototype`；写 `CHANGELOG.md`；在产物注入 `window.__ARK_VERSION__ = {version, commit, builtAt}`，页内可查 |
 | P0.1-2 | 建立目录 | 按 §6 落地 `src/ data/ build/ tests/ docs/`，先只搬运不重写 |
-| P0.1-3 | 构建脚本 | `build/bundle.mjs`：按清单顺序内联 `src/**` 到 `templates/game.html` → 输出根目录 `game.html`；附"产物一致性校验"（对比旧版仅注释/空白差异） |
+| P0.1-3 | 构建脚本 | `build/bundle.mjs`：按清单顺序内联 `src/**` 到 `templates/game.html` → 输出根目录 `game.html`；附"产物一致性校验"（对比旧版仅注释/空白差异）；**构建时自动注入 `__ARK_VERSION__.build` 并校验 `index.html` 的 BUILD（见 AC-23）** |
 | P0.1-4 | 机械拆分 | 纯移动不改逻辑：常量与数据 → `src/data/`；掷骰与派生面板 → `src/rules/`；地图生成 → `src/rules/mapgen.js`；渲染 → `src/ui/`；联机 → `src/net/`；补丁与设置 → `src/ui/chrome.js` |
 | P0.1-5 | 回归入库 | 现有 Playwright 脚本整理为 `tests/e2e/`（竖屏 / 横屏 / 选角 / 一关流程 / 设置面板 / 比例拖动 / 跨帧补丁），纳入 `npm test` |
 | P0.1-6 | 调试口登记 | 列出 `__dbg` / `debugMode` / F12 钩子 / 临时日志，标注"保留 / 移除 / 移到 dev 构建" |
@@ -410,6 +410,13 @@ PvP 的 `pvpResolveTurn(state, plans, seed)` 已经是正确范式：给同样�
 - `AC-02`：页面可读出 `window.__ARK_VERSION__`，与 tag 一致。
 - `AC-03`：仓库根目录仍只含应有文件（`game.html`、`index.html`、`leaderboard.*`、`net/`、构建与测试配置），无临时脚本残留。
 - `AC-04`：任意一次改动都能在 5 分钟内回滚到上一版（脚本一键）。
+- `AC-23`：**双 BUILD 由机器把关**（§0.9），不再依赖"记得同时改两个地方"：
+  - `game.html` 的 `window.__ARK_VERSION__.build` 由**构建脚本自动注入**（格式 `YYYYMMDDx`，同日递增 `a`/`b`/`c`…），人工不得手改；
+  - 构建结束前自动比对 `index.html` 的 `var BUILD` 是否等于本次 build —— **不一致则构建失败并打印应改的值**。
+    `index.html` 是只读资产（NB-01），脚本**只校验不改写**，改它仍需人类授权；
+  - 本地试构建可用 `--no-build-check` 跳过该校验（仅本地，发布链路不得使用）；
+  - 顺带消除 `P0.1-1` 的已知限制：`commit` 字段改为构建时注入真实 sha，不再是冻结的基线 sha。
+  - 依据：2026-10-27/28 连续两次出现版本信息不同步（一次险些覆盖他人改动、一次排查"新版本没上线"实为 CDN 缓存），根因都是人工维护版本号。
 
 **退出条件**：`v0.1.0-prototype` 打 tag，README 写明「改代码 → 构建 → 发布 → 回滚」四步。
 
@@ -737,6 +744,7 @@ ark-rogue-chess/
 | v2.1 | 2026-10-27 | `P0.1-1` 冻结基线交付：新增 `CHANGELOG.md`；产物注入 `window.__ARK_VERSION__`（设置面板可见）；打 tag `v0.1.0-prototype`。§0.5 看板 M0.1 转为 🔵 进行中 |
 | v2.2 | 2026-10-28 | 新增 **§0.9 发布与版本号维护**（双 BUILD 同步规则、CDN 10 分钟缓存、发布后 3 步自检）；§0.2 登记 `index.html` / `leaderboard.html` 的一次性授权例外。UI：版本号从设置面板底部移到标题栏「设置」右侧（`__ARK_VERSION__` 增补 `build` 字段，保留 `commit`/`builtAt`）、设置面板内折叠按钮删除（改由左上角 ⚙ 同位置切换）、排行榜入口收进主页、榜单刷新改标题右侧 🔄 图标、浮层关闭按钮统一为方形 |
 | v2.3 | 2026-10-28 | 发布链路加固（`P0.1-7` 部分）：§0.6 新增**「发布前覆盖保护（强制）」**条款；`net/push_api.py` 内置并发覆盖保护（基线比对 + 退出码 3 中止，修复原 422 重试"检测到冲突仍坚持覆盖"的缺陷），新增 `--base` / `--force` / `--sync-baseline`；新增离线单测 `net/push_guard_test.py`（10 项）。**首次实战即拦下一次真实覆盖**：推送时检出 `README.md` 已被他方推进（`4aabf6ad`），遂 rebase 而非覆盖 |
+| v2.4 | 2026-10-28 | 把「双 BUILD 同步」从人工纪律升为机器校验：新增 **`AC-23`**（`P0.1-3` 验收项）——构建时自动注入 `__ARK_VERSION__.build`，并在构建结束前校验 `index.html` 的 `var BUILD` 是否一致，不一致则构建失败（`index.html` 只读，脚本只校验不改写）；同时消除 `P0.1-1` 的已知限制（`commit` 改为构建时注入真实 sha）。§0.5 看板同步 `P0.1-7` 进展 |
 
 ---
 
