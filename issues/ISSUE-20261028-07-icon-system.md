@@ -100,6 +100,25 @@ else if (e.type === 'alien') { icon = '👾'; }
 2. **复杂立绘** → 转 **WebP**（`cwebp` 或在线转换）
 3. **多张小图标** → 合并为**雪碧图**，省掉重复的文件头与请求开销
 
+### 素材来源与授权（2026-10-28 03:2x 评估）
+
+用户曾提议使用 PokéAPI Sprites（`github.com/PokeAPI/sprites`，其中 `sprites/pokemon/other/dream-world/` 为 SVG 目录）。**评估结论：不采用。**
+
+1. **授权不成立（决定性理由）**：该仓库 LICENSE 明确写着「Pokémon and Pokémon character names are trademarks of Nintendo. All rights reserved.」，图像内容版权归 The Pokémon Company —— **仓库的开源许可只覆盖仓库本身的代码组织，不覆盖其中的图像素材**。第三方整理项目同样注明「Treat these as personal-use party assets unless you separately clear rights for broader use」。本项目已绑定自有域名与服务器并公开发布，不宜引入此风险。
+2. **风格错配**：宝可梦是 Q 版怪物，本项目为明日方舟同人题材（硬派军事科幻），视觉语言冲突；角色侧已使用鹰角 IP，再叠加任天堂 IP 会让授权状况更复杂。
+3. **技术不匹配**：dream-world 的 SVG 是**彩色复杂立绘**而非单色图标 → 无法用 `fill="currentColor"` 随受伤 / 眩晕 / 敌我变色（**与第一层方案直接冲突**）；整套素材约 **58MB**，且**并非每个物种都有 SVG**（存在覆盖缺口）。
+
+**推荐替代来源（均可合法使用）**
+
+| 来源 | 授权 | 格式 | 适配点 |
+|---|---|---|---|
+| **Kenney.nl** | **CC0**（公有领域，可商用，**无需署名**） | PNG / SVG / spritesheet | `Roguelike` 系列含数百个小角色与地牢图块，最贴合本项目；另有 UI 包、Game Icons |
+| **Game-icons.net** | CC BY 3.0（**需署名**，页面或设置里加一行即可） | **单色 SVG** | 数千图标，含骷髅 / 幽灵 / 外星人；单色线条，`fill:currentColor` 可直接变色，**完美匹配第一层方案** |
+| OpenGameArt.org | 按资产各异（用 CC0 筛选） | PNG / SVG 等 | 需逐个确认授权 |
+| itch.io 免费区 | 多数 CC0，需逐项确认 | 多种 | Pixel Frog、Ansimuz、0x72 DungeonTileset II 等 |
+
+**建议组合**：棋盘单位图标用 **Game-icons.net**（单色、可随状态变色）+ 角色与敌人造型用 **Kenney Roguelike 包**（CC0），UI 图标用 Kenney UI / Icons。
+
 ### 不做的事（明确排除）
 
 - **不替换几何箭头/星标**（`← → ▲ ▼ ▶ ★ ⚠ ✦` 等）：它们不是 emoji，跨平台一致，替换是过度工程
