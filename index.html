@@ -28,12 +28,37 @@
     font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
     background:rgba(0,0,0,.82); color:#fff; text-align:center; display:none;
   }
+  /* ===== 排行榜浮层（DLC 模块入口）===== */
+  #rankBtn {
+    position:fixed; right:10px; bottom:14px; z-index:9998;
+    padding:9px 14px; border-radius:22px; font-size:14px; font-weight:600;
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:rgba(20,22,44,.82); color:#ffd166; border:1px solid rgba(255,209,102,.45);
+    box-shadow:0 4px 16px rgba(0,0,0,.45); cursor:pointer; -webkit-tap-highlight-color:transparent;
+  }
+  #rankBtn:active { transform:scale(.96); }
+  #rankPanel {
+    position:fixed; inset:0; z-index:10000; display:none;
+    background:rgba(8,9,20,.94); backdrop-filter:blur(3px);
+  }
+  #rankPanel.open { display:block; }
+  #rankPanel iframe { position:absolute; left:0; top:0; width:100%; height:100%; border:0; }
+  #rankClose {
+    position:absolute; right:12px; top:12px; z-index:10001;
+    width:34px; height:34px; border-radius:50%; border:1px solid rgba(255,255,255,.2);
+    background:rgba(30,32,58,.9); color:#fff; font-size:18px; line-height:1; cursor:pointer;
+  }
   </style>
 </head>
 <body>
 <div id="loading">游戏加载中…</div>
 <div id="hint" class="hide"></div>
 <div id="toast"></div>
+<button id="rankBtn">🏆 排行榜</button>
+<div id="rankPanel">
+  <button id="rankClose">✕</button>
+  <iframe id="rankFrame" src="leaderboard.html"></iframe>
+</div>
 <iframe id="game" src="game.html" onload="onGameLoad()"></iframe>
 
 <!--
@@ -138,6 +163,38 @@ if (IN_TG) {
 } else {
   showHint('🌐 浏览器预览模式：成绩不会记录（需在 Telegram 内从键盘按钮进入）', false);
 }
+// ===== 排行榜浮层（DLC 模块）=====
+var MY_SCORE = null;   // 我这次的成绩，游戏结束时写入
+
+function openRank(){
+  var p = document.getElementById('rankPanel');
+  if (!p) return;
+  p.classList.add('open');
+  // 浮层刚开，iframe 可能还没 ready → 先把成绩存着，onload 时补发
+  pushMyScore();
+}
+function closeRank(){
+  var p = document.getElementById('rankPanel');
+  if (p) p.classList.remove('open');
+}
+function pushMyScore(){
+  if (!MY_SCORE) return;
+  try {
+    var f = document.getElementById('rankFrame');
+    if (f && f.contentWindow) {
+      f.contentWindow.postMessage({type:'my_score', level: MY_SCORE.level, kills: MY_SCORE.kills}, '*');
+    }
+  } catch (e) {}
+}
+document.addEventListener('DOMContentLoaded', function(){
+  var b = document.getElementById('rankBtn');
+  var c = document.getElementById('rankClose');
+  var f = document.getElementById('rankFrame');
+  if (b) b.addEventListener('click', openRank);
+  if (c) c.addEventListener('click', closeRank);
+  if (f) f.addEventListener('load', pushMyScore);
+});
+
 // ===== 游戏 iframe 加载完成后，把上报钩子注入进去 =====
 function onGameLoad() {
   var l = document.getElementById('loading');
@@ -167,9 +224,14 @@ window.addEventListener('message', function (e) {
       tg_name: '',
       initData: (W && W.initData) || ''
     };
+    // 记下我的成绩 → 排行榜浮层里高亮「我」的那一行
+    MY_SCORE = {level: payload.level, kills: payload.kills};
+    pushMyScore();
+
     if (CAN_REPORT && W && W.sendData) {
       W.sendData(JSON.stringify(payload));
-      toast('📊 成绩已提交：第 ' + payload.level + ' 层 / 击杀 ' + payload.kills, 4000);
+      toast('📊 成绩已提交：第 ' + payload.level + ' 层 / 击杀 ' + payload.kills
+            + '\n点右下角 🏆 看排行榜', 5000);
     } else if (IN_TG) {
       // inline / 菜单入口：sendData 无效，明确告诉玩家怎么才能记成绩
       toast('⚠️ 这个入口不能记录成绩。\n请私聊 bot 发 /play，点键盘上的「▶️ 方舟战棋」重开一局。', 9000);
