@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>联机链路测试 · 方舟战棋</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px; background:#14162a; color:#e8e8f0;
+         font:14px/1.6 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  h1 { font-size:16px; font-weight:600; margin:0 0 4px; }
+  .sub { color:#8b8fa8; font-size:12px; margin-bottom:14px; }
+  .card { background:#1e2140; border:1px solid #2e3259; border-radius:12px;
+          padding:12px; margin-bottom:12px; }
+  label { display:block; font-size:12px; color:#9aa0c0; margin-bottom:4px; }
+  input { width:100%; padding:9px 10px; border-radius:8px; border:1px solid #33385f;
+          background:#14162a; color:#e8e8f0; font-size:14px; font-family:inherit; }
+  .row { display:flex; gap:8px; margin-top:8px; }
+  .row > * { flex:1; }
+  button { padding:10px 12px; border-radius:8px; border:1px solid #3a3f6e;
+           background:#2a2e52; color:#e8e8f0; font-size:14px; font-family:inherit;
+           cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  button:active { transform:scale(.98); }
+  button.primary { background:#2d6cdf; border-color:#2d6cdf; font-weight:600; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #log { height:230px; overflow-y:auto; font:12px/1.65 ui-monospace,Consolas,monospace;
+         background:#0f1120; border-radius:8px; padding:8px; border:1px solid #262a4a; }
+  .ev { padding:1px 0; }
+  .t-start { color:#5DCAA5; } .t-turn { color:#EF9F27; }
+  .t-next { color:#85B7EB; } .t-plan_in { color:#a89ce0; }
+  .t-err { color:#F09595; } .t-info { color:#7d829e; }
+  .stat { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; color:#9aa0c0; }
+  .stat b { color:#e8e8f0; font-weight:600; }
+  #roomBadge { font:600 20px ui-monospace,monospace; letter-spacing:3px; color:#ffd166; }
+</style>
+</head>
+<body>
+<h1>联机链路测试</h1>
+<div class="sub">同一个页面的两个标签页（或手机 + 电脑）开一局，验证房间、计划交换、回合推进。</div>
+
+<div class="card">
+  <label>服务地址（Funnel 的 https 域名，末尾不要斜杠）</label>
+  <input id="base" placeholder="https://xxx.tailXXXX.ts.net">
+  <label style="margin-top:10px">你的名字</label>
+  <input id="name" placeholder="玩家" value="玩家">
+  <div class="row">
+    <button class="primary" id="btnCreate">建房</button>
+    <button id="btnJoin">加入</button>
+  </div>
+  <label style="margin-top:10px">房间号（加入时填）</label>
+  <input id="room" placeholder="A1B2C3" style="text-transform:uppercase">
+  <div style="margin-top:12px">我的房间：<span id="roomBadge">—</span></div>
+  <div class="stat" id="stat" style="margin-top:6px">
+    <span>回合 <b id="turn">0</b></span>
+    <span>座位 <b id="slot">—</b></span>
+    <span>连接 <b id="conn">未连接</b></span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row" style="margin-top:0">
+    <button id="btnPlan">提交计划（假数据）</button>
+    <button id="btnReady">报就绪</button>
+  </div>
+  <div style="font-size:12px;color:#7d829e;margin-top:8px">
+    真实接入时，计划就是 confirmAction 里那包 {path, attackIndices, skillIndices, charId}。
+  </div>
+</div>
+
+<div class="card">
+  <div style="font-size:12px;color:#9aa0c0;margin-bottom:6px">事件日志</div>
+  <div id="log"></div>
+</div>
+
+<script src="./net.js"></script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+var curTurn = 0, planSent = false;
+
+function log(cls, msg) {
+  var d = document.createElement('div');
+  d.className = 'ev ' + cls;
+  d.textContent = new Date().toLocaleTimeString('zh-CN', {hour12:false}) + '  ' + msg;
+  var box = $('log');
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+function setConn(t) { $('conn').textContent = t; }
+
+var saved = localStorage.getItem('ark_net_base');
+if (saved) $('base').value = saved;
+
+function applyBase() {
+  var b = $('base').value.trim();
+  if (!b) { log('t-err', '先填服务地址'); return false; }
+  localStorage.setItem('ark_net_base', b);
+  try {
+    NET.config({ base: b });
+    return true;
+  } catch (e) {
+    log('t-err', e.message);
+    return false;
+  }
+}
+
+NET.on('joined', function (d) {
+  $('roomBadge').textContent = d.room;
+  $('slot').textContent = d.slot === 0 ? '0（房主）' : '1（挑战者）';
+  setConn('已连接');
+  log('t-info', '已进入房间 ' + d.room + '，座位 ' + d.slot);
+});
+NET.on('start', function (d) {
+  log('t-start', '双方到齐：' + d.slots[0] + ' vs ' + d.slots[1] + ' —— 开局');
+  curTurn = 0;
+});
+NET.on('plan_in', function (d) {
+  log('t-plan_in', '座位 ' + d.slot + ' 的回合 ' + d.turn + ' 计划已提交，等我方');
+});
+NET.on('turn', function (d) {
+  log('t-turn', '回合 ' + d.turn + ' 两份计划齐备，seed=' + d.seed);
+  log('t-turn', '  计划0：' + JSON.stringify(d.plans['0']));
+  log('t-turn', '  计划1：' + JSON.stringify(d.plans['1']));
+  $('turn').textContent = d.turn;
+  curTurn = d.turn + 1;
+  planSent = false;
+  log('t-info', '真实流程：这里该播结算动画，播完自动报就绪');
+  setTimeout(function () { NET.ready(d.turn); }, 800);
+});
+NET.on('next', function (d) {
+  log('t-next', '进入回合 ' + d.turn + '，可以重新规划');
+  $('turn').textContent = d.turn;
+  curTurn = d.turn;
+  planSent = false;
+});
+NET.on('peer_left', function (d) { log('t-err', '对手离开了房间（座位 ' + d.slot + '）'); });
+NET.on('closed', function (d) { setConn('已断开'); log('t-err', '连接关闭：' + d.reason); });
+NET.on('error', function (e) { setConn('重连中'); log('t-err', '轮询异常：' + e.message); });
+NET.on('_alive', function () { setConn('已连接'); });
+
+$('btnCreate').onclick = function () {
+  if (!applyBase()) return;
+  NET.create($('name').value.trim() || '房主').catch(function (e) { log('t-err', '建房失败：' + e.message); });
+};
+$('btnJoin').onclick = function () {
+  if (!applyBase()) return;
+  var rm = $('room').value.trim().toUpperCase();
+  if (!rm) { log('t-err', '先填房间号'); return; }
+  NET.join(rm, $('name').value.trim() || '挑战者').catch(function (e) { log('t-err', '加入失败：' + e.message); });
+};
+$('btnPlan').onclick = function () {
+  if (!NET.state.room) { log('t-err', '还没进房间'); return; }
+  if (planSent) { log('t-err', '本回合已经交过了'); return; }
+  var slot = NET.state.slot;
+  var plan = {
+    charId: slot === 0 ? 'vampire' : 'fencer',
+    path: slot === 0 ? [[2,2],[3,2],[4,2]] : [[8,8],[8,7],[8,6]],
+    attackIndices: [2], skillIndices: []
+  };
+  planSent = true;
+  NET.plan(curTurn, plan).then(function (r) {
+    log('t-info', '计划已提交（回合 ' + curTurn + '）' + (r.waiting ? '，等对手' : '，双方齐备'));
+  }).catch(function (e) {
+    planSent = false;
+    log('t-err', '提交失败：' + e.message);
+  });
+};
+$('btnReady').onclick = function () {
+  if (!NET.state.room) { log('t-err', '还没进房间'); return; }
+  NET.ready(NET.state.turn - 1).catch(function (e) { log('t-err', '就绪失败：' + e.message); });
+};
+</script>
+</body>
+</html>
