@@ -19,7 +19,12 @@ try {
   process.exit(2);
 }
 
-const html = fs.readFileSync(new URL('../game.html', import.meta.url), 'utf8');
+// 默认测根目录产物；设 ARK_GAME_HTML 可指向构建产物（如 build/out/game.html），
+// 用于验证「拆分后重新内联的产物」确实能跑，而不只是文本等价。
+const GAME_URL = process.env.ARK_GAME_HTML
+  ? new URL('file:///' + process.env.ARK_GAME_HTML.replace(/\\/g, '/').replace(/^\//, ''))
+  : new URL('../game.html', import.meta.url);
+const html = fs.readFileSync(GAME_URL, 'utf8');
 const errors = [];
 const vc = new VirtualConsole();
 vc.on('jsdomError', (e) => errors.push('jsdomError: ' + (e && e.message ? e.message : e)));

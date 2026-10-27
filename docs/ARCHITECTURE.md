@@ -26,7 +26,7 @@
 | 路径 | 职责 | 现在的状态 |
 |---|---|---|
 | `game.html` | 构建产物，唯一发布物 | 单文件，约 249 KB / 5.4k 行 |
-| `src/data/` | 角色 / 敌人 / 遗物 / 事件 / 节点模板 / 数值（`balance.json` 为唯一数值出口） | 空，待 `P0.1-4` 搬运 |
+| `src/data/` | 角色 / 敌人 / 遗物 / 事件 / 节点模板 / 数值（`balance.json` 为唯一数值出口） | ✅ 第一批已搬：`constants.js` / `characters.js` / `enemies.js`（原 `game.html` 487-620 行） |
 | `src/rules/` | 纯规则：`rng` / `state` / `resolveTurn` / `combat` / `mapgen` / `progress` | 空，待 `P0.1-4` 搬运 |
 | `src/ui/` | DOM 渲染、棋盘交互、面板、日志、横竖屏布局、跨帧补丁 | 空，待 `P0.1-4` 搬运 |
 | `src/net/` | 联机：传输层（poll / ws）、房间流程、回放导入导出 | 空，待 `P0.1-4` 搬运 |
@@ -96,6 +96,27 @@ node build/verify.mjs <产物> --prev <旧产物>
 3. `src/rules/` 必须保持**无 DOM、无 `window`**（`AC-05`：`grep -r "document\.\|window\." src/rules` 为空）。
    规则层一旦沾 DOM，就无法单测与重演。
 4. 数据外置时，数值统一收敛到 `src/data/balance.json`，避免散落魔法数字。
+
+### 进度
+
+| 批次 | 内容 | 模块 | 状态 |
+|---|---|---|---|
+| 1 | 第 1 区「数据与常量」（原 487-620 行） | `data/constants.js`、`data/characters.js`、`data/enemies.js` | ✅ 已完成 |
+| 2+ | 第 2–15 区（状态 / 工具 / 掷骰 / 雷达图 / 规则 / DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
+
+### 本批的等价性证明（重要）
+
+机械拆分最怕"看起来搬对了、实际顺序变了"。本批用三层验证：
+
+1. **文本等价**：`node build/bundle.mjs --prev game.html` —— 归一化（去注释/空白、抹平版本对象）后
+   与拆分前 `game.html` **完全一致**。产物 +698 B（0.28%），远低于 `AC-01` 的 2% 预算。
+2. **真运行**：`ARK_GAME_HTML=build/out/game.html node net/dom_load_test.mjs` → 23 项全绿；
+   `node net/hook_integration_test.mjs build/out/game.html` → 8 项全绿。
+3. **无残留**：关键定义（`PHASE` / `CHARACTERS` / `ENEMY_STATS` / `DIR4_BFS`）在 `src/` 各 1 处，
+   模板中只剩**引用**而非重复定义。拆分出的 3 个模块 DOM/`window` 引用均为 0。
+
+> 模板当前仍含第 2–15 区代码（约 5,200 行），占位符 `<!-- @inject:scripts -->` 位于原第 1 区处。
+> 后续每批搬走一段、占位保持原位，顺序因此天然守恒 —— 这是"机械拆分"能零行为改变的根本原因。
 
 ## 待建文档
 
