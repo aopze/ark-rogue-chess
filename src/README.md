@@ -4,6 +4,7 @@
 >
 > **第一批已完成（第 1 区：数据与常量）** —— `data/constants.js`、`data/characters.js`、`data/enemies.js`。
 > **第二批已完成（第 2 区：运行时状态）** —— `rules/state.js`、`rules/buffs.js`、`rules/sp.js`。
+> **第三批已完成（第 3 区：DOM 引用与基础工具）** —— `ui/dom-refs.js`、`rules/rng.js`、`net/pvp-core.js`。
 >
 > 🔄 **2026-10-28：已按 `20261028b` 基线重新取区对齐**
 > （人类发版后旧基线 249,421 B 失效，6 个模块与模板全部基于 261,228 B 新版 `game.html` 重取，

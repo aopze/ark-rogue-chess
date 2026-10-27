@@ -28,8 +28,8 @@
 | `game.html` | 构建产物，唯一发布物 | 单文件，约 249 KB / 5.4k 行 |
 | `src/data/` | 角色 / 敌人 / 遗物 / 事件 / 节点模板 / 数值（`balance.json` 为唯一数值出口） | ✅ 第一批已搬：`constants.js` / `characters.js` / `enemies.js`（原 `game.html` 487-620 行） |
 | `src/rules/` | 纯规则：`rng` / `state` / `resolveTurn` / `combat` / `mapgen` / `progress` | ✅ 第二批已搬：`state.js` / `buffs.js` / `sp.js`（原 `game.html` 622-751 行） |
-| `src/ui/` | DOM 渲染、棋盘交互、面板、日志、横竖屏布局、跨帧补丁 | 空，待 `P0.1-4` 搬运 |
-| `src/net/` | 联机：传输层（poll / ws）、房间流程、回放导入导出 | 空，待 `P0.1-4` 搬运 |
+| `src/ui/` | DOM 渲染、棋盘交互、面板、日志、横竖屏布局、跨帧补丁 | ✅ 第三批已搬：`dom-refs.js`（原 `game.html` 489-523 行） |
+| `src/net/` | 联机：传输层（poll / ws）、房间流程、回放导入导出 | ✅ 第三批已搬：`pvp-core.js`（PVP-CORE 结算核心，原 553-740 行） |
 | `src/main.js` | 入口：装配依赖、启动 | 空，待 `P0.1-4` |
 | `templates/game.html` | 构建模板（`<style>` 占位 + 脚本注入点） | 空，待 `P0.1-4` 从 `game.html` 剥离；**缺失时构建自动回退**到根目录 `game.html` 作基底（直通模式） |
 | `build/bundle.mjs` | 按清单顺序内联 `src/**` → 输出产物 | ✅ 已落地（`P0.1-3`）。**默认输出到 `build/out/game.html`**，写根目录需显式授权 |
@@ -104,7 +104,8 @@ node build/verify.mjs <产物> --prev <旧产物>
 | 1 | 第 1 区「数据与常量」（`20261028b` 基线 487-594 行） | `data/constants.js`、`data/characters.js`、`data/enemies.js` | ✅ 已完成 |
 | 2 | 第 2 区「运行时状态」（`20261028b` 基线 673-809 行） | `rules/state.js`、`rules/buffs.js`、`rules/sp.js` | ✅ 已完成 |
 | — | **按 `20261028b` 重新取区对齐**（2026-10-28） | 全部 6 模块 + 模板 | ✅ 已完成 |
-| 3+ | 第 3–15 区（DOM 引用与工具 / 掷骰 / 雷达图 / 规则 / DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
+| 3 | 第 3 区「DOM 引用与基础工具」（`20261028b` 基线 489-740 行） | `ui/dom-refs.js`、`rules/rng.js`、`net/pvp-core.js` | ✅ 已完成 |
+| 4+ | 第 4–15 区（掷骰 / 雷达图 / 规则 / DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
 
 ### 前两批的等价性证明（重要）
 

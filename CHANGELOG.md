@@ -70,12 +70,30 @@ e2e 六套件 + `bundle_test` 34 项 + `push_guard` 10 项全绿。
 - `docs/ARCHITECTURE.md`：新增「拆分进度表」与「本批的等价性证明」。
 - `src/README.md`：更新搬运状态、「顺序即语义」约束，并立下 **LF 换行约定**。
 
+### 第三批（第 3 区：DOM 引用与基础工具，20261028b 基线 489-740 行）
+
+- `src/ui/dom-refs.js` —— 13 个 DOM 引用（boardWrap / board / unitLayer / fxLayer / log / stats /
+  footBar / heroInfo / heroKv / controls / actionSlot / radarCanvas）+ 六维图点击加点与悬停手型 + `unitEls`（489-523 行）
+- `src/rules/rng.js` —— mulberry32 可播种随机：`seedRng` / `rng` / `randInt`，
+  以及 `RNG_SEED` 与本局种子 `RUN_SEED`（525-551 行）
+- `src/net/pvp-core.js` —— PVP-CORE 联机结算核心 188 行（553-740 行）。
+  纯函数、不碰 DOM、不读全局 `rng()`；`net/pvp_core_test.mjs` 按区块起止标记切片 `eval` 后单测，
+  因此**标记字面量在全文只能各出现 1 次**（见下方踩坑）。
+
+`build/manifest.json` 的 `modules` 增至 **9 个**。产物 264,005 B vs 261,228 B = **+2,777 B（1.06%）**。
+
 ### 踩坑：Windows 文本模式把 LF 写成 CRLF
 
 第二批首次构建时产物虚增 **6,095 B（2.4%）** 且 `diff` 整片变红。
 根因是 Windows 上以文本模式（`open(...,'w')`）写回行内容时，`\n` 被静默转成 `\r\n`——
 模板 5,208 行全部变成 CRLF。修正方式：统一按二进制写回 `\n`。
 **约定：仓库所有文本文件一律 LF，写回后确认 `CRLF = 0`。**
+
+### 踩坑：模块头注释里写了标记字面量，把断言打红
+
+`src/net/pvp-core.js` 的头部说明原本写了「按 `//#PVP_CORE_START` / `//#PVP_CORE_END` 标记切片」，
+导致 `dom_load_test` 的「PvP 核心标记成对存在」断言失败 —— 全文 START 出现 2 次（注释 1 次 + 真实 1 次）。
+**规矩：被脚本按标记切片的代码块，其注释中不得复写标记字面量。** 已改为「按区块起止标记切片」的描述式写法。
 
 ### 为何先拆这两批
 
