@@ -8,7 +8,11 @@
   * { box-sizing: border-box; }
   :root { --cell: 50px; --unit-move-ms: 120ms; }
   body { font-family: system-ui, -apple-system, "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; background:#1a1a2e; color:#eee; margin:0; padding:0; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; display:flex; flex-direction:column; touch-action: manipulation; }
-  h1 { font-size:18px; margin:8px 0 4px; text-align:center; flex-shrink:0; }
+  #topbar { display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0; padding: 4px 12px; }
+  #topbar h1 { font-size:18px; margin:4px 0; text-align:center; }
+  #resetBtn { position:absolute; right:12px; top:50%; transform:translateY(-50%); padding:5px 12px; font-size:13px; font-weight:700; color:#cfe6ff; background:#26263f; border:1px solid #3a3a5c; border-radius:8px; cursor:pointer; transition:background .15s, border-color .15s; }
+  #resetBtn:hover { background:#34345a; border-color:#4a4a70; color:#fff; }
+  #resetBtn:active { background:#1c1c30; }
   #game { display:flex; gap:8px; padding: 8px 16px 16px 16px; flex-grow: 1; min-height: 0; justify-content:center; }
   #boardWrap { flex-grow: 1; display: flex; justify-content: center; align-items: center; position:relative; min-width: 0; min-height: 0; overflow: hidden; }
   #board { display:grid; gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; position: relative; }
@@ -312,7 +316,10 @@
 </head>
 <body>
 
-<h1>方舟战棋</h1>
+<div id="topbar">
+  <h1>方舟战棋</h1>
+  <button id="resetBtn" title="重开游戏（回到选角界面）">⟲ 重开</button>
+</div>
 <div id="game">
   <div id="boardWrap">
     <div id="board"></div>
@@ -4058,6 +4065,15 @@ logCloseBtn.addEventListener('click', (e) => {
 });
 
 initCharSelect();
+
+// 顶部「重开」按钮：随时回到选角界面（重开一局）
+(function bindResetBtn() {
+  const rb = document.getElementById('resetBtn');
+  if (!rb) return;
+  rb.addEventListener('click', () => {
+    if (window.confirm('确定重开游戏吗？当前进度将丢失。')) initCharSelect();
+  });
+})();
 </script>
 </body>
 </html>
