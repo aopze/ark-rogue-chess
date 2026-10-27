@@ -167,7 +167,7 @@ issues/ISSUE-<YYYYMMDD>-<两位序号>-<英文短标签>.md
 
 | 阶段 | 状态 | 负责人 | 当前焦点 | 阻塞项 |
 |---|---|---|---|---|
-| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；`P0.1-2` 目录已落地（骨架 + `docs/ARCHITECTURE.md`，**未动 `game.html`**）；**`P0.1-3` 构建脚本已落地**（`build/bundle.mjs` + `verify.mjs` + 清单 + 34 项单测，`AC-23` 双 BUILD 由机器把关，默认只输出到 `build/out/` 不碰根目录）；**`P0.1-4` 机械拆分第一批已交付**（第 1 区「数据与常量」→ `src/data/` 3 个模块 + `templates/game.html`，构建产物与拆分前 `game.html` **归一化完全一致**、真运行 e2e 全绿）；下一步继续第 2 批（第 2–15 区），全部拆完后 `AC-01` 方可完整验收 | 无 |
+| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；`P0.1-2` 目录已落地（骨架 + `docs/ARCHITECTURE.md`，**未动 `game.html`**）；**`P0.1-3` 构建脚本已落地**（`build/bundle.mjs` + `verify.mjs` + 清单 + 34 项单测，`AC-23` 双 BUILD 由机器把关，默认只输出到 `build/out/` 不碰根目录）；**`P0.1-4` 机械拆分已交付两批**（第 1 区「数据与常量」→ `src/data/` 3 个模块；第 2 区「运行时状态」→ `src/rules/` 3 个模块；共 6 模块 + `templates/game.html`，构建产物与拆分前 `game.html` **归一化完全一致**、真运行 e2e 全绿）；下一步继续第 3 批（第 3–15 区），全部拆完后 `AC-01` 方可完整验收 | 无 |
 | M0.2 规则可验证 | 🟡 未开始 | 待认领 | 依赖 M0.1 | M0.1 |
 | M0.3 内容扩展 | 🟡 未开始 | 待认领 | 依赖 M0.2 | M0.2 |
 | M0.4 联机可靠 | 🟡 未开始 | 待认领 | 可与 M0.3 并行 | M0.2 |
@@ -845,6 +845,7 @@ ark-rogue-chess/
 | v2.6 | 2026-10-28 | `P0.1-2` 目录落地：按 §6 建立 `src/`（data/rules/ui/net）`templates/` `build/` `tests/`（unit/replay/property/e2e/fixtures）`tools/` `docs/` 骨架；新增 `docs/ARCHITECTURE.md`（架构、目录职责、构建流程、拆分原则）与 RULES/CONTENT/ONLINE/COMPAT/RELEASE 占位；`src/README.md`、`tests/README.md` 说明归属与「内容待 `P0.1-4` 搬运」。**`game.html` 等红线文件零改动**。§0.5 看板同步 |
 | v2.7 | 2026-10-28 | **`P0.1-3` 构建脚本落地**：新增 `build/bundle.mjs`（按 `build/manifest.json` 顺序内联 `src/**`、剥离 ESM 语法、幂等注入 `__ARK_VERSION__`）与 `build/verify.mjs`（AC-23 双 BUILD / NB-04 离线自包含 / 结构 / 产物一致性校验）；新增 `build/bundle_test.mjs` 离线单测 34 项与 `tests/fixtures/` 迷你样例。**护栏**：默认只输出到 `build/out/`，写根目录 `game.html` 被识别为发版动作，缺授权以退出码 4 中止；`index.html` 只校验不改写。`--bump` 修正了用 UTC 推 build 号导致「同日发版被误判为未来日期」的时区 bug。`docs/ARCHITECTURE.md`、`docs/RELEASE.md` 同步补命令与四步流程。**`game.html` 等红线文件零改动** |
 | v2.8 | 2026-10-28 | **`P0.1-4` 机械拆分第一批交付**：第 1 区「数据与常量」（原 `game.html` 487-620 行）搬为 `src/data/constants.js`、`src/data/characters.js`、`src/data/enemies.js`；产出 `templates/game.html`（占位符 `<!-- @inject:scripts -->` 位于原第 1 区处，第 2–15 区仍在模板内）。**等价性三层验证**：归一化后与拆分前完全一致（+698 B / 0.28%，远低于 `AC-01` 的 2%）、构建产物跑 `dom_load` 23 项与 `hook_integration` 8 项全绿、关键定义无残留重复且模块零 DOM 引用。`net/dom_load_test.mjs` 新增 `ARK_GAME_HTML` 环境变量以测构建产物。**根目录 `game.html` 未改动**（拆分产物未发布，发版需人类授权） |
+| v2.9 | 2026-10-28 | **`P0.1-4` 机械拆分第二批交付**：第 2 区「运行时状态」（原 `game.html` 622-751 行）搬为 `src/rules/state.js`（关卡/路径/技力/升级/UI 缓存的顶层 `let`）、`src/rules/buffs.js`（升级与奖励池 + `damagePlayer` 统一受伤入口）、`src/rules/sp.js`（三种角色技力系统与敌人攻击欲望系数）；`build/manifest.json` 的 `modules` 增至 6 个，顺序仍等于拆分前的出现顺序。**等价性三层验证**：归一化后与拆分前一致（+1,459 B / 0.58%，低于 `AC-01` 的 2%）、构建产物跑 `dom_load` 23 / `pvp_core` 20 / `pvp_e2e` 16 / `pvp_browser` 16 / `hook_integration` 8 项 + 联机 client 全绿、`build/bundle_test.mjs` 34 项与 `push_guard` 10 项全绿。**踩坑记录**：Windows 文本模式写文件会把 `LF` 静默转成 `CRLF`，导致产物虚增 6,095 B（2.4%）并让整个 diff 变红；已统一修正为 `LF` 并在 `src/README.md` 立下换行约定。**根目录 `game.html` 未改动**（249,421 B / `1a86858d00`） |
 
 ---
 

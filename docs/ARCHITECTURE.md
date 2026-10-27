@@ -27,7 +27,7 @@
 |---|---|---|
 | `game.html` | 构建产物，唯一发布物 | 单文件，约 249 KB / 5.4k 行 |
 | `src/data/` | 角色 / 敌人 / 遗物 / 事件 / 节点模板 / 数值（`balance.json` 为唯一数值出口） | ✅ 第一批已搬：`constants.js` / `characters.js` / `enemies.js`（原 `game.html` 487-620 行） |
-| `src/rules/` | 纯规则：`rng` / `state` / `resolveTurn` / `combat` / `mapgen` / `progress` | 空，待 `P0.1-4` 搬运 |
+| `src/rules/` | 纯规则：`rng` / `state` / `resolveTurn` / `combat` / `mapgen` / `progress` | ✅ 第二批已搬：`state.js` / `buffs.js` / `sp.js`（原 `game.html` 622-751 行） |
 | `src/ui/` | DOM 渲染、棋盘交互、面板、日志、横竖屏布局、跨帧补丁 | 空，待 `P0.1-4` 搬运 |
 | `src/net/` | 联机：传输层（poll / ws）、房间流程、回放导入导出 | 空，待 `P0.1-4` 搬运 |
 | `src/main.js` | 入口：装配依赖、启动 | 空，待 `P0.1-4` |
@@ -102,20 +102,27 @@ node build/verify.mjs <产物> --prev <旧产物>
 | 批次 | 内容 | 模块 | 状态 |
 |---|---|---|---|
 | 1 | 第 1 区「数据与常量」（原 487-620 行） | `data/constants.js`、`data/characters.js`、`data/enemies.js` | ✅ 已完成 |
-| 2+ | 第 2–15 区（状态 / 工具 / 掷骰 / 雷达图 / 规则 / DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
+| 2 | 第 2 区「运行时状态」（原 622-751 行） | `rules/state.js`、`rules/buffs.js`、`rules/sp.js` | ✅ 已完成 |
+| 3+ | 第 3–15 区（DOM 引用与工具 / 掷骰 / 雷达图 / 规则 / DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
 
-### 本批的等价性证明（重要）
+### 前两批的等价性证明（重要）
 
-机械拆分最怕"看起来搬对了、实际顺序变了"。本批用三层验证：
+机械拆分最怕"看起来搬对了、实际顺序变了"。每批都用三层验证：
 
 1. **文本等价**：`node build/bundle.mjs --prev game.html` —— 归一化（去注释/空白、抹平版本对象）后
-   与拆分前 `game.html` **完全一致**。产物 +698 B（0.28%），远低于 `AC-01` 的 2% 预算。
+   与拆分前 `game.html` **完全一致**。两批合计 +1,459 B（0.58%），低于 `AC-01` 的 2% 预算。
 2. **真运行**：`ARK_GAME_HTML=build/out/game.html node net/dom_load_test.mjs` → 23 项全绿；
-   `node net/hook_integration_test.mjs build/out/game.html` → 8 项全绿。
+   `node net/hook_integration_test.mjs build/out/game.html` → 8 项全绿；
+   `pvp_core` 20 项 / `pvp_e2e` 16 项 / `pvp_browser` 16 项 / 联机 `client_test` 全绿。
 3. **无残留**：关键定义（`PHASE` / `CHARACTERS` / `ENEMY_STATS` / `DIR4_BFS`）在 `src/` 各 1 处，
-   模板中只剩**引用**而非重复定义。拆分出的 3 个模块 DOM/`window` 引用均为 0。
+   模板中只剩**引用**而非重复定义；顶层 `let` 状态（`phase` / `mode` / `player` / `enemies` …）
+   也各只有 1 处声明，无重复。
 
-> 模板当前仍含第 2–15 区代码（约 5,200 行），占位符 `<!-- @inject:scripts -->` 位于原第 1 区处。
+> ⚠️ **换行约定（第二批踩过的坑）**：仓库文本文件一律 `LF`。
+> Windows 上以文本模式写文件会把 `\n` 静默转成 `\r\n`（模板 5,208 行全变 CRLF），
+> 产物虚增 6,095 B（2.4%）且 diff 整片变红。写回后务必确认 `CRLF = 0`。
+
+> 模板当前仍含第 3–15 区代码，占位符 `<!-- @inject:scripts -->` 位于原第 1 区处。
 > 后续每批搬走一段、占位保持原位，顺序因此天然守恒 —— 这是"机械拆分"能零行为改变的根本原因。
 
 ## 待建文档

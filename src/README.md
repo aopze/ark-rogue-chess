@@ -3,8 +3,12 @@
 > **`P0.1-4` 机械拆分进行中**。内容由 `P0.1-4` 机械拆分从根目录 `game.html` 搬运而来。
 >
 > **第一批已完成（第 1 区：数据与常量）** —— `data/constants.js`、`data/characters.js`、`data/enemies.js`。
+> **第二批已完成（第 2 区：运行时状态）** —— `rules/state.js`、`rules/buffs.js`、`rules/sp.js`。
 > 验证：构建产物与拆分前 `game.html` **归一化后完全一致**，且 e2e 与 hook 集成测试对构建产物全绿。
-> 剩余第 2–15 区仍在 `templates/game.html` 中，待后续批次搬移。
+> 剩余第 3–15 区仍在 `templates/game.html` 中，待后续批次搬移。
+>
+> ⚠️ **换行约定**：仓库内所有文本文件一律 `LF`。Windows 上用文本模式写文件会静默变成 `CRLF`，
+> 会让产物体积虚增约 2.6% 并污染 diff —— 写回后请确认 `CRLF = 0`。
 
 ## 四个子目录
 
