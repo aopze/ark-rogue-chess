@@ -1,5 +1,4 @@
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 489-523 行原样搬移（DOM 引用与六维图点击热区注册（boardWrap / board / unitLayer / fxLayer / log / stats / radarCanvas 等））。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* P0.1-4 拆分 · 20261028b 基线 811-845 行 · DOM 引用与六维图点击热区 */
 const boardWrap = document.getElementById('boardWrap');
 const boardEl = document.getElementById('board');
 const unitLayer = document.getElementById('unitLayer');

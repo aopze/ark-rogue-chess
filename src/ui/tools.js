@@ -1,6 +1,4 @@
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 489-534 行原样搬移
- * （基础工具与战斗日志：dist / cheb / key / LOG_MAX / autoLogType / makeLogLine / renderLogAll / clearLog / log / sleep / inBounds / findLastIndex）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* P0.1-4 拆分 · 20261028b 基线 1063-1108 行 · 距离工具与战斗日志系统 */
 function dist(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
 function cheb(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
 function key(x, y) { return x + ',' + y; }

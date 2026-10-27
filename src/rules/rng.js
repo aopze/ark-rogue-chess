@@ -1,5 +1,4 @@
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 525-551 行原样搬移（可播种伪随机 mulberry32：seedRng / rng / randInt、RNG_SEED 与本局种子 RUN_SEED）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* P0.1-4 拆分 · 20261028b 基线 847-873 行 · mulberry32 可播种随机（RNG_SEED / RUN_SEED） */
 /* =========================================================
  * ★ 可播种伪随机（mulberry32）
  * 原来直接用 Math.random，导致同一份输入无法复现同一局：

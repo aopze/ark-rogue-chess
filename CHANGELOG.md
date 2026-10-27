@@ -82,6 +82,30 @@ e2e 六套件 + `bundle_test` 34 项 + `push_guard` 10 项全绿。
 
 `build/manifest.json` 的 `modules` 增至 **9 个**。产物 264,005 B vs 261,228 B = **+2,777 B（1.06%）**。
 
+### 第五批（第 6 区：规则判定，20261028b 基线 1352-1768 行）
+
+- `src/rules/path.js` —— 路径判定与冲锋计算：`isWalkable` / `faceToward` / `isFacingTarget` /
+  `isInFacingCone` / `previewFacing` / `calcPathSignature` / `pathSpGain` / `findChargeSkillIndex` /
+  `previewChargeBudget` / `computeStraightChargePath` / `resolveChargeRemainingHits` /
+  `skillReadyInfo` / `countMoveSteps` / `countWaitSteps`（1352-1564 行）
+- `src/rules/actions.js` —— 动作机制：`DODGE_AC_BONUS` / `firstWaitIndex` / `plannedActionInfo` /
+  `nodeFitsBudget` / `playerEffectiveAC`（1566-1621 行）
+- `src/ui/units.js` —— 动作预算与单位渲染：`maxActionsThisTurn` / `canPerformAttackAction` /
+  `clearUnitLayer` / `getUnitIcon` / `getPlayerRenderFacing` / `isPlayerPreviewCharging` / `renderUnits`（1623-1768 行）
+  （含 DOM 故归 `ui/`；两个预算函数待重构时移入 `rules/`）
+
+### `AC-01` 体积治理（同批）
+
+15 个模块时产物增量达 **1.94%**（266,292 B），逼近 `AC-01` 的 2% 红线。
+增量**全部来自注释与空行**（归一化后始终与基线完全一致，即实质零膨胀），因此做两处压缩：
+
+1. 模块头部的 3-4 行来源说明 → **1 行**（15 个模块省 3,013 B）
+2. `bundle.mjs` 的内联分隔头 `/* ---- src: xxx ---- */` → `/* src: xxx */`
+
+结果：**+1,901 B（0.73%）**，为剩余 9 个区留出余量。
+顺带修正：第 3-5 批头注释里的「基线行号」其实是**模板行号**（拆分会让模板行数变化），
+已用整段子串匹配重算为 `game.html` 的真实行号（`src/**` 现覆盖基线 487-1768 行，区间连续无重叠）。
+
 ### 第四批（第 4-5 区：掷骰与面板 / 六维雷达图，20261028b 基线 489-776 行）
 
 - `src/ui/tools.js` —— 基础工具与战斗日志：`dist` / `cheb` / `key` / `LOG_MAX` / `LOG_VIEW_MAX` /
@@ -93,9 +117,7 @@ e2e 六套件 + `bundle_test` 34 项 + `push_guard` 10 项全绿。
 
 `build/manifest.json` 的 `modules` 增至 **12 个**。产物 265,079 B vs 261,228 B = **+3,851 B（1.48%）**。
 
-> 📈 **预算提示**：增量随拆分推进单调上升（每个模块约 +250 B：来源注释头 + 分隔空行）。
-> 按此速度 `AC-01` 的 2% 预算约可容纳 15-16 个模块；全部 15 区拆完预计需 20+ 个模块，
-> 届时需要么把 2% 放宽并说明理由，要么改为「构建期不写 `/* ---- src: xxx ---- */` 头」。
+> ℹ️ **体积口径**：`AC-01` 的「字节差 < 2%」按产物原始字节计；增量全部来自来源注释与空行（归一化后与基线完全一致）。第五批已做注释压缩（见下节），当前 +1,901 B / 0.73%。若后续再次逼近 2%，可考虑构建期完全不写来源注释头。
 
 ### 踩坑：Windows 文本模式把 LF 写成 CRLF
 

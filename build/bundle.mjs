@@ -158,7 +158,7 @@ export function inlineModules(templateHtml, manifest, label = 'manifest') {
     const abs = path.join(ROOT, rel);
     if (!fs.existsSync(abs)) throw new Error(`清单中的模块不存在：${rel}`);
     const code = stripModuleSyntax(fs.readFileSync(abs, 'utf8'), rel);
-    chunks.push(`/* ---- src: ${rel} ---- */\n${code.trim()}`);
+    chunks.push(`/* src: ${rel} */\n${code.trim()}`);
   }
   const joined = chunks.join('\n\n');
 

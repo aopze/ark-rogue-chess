@@ -1,5 +1,4 @@
-/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 487-522 行原样搬移（常量与方向表）。
- * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
+/* P0.1-4 拆分 · 20261028b 基线 487-522 行 · 常量与方向表 */
 const SPAWN_CLEAR_RADIUS = 2;
 const OBSTACLE_MAX_GROUP = 4;
 const OBSTACLE_GROUPS_TRY = 8;
