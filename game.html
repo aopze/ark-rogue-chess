@@ -176,15 +176,42 @@
     border: 1px solid #3a3a55; border-radius: 10px;
     box-shadow: 0 8px 26px rgba(0,0,0,.55);
     overflow: hidden;
+    --set-mini: clamp(26px, calc(var(--cell) * 0.5), 40px);
   }
   #logPanel.folded #log { display: none; }
   #logPanel.folded #logBar { border-bottom: none; }
+  /* ---- 收起态：只剩一个约半格大小的 ⚙ 按钮（点击展开设置面板） ---- */
+  #setOpenBtn {
+    display: none; width: var(--set-mini); height: var(--set-mini);
+    align-items: center; justify-content: center; padding: 0;
+    background: rgba(20,20,36,.94); color: #cfe6ff;
+    border: 1px solid #3a3a55; border-radius: 9px;
+    font-size: calc(var(--set-mini) * 0.5); line-height: 1;
+    cursor: pointer; touch-action: manipulation;
+    box-shadow: 0 2px 8px rgba(0,0,0,.45);
+  }
+  #setOpenBtn:active { transform: scale(.94); }
+  #logPanel.collapsed {
+    width: auto; max-width: none; background: transparent;
+    border-color: transparent; box-shadow: none; overflow: visible;
+    border-radius: 9px;
+  }
+  #logPanel.collapsed #logBar,
+  #logPanel.collapsed #setBtns,
+  #logPanel.collapsed #log { display: none; }
+  #logPanel.collapsed #setOpenBtn { display: flex; }
   /* ---- 布局模式：layout-h 地图左/UI右（桌面默认）；layout-v 地图上/UI下（竖版） ---- */
   body.layout-v #game { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
-  body.layout-v #dragHandle { display: none; }
-  body.layout-v #boardWrap { width: 100%; flex: 0 0 auto; height: min(62vh, 100%); }
+  body.layout-v #boardWrap { width: 100%; flex: 0 0 auto; height: min(62vh, 100%); min-height: 96px; }
   body.layout-v #sidebar { width: 100%; max-width: 100%; height: auto; flex: 1 1 auto; min-height: 0; }
   body.layout-v #sidebar > * { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+  /* 竖版中间的可上下拖动分隔条（横线 + 横胶囊），与横版竖线呼应 */
+  body.layout-v #dragHandle { display: block; flex: 0 0 14px; align-self: stretch; cursor: row-resize; }
+  body.layout-v #dragHandle::before { left: 8px; right: 8px; top: 50%; bottom: auto; width: auto; height: 2px; transform: translateY(-50%); }
+  body.layout-v #dragHandle .grip { width: 50px; height: 9px; }
+  body.layout-v #dragHandle .grip::before, body.layout-v #dragHandle .grip::after { left: auto; top: 50%; transform: translateY(-50%); }
+  body.layout-v #dragHandle .grip::before { left: 16px; }
+  body.layout-v #dragHandle .grip::after { right: 16px; }
   #logBar { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 8px; font-size: 12px; font-weight: 800; color: #9a9ab5; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,.06); cursor: grab; user-select: none; touch-action: none; }
   #logPanel.dragging #logBar { cursor: grabbing; }
   #logGrip { color: #5a5a80; font-size: 12px; letter-spacing: -2px; }
@@ -277,9 +304,15 @@
     body.layout-h #dragHandle { display: none; }
     body.layout-h #radarCanvas { width: 104px; height: 104px; }
     body.layout-v #game { display: flex; flex-direction: column; gap: 6px; padding: 4px; }
-    body.layout-v #boardWrap { width: 100%; height: auto; aspect-ratio: 1 / 1.12; max-height: 58vh; flex: none; }
+    /* 竖屏：默认按宽高比紧贴棋盘；用户拖动过之后由 JS 用内联 height 接管 */
+    body.layout-v #boardWrap { width: 100%; height: auto; aspect-ratio: 1 / 1.12; max-height: 58vh; flex: 0 0 auto; }
+    body.layout-v #dragHandle { display: block; }
     body.layout-v #sidebar { width: 100%; height: auto; max-height: none; flex: 1 1 auto; }
     body.layout-v #sidebar > * { max-width: 100%; }
+    /* 窄屏：横胶囊略微收窄，避免压到边缘 */
+    body.layout-v #dragHandle .grip { width: 44px; height: 8px; }
+    body.layout-v #dragHandle .grip::before { left: 14px; }
+    body.layout-v #dragHandle .grip::after { right: 14px; }
     #sidebar {
       width: 100%;
       height: 100%;
@@ -371,12 +404,13 @@
   </div>
 </div>
 
-<!-- 设置：左上角圆角方框（可拖动），内含 主页/联机/重开/旋转 四按钮 + 战斗日志 -->
-<div id="logPanel">
+<!-- 设置：默认收成左上角半格大小的 ⚙ 按钮，点击展开（主页/联机/重开/旋转 + 战斗日志） -->
+<div id="logPanel" class="collapsed">
+  <button id="setOpenBtn" title="设置（点击展开）" aria-label="设置">⚙</button>
   <div id="logBar">
     <span id="logGrip" title="拖动移动窗口">⣿</span>
     <span id="logTitle">设置</span>
-    <button id="logFoldBtn" title="展开 / 收起日志">▾</button>
+    <button id="logFoldBtn" title="收起设置面板">▾</button>
   </div>
   <div id="setBtns">
     <button id="setHomeBtn" title="返回主页">🏠 主页</button>
@@ -2575,24 +2609,73 @@ function applySidebarWidth(w, save) {
   if (!isNaN(saved) && saved > 0) applySidebarWidth(saved, false);
   else fitSidebarToWidth();
 })();
-let sideDragging = false, sideDragRaf = 0, sideDragPendingW = null;
+// ===== 竖版（layout-v）：地图高度比例，可上下拖动 =====
+const gameEl = document.getElementById('game');
+const MAP_V_KEY = 'ark_map_v_ratio';
+let mapVRatio = null;      // null = 未拖动过，沿用 CSS 默认（紧贴棋盘）
+try {
+  const s = parseFloat(localStorage.getItem(MAP_V_KEY));
+  if (s >= 0.2 && s <= 0.86) mapVRatio = s;
+} catch (_) {}
+// #game 去掉上下内边距后的可用高度
+function vGameBox() {
+  const cs = getComputedStyle(gameEl);
+  const padT = parseFloat(cs.paddingTop) || 0, padB = parseFloat(cs.paddingBottom) || 0;
+  return Math.max(140, gameEl.clientHeight - padT - padB);
+}
+function vMapBounds(box) {
+  return { min: Math.max(96, box * 0.22), max: Math.max(96 + 80, box * 0.82) };
+}
+function applyMapVHeight(px, save) {
+  const box = vGameBox();
+  const { min, max } = vMapBounds(box);
+  const h = Math.round(Math.max(min, Math.min(max, px)));
+  mapVRatio = h / box;
+  boardWrap.style.maxHeight = 'none';
+  boardWrap.style.height = h + 'px';
+  if (save) { try { localStorage.setItem(MAP_V_KEY, String(mapVRatio)); } catch (_) {} }
+  updateCellSize();
+  return h;
+}
+function syncMapVHeight() {
+  if (!document.body.classList.contains('layout-v')) { clearMapVHeight(); return; }
+  if (mapVRatio == null) { clearMapVHeight(); return; }
+  applyMapVHeight(mapVRatio * vGameBox(), false);
+}
+function clearMapVHeight() {
+  boardWrap.style.height = '';
+  boardWrap.style.maxHeight = '';   // 回到 CSS 默认（竖屏按宽高比紧贴棋盘）
+  updateCellSize();
+}
+
+let sideDragging = false, sideDragVertical = false, sideDragRaf = 0, sideDragPendingW = null;
+let mapVDragStartY = 0, mapVDragStartH = 0, mapVDragPending = null;
 function sideDragFlush() {
   sideDragRaf = 0;
-  if (sideDragPendingW == null) return;
-  applySidebarWidth(sideDragPendingW, false);
-  sideDragPendingW = null;
+  if (sideDragPendingW != null) { applySidebarWidth(sideDragPendingW, false); sideDragPendingW = null; }
+  if (mapVDragPending != null) { applyMapVHeight(mapVDragPending, false); mapVDragPending = null; }
 }
 dragHandle.addEventListener('pointerdown', (e) => {
-  if (window.innerWidth <= 760) return;
+  sideDragVertical = document.body.classList.contains('layout-v');
+  // 横版：手机端不开放（侧栏宽度由媒体查询固定）；竖版：手机/桌面都可用
+  if (!sideDragVertical && window.innerWidth <= 760) return;
   sideDragging = true;
+  if (sideDragVertical) {
+    mapVDragStartY = e.clientY;
+    mapVDragStartH = boardWrap.offsetHeight;
+  }
   dragHandle.classList.add('dragging');
   try { dragHandle.setPointerCapture(e.pointerId); } catch (_) {}
   e.preventDefault();
 });
 dragHandle.addEventListener('pointermove', (e) => {
   if (!sideDragging) return;
-  // 右侧内边距16 + 半个调整块5 + 两个gap 8*2 ≈ 29
-  sideDragPendingW = window.innerWidth - e.clientX - 29;
+  if (sideDragVertical) {
+    mapVDragPending = mapVDragStartH + (e.clientY - mapVDragStartY);
+  } else {
+    // 右侧内边距16 + 半个调整块5 + 两个gap 8*2 ≈ 29
+    sideDragPendingW = window.innerWidth - e.clientX - 29;
+  }
   if (!sideDragRaf) sideDragRaf = requestAnimationFrame(sideDragFlush);
 });
 function endSideDrag() {
@@ -2600,8 +2683,12 @@ function endSideDrag() {
   sideDragging = false;
   dragHandle.classList.remove('dragging');
   if (sideDragRaf) { cancelAnimationFrame(sideDragRaf); sideDragRaf = 0; sideDragFlush(); }
-  const cur = parseFloat(sidebarEl.style.width) || sidebarEl.offsetWidth;
-  applySidebarWidth(cur, true);
+  if (sideDragVertical) {
+    applyMapVHeight(boardWrap.offsetHeight, true);
+  } else {
+    const cur = parseFloat(sidebarEl.style.width) || sidebarEl.offsetWidth;
+    applySidebarWidth(cur, true);
+  }
   if (player || phase === PHASE.CHAR_SELECT) render();
 }
 dragHandle.addEventListener('pointerup', endSideDrag);
@@ -2619,6 +2706,7 @@ window.addEventListener('resize', () => {
       radarCanvas.style.height = '';
       updateCellSize();
     }
+    if (document.body.classList.contains('layout-v')) syncMapVHeight();
     if (player || phase === PHASE.CHAR_SELECT) render();
   }, 100);
 });
@@ -4650,17 +4738,41 @@ const logResetBtn  = document.getElementById('logResetBtn');
 const logRotateBtn = document.getElementById('logRotateBtn');
 const LOG_POS_KEY = 'ark_log_pos';
 
-// 折叠 / 展开
-function setLogFolded(folded) {
-  logPanelEl.classList.toggle('folded', folded);
-  logFoldBtn.textContent = folded ? '▸' : '▾';
-  logFoldBtn.title = folded ? '展开日志' : '折叠日志';
+// 展开 / 收起整个「设置」面板：收起后只剩左上角一个约半格大小的 ⚙ 按钮
+const setOpenBtn = document.getElementById('setOpenBtn');
+function clampLogPanelPos() {
+  const r = logPanelEl.getBoundingClientRect();
+  let x = r.left, y = r.top;
+  const maxX = Math.max(0, window.innerWidth - r.width);
+  const maxY = Math.max(0, window.innerHeight - r.height);
+  x = Math.max(0, Math.min(maxX, x));
+  y = Math.max(0, Math.min(maxY, y));
+  if (Math.abs(x - r.left) > 0.5 || Math.abs(y - r.top) > 0.5) {
+    logPanelEl.style.left = Math.round(x) + 'px';
+    logPanelEl.style.top = Math.round(y) + 'px';
+    logPanelEl.style.right = 'auto';
+    logPanelEl.style.bottom = 'auto';
+  }
 }
+function setSettingsOpen(open) {
+  logPanelEl.classList.toggle('collapsed', !open);
+  if (open) {
+    logPanelEl.classList.remove('folded');
+    requestAnimationFrame(clampLogPanelPos);
+  } else {
+    requestAnimationFrame(clampLogPanelPos);
+  }
+}
+if (setOpenBtn) setOpenBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  setSettingsOpen(true);
+});
 logFoldBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  setLogFolded(!logPanelEl.classList.contains('folded'));
+  setSettingsOpen(false);
 });
-setLogFolded(false);
+// 默认收起：只留一个半格大小的 ⚙ 按钮
+setSettingsOpen(false);
 
 // 拖动移动悬浮窗（按住标题栏）
 (function bindLogDrag() {
@@ -4761,6 +4873,7 @@ function setLayout(mode, save) {
     }
   } catch (_) {}
   setTimeout(() => {
+    try { syncMapVHeight(); } catch (_) {}
     updateCellSize();
     if (player || phase === PHASE.CHAR_SELECT) render();
   }, 30);
@@ -5274,6 +5387,24 @@ function pvpClosePanel() {
 
   // 1) 隐藏外壳悬浮主页
   try { var hb = pd.getElementById('btnHome'); if (hb) hb.style.display = 'none'; } catch (e) {}
+
+  // 1.5) 外壳顶部居中的空胶囊（#ghint）：没文字时隐藏，有文字时挪到右上角，避免压住左上角「设置」
+  try {
+    var gh = pd.getElementById('ghint');
+    if (gh) {
+      gh.style.left = 'auto';
+      gh.style.right = '8px';
+      gh.style.transform = 'none';
+      var syncGhint = function () {
+        var has = (gh.textContent || '').trim().length > 0;
+        gh.style.display = has ? '' : 'none';
+      };
+      syncGhint();
+      try {
+        new P.MutationObserver(syncGhint).observe(gh, { childList: true, characterData: true, subtree: true });
+      } catch (e) {}
+    }
+  } catch (e) {}
 
   // 2) 劫持外壳 showHint，使之后弹出的绿色提示同样变短 + 可点击
   try {
