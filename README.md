@@ -42,7 +42,7 @@
 >
 > | 文件 | 改了什么 |
 > |---|---|
-> | `src/data/enemies.js` | 新增 `AFFIX_DEFS` / `AFFIX_POOL_EARLY|LATE` / `ELITE_*` 常量，`affixRng` / `eliteIndexFor` / `rollEnemyAffixPlan` / `enemyHasAffix` / `enemyIsFrenzied` / `enemyMoveOf` / `enemyDamageBonus` / `enemyAffixLabel` / `enemyTakeDamage` / `enemyThornsReflect`；`rollEnemyDamage` 末尾叠狂暴 +1 |
+> | `src/data/enemies.js` | 新增 `AFFIX_DEFS` / `AFFIX_POOL_EARLY` / `AFFIX_POOL_LATE` / `ELITE_*` 常量，`affixRng` / `eliteIndexFor` / `rollEnemyAffixPlan` / `enemyHasAffix` / `enemyIsFrenzied` / `enemyMoveOf` / `enemyDamageBonus` / `enemyAffixLabel` / `enemyTakeDamage` / `enemyThornsReflect`；`rollEnemyDamage` 末尾叠狂暴 +1 |
 > | `src/ui/units.js` | `renderUnits()` 加 `.ua-elite` 金边类与 `.affix-tag` 右上角标签（敌人分支） |
 > | `templates/game.html` | 敌人生成（`rollEnemyAffixPlan` + 精英 HP）、面板日志（★精英 / `enemyMoveOf` / 词缀）、`killEnemy` 精英掉落、**7 处伤害入口**改走 `enemyTakeDamage`、AI 4 处 `e.move` → `enemyMoveOf(e)`。模板 **166,663 → 169,610 B** |
 >
