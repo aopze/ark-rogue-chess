@@ -510,6 +510,9 @@ PvP 的 `pvpResolveTurn(state, plans, seed)` 已经是正确范式：给同样�
 **原则 10 · 用可观测替代猜测。**
 日志分类着色、版本号注入、`/api/health`、metrics，都属于"线上出问题能在 5 分钟内定位"的投资，优先级不低于新功能。
 
+**原则 11 · `game.html`（及 `src/` 源码）必须为下游 Godot 正式版保留可对照结构。**
+本仓库的游戏代码同时是另一份 Godot 工程（游戏正式版）的**玩法准绳**：对方逐模块复刻本仓库的规则与数值，并跑自有回归。因此本仓库的代码组织必须让"规则 / 数值"能被外部引擎低成本、无歧义地抄写——这是对所有 AI 协作方的硬约束，实施细则见 §10.4。
+
 ---
 
 ## 5. 分阶段计划
@@ -803,6 +806,7 @@ ark-rogue-chess/
 | NB-10 | 不得跳过 e2e 直接发版（除紧急回滚） | 移动端布局回归成本远高于等待 5 分钟 |
 | **NB-11** | **不得绕过 `issues/` 直接修改 `game.html`**（唯一例外见 §0.0） | 单文件产物 + 多 AI 并发 = 静默覆盖丢改动；碎片化改动还会把 CDN 缓存反复打穿 |
 | **NB-12** | **不得在人类维护者未说「版本更新」时自行发版** | 发版节奏由人类维护者决定，AI 只负责攒 issue 和待命 |
+| **NB-13** | **不得破坏 §10.4 的 Godot 复刻契约**（在规则模块散落魔法数字、删除 `@port` 标注、规则函数掺入 DOM、模块 / 符号命名与 Godot 端严重漂移、改动 PVP 接口语义） | 下游 Godot 复刻因歧义或遗漏产生无法对齐的 bug |
 
 ---
 
@@ -891,6 +895,46 @@ ark-rogue-chess/
 | v3.2 | 2026-10-28 | **`P0.1-4` 机械拆分第三批交付**：第 3 区「DOM 引用与基础工具」搬为 `src/ui/dom-refs.js`（13 个 DOM 引用 + 六维图点击/悬停热区 + `unitEls`）、`src/rules/rng.js`（mulberry32 可播种随机：`seedRng` / `rng` / `randInt` + `RNG_SEED` / `RUN_SEED`）、`src/net/pvp-core.js`（PVP-CORE 联机结算核心 188 行，纯函数、按区块起止标记被 `net/pvp_core_test.mjs` 切片 eval）；`build/manifest.json` 的 `modules` 增至 9 个。**验证**：归一化后一致（264,005 vs 261,228 B = **+2,777 B / 1.06%**，仍低于 `AC-01` 的 2%）、e2e 六套件全绿。**踩坑**：模块头部注释里写了 `//#PVP_CORE_START` 字面量，导致 `dom_load_test` 的「标记成对存在」断言失败（全文出现 2 次）—— 已在注释中立规矩：起止标记字面量在 `src/net/pvp-core.js` 全文只能各出现 1 次。**根目录 `game.html` 未改动** |
 | v3.3 | 2026-10-28 | **`P0.1-4` 机械拆分第四批交付**：第 4 区「掷骰与面板」与第 5 区「六维雷达图」搬为 `src/ui/tools.js`（距离/`key`/日志系统/`sleep`/`inBounds`/`findLastIndex`，489-534 行）、`src/rules/dnd.js`（泥岩技力 + DnD 六属性 `abilityMod`/`computeAC`/`attackRoll`/劣势掷骰/`recomputePlayerDerivedStats`/敌人 L1 只读查询，536-609 行）、`src/ui/radar.js`（`drawRadar` 六维图与属性文字命中框，611-776 行）；`modules` 增至 12 个。**验证**：归一化后一致（265,079 vs 261,228 B = **+3,851 B / 1.48%**，仍低于 `AC-01` 的 2%）、e2e 六套件全绿。**注意**：产物相对基线的增量会随拆分推进单调上升（每模块约 +250 B 注释头与空行），2% 预算约可容纳 15-16 个模块，超出时需在 `AC-01` 中说明或改用「构建期不写来源注释」策略。**根目录 `game.html` 未改动** |
 | v3.4 | 2026-10-28 | **`P0.1-4` 机械拆分第五批交付 + `AC-01` 体积治理**：第 6 区「规则判定」搬为 `src/rules/path.js`（路径判定 / 冲锋计算 / 步数统计，20261028b 基线 1352-1564 行）、`src/rules/actions.js`（动作机制与有效 AC，1566-1621 行）、`src/ui/units.js`（动作预算与单位渲染，1623-1768 行）。**体积治理**：15 模块时增量已达 **1.94%**（逼近 `AC-01` 的 2%），故把每个模块的 3-4 行来源注释压成 1 行、内联分隔头 `/* ---- src: x ---- */` 缩短为 `/* src: x */`，**增量回落到 0.73%**（263,129 vs 261,228 B = **+1,901 B**），为剩余 9 个区留出余量；顺带把第 3-5 批头注释里误标的「基线行号」（实为模板行号）修正为 `game.html` 真实行号。**验证**：归一化后完全一致、e2e 六套件全绿。**根目录 `game.html` 未改动**（261,228 B / `4cb46640`） |
+| v3.5 | 2026-10-28 | **`docs` 新增 Godot 正式版复刻契约（原则 11 / 红线 NB-13 / §10.4）**：明确 `src/` 源码与 `game.html` 产物作为 Godot 正式版玩法准绳的下游复刻契约，约束常量集中 / 命名对齐 / 数据表驱动 / port-map / 规则纯函数 / RNG 纪律 / PVP 标注 / 变更摘要 / 对照映射表 |
+
+---
+
+### 10.4 Godot 正式版复刻契约（下游兼容性）
+
+> **地位**：本仓库的游戏代码（`src/` 源码 + 构建产物 `game.html`）是另一份 Godot 工程（游戏正式版）的**唯一玩法准绳**。Godot 端逐模块复刻本仓库的规则与数值，并跑自有回归（smoke / soak / layout / chars / tuner）。本契约保证"复刻"这一步低成本、无歧义。所有 AI 协作方在改动游戏代码时**必须**遵守以下 10 条。
+
+**1. 源码多文件（沿用原则 1）**：所有逻辑在 `src/`，`game.html` 仅为构建产物；Godot 端复刻直接对照 `src/` 各模块，不读产物。
+
+**2. 常量集中**：所有可调数值放在 `src/data/constants.js`（对应 Godot `Tuning.gd`），禁止在规则模块内散落魔法数字（如 `if (x > 3)` 应写成 `CONFIG.PLAYER_RANGE`）。
+
+**3. 模块 / 符号命名对齐 Godot**：文件、函数、字段名尽量与 Godot 端 snake_case 一致（如 `char_id`、`player_effective_ac`、`skill_indices`、`planned_dodge_index`）；新增机制命名时先查 Godot 端是否已有对应符号，避免漂移。
+
+**4. 数据表驱动**：角色 / 敌人 / buff 放在 `src/data/*.js`，字段名对齐 Godot `Characters.gd`（如 `char_id` / `abilities` / `prof`）。
+
+**5. port-map 注释**：每个规则模块 / 关键函数上方写一行 `// @port <Godot文件>:<函数名>`，标注复刻目标。例：`// @port Battle.gd:attack_roll`。
+
+**6. 规则层纯函数化（沿用原则 2）**：规则在 `src/rules/`，必须是**无 DOM 依赖的纯函数**；渲染 / DOM 只在 `src/ui/`。Godot 端复刻时只扫规则层。
+
+**7. RNG 纪律（沿用 NB-06）**：随机一律走 `src/rules/rng.js` 的 `rng()`（mulberry32 单例 + `RUN_SEED` 分层派生），禁止 `Math.random()`。
+
+**8. PVP 区段标注**：联机核心在 `src/net/pvp-core.js`，标 `// PVP (DEFERRED_IN_GODOT)`，Godot 端暂不复刻；**不得改动其接口语义**，以免 Godot 端后续对齐时错位。
+
+**9. 变更摘要**：每次大改后，在 issue / commit 里附一段变更摘要——改了哪些 `constants.js` 键、新增 / 删除了哪些规则函数、数值增减。这是 Godot 端 `git pull` 后 re-audit 的输入。
+
+**10. 对照映射表**（AI 改代码时对照此表，确保 Godot 端能找到对应实现）：
+
+| 本仓库 `src/` 模块 / 符号 | Godot 端目标 |
+|---|---|
+| `src/data/constants.js` | `Tuning.gd`（全静态可调数值） |
+| `src/data/characters.js` / `enemies.js` | `Characters.gd`（角色 / 敌人数据表） |
+| `src/rules/rng.js`（`seedRng` / `rng` / `randInt` / `RUN_SEED`） | `Rng.gd`（mulberry32 单例） |
+| `src/rules/dnd.js`（`abilityMod` / `computeAC` / `attackRoll` / `recomputePlayerDerivedStats`） | `Battle.gd`（DnD 派生与检定） |
+| `src/rules/state.js` / `actions.js`（`playerChargeBudget` / 有效 AC / 动作预算） | `Battle.gd`（动作预算 / 闪避 / 技能节点） |
+| `src/rules/buffs.js`（`damagePlayer` 统一受伤入口） | `Battle._damage_player`（统一伤害入口） |
+| `src/rules/path.js`（路径判定 / 冲锋 / 步数统计） | `Battle.gd`（路径与技能节点） |
+| `src/net/pvp-core.js` | Godot 端暂不复刻（DEFERRED_IN_GODOT） |
+
+> 维护提醒：本契约随 Godot 端架构演进而更新；若 Godot 端增删文件，请同步刷新上表。
 
 ---
 
