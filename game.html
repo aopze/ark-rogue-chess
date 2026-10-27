@@ -101,9 +101,11 @@
   #heroRight { display:flex; flex-direction:column; justify-content:space-between; gap:5px; min-width:0; }
   #heroInfo { min-width:0; display:flex; flex-direction:column; gap:4px; }
   #heroKv { min-width:0; }
-  .hero-top { display:flex; align-items:baseline; justify-content:space-between; gap:6px; flex-wrap:wrap; }
+  .hero-top { display:flex; align-items:baseline; gap:5px; flex-wrap:wrap; }
   .hero-name { font-size:14px; font-weight:900; color:#4ecdc4; letter-spacing:1px; white-space:nowrap; }
-  .hero-lv { font-size:11px; font-weight:800; color:#8a8aa5; white-space:nowrap; }
+  /* 等级：紧贴名字右侧（金色），用于替代原先画在六维图中心的 Lv */
+  .hero-lv-gold { font-size:12px; font-weight:900; color:#ffd700; letter-spacing:.5px; white-space:nowrap; text-shadow:0 0 6px rgba(255,215,0,.25); }
+  .hero-lv { font-size:11px; font-weight:800; color:#8a8aa5; white-space:nowrap; margin-left:auto; }
   .hp-track { position:relative; height:13px; border-radius:7px; background:#101019; box-shadow:inset 0 0 0 1px #34344f; overflow:hidden; }
   .hp-fill-lg { display:block; height:100%; border-radius:7px; background:linear-gradient(90deg,#2ecc71,#4ecdc4); transition:width .25s ease; }
   .hp-track.warn .hp-fill-lg { background:linear-gradient(90deg,#e67e22,#f1c40f); }
@@ -180,26 +182,31 @@
   }
   #logPanel.folded #log { display: none; }
   #logPanel.folded #logBar { border-bottom: none; }
-  /* ---- 收起态：只剩一个约半格大小的 ⚙ 按钮（点击展开设置面板） ---- */
+  /* ---- 收起态：只剩一个约半格大小的 ⚙ 按钮（点击展开 / 再点收起，位置不变） ---- */
   #setOpenBtn {
-    display: none; width: var(--set-mini); height: var(--set-mini);
+    position: absolute; left: 1px; top: 1px; z-index: 3;
+    display: flex; width: var(--set-mini); height: var(--set-mini);
     align-items: center; justify-content: center; padding: 0;
-    background: rgba(20,20,36,.94); color: #cfe6ff;
+    background: rgba(24,24,42,.96); color: #cfe6ff;
     border: 1px solid #3a3a55; border-radius: 9px;
     font-size: calc(var(--set-mini) * 0.5); line-height: 1;
     cursor: pointer; touch-action: manipulation;
     box-shadow: 0 2px 8px rgba(0,0,0,.45);
+    transition: color .15s, border-color .15s, background .15s;
   }
   #setOpenBtn:active { transform: scale(.94); }
+  #setOpenBtn.on { color: #ffd700; border-color: #6b5a1f; }
   #logPanel.collapsed {
-    width: auto; max-width: none; background: transparent;
+    width: calc(var(--set-mini) + 2px); height: calc(var(--set-mini) + 2px);
+    max-width: none; background: transparent;
     border-color: transparent; box-shadow: none; overflow: visible;
     border-radius: 9px;
   }
   #logPanel.collapsed #logBar,
   #logPanel.collapsed #setBtns,
   #logPanel.collapsed #log { display: none; }
-  #logPanel.collapsed #setOpenBtn { display: flex; }
+  /* 展开时标题栏给按钮让位，按钮位置与收起态完全一致 */
+  #logPanel:not(.collapsed) #logBar { padding-left: calc(var(--set-mini) + 8px); }
   /* ---- 布局模式：layout-h 地图左/UI右（桌面默认）；layout-v 地图上/UI下（竖版） ---- */
   body.layout-v #game { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
   body.layout-v #boardWrap { width: 100%; flex: 0 0 auto; height: min(62vh, 100%); min-height: 96px; }
@@ -332,6 +339,7 @@
     #heroKv .kv b { font-size: 9px; }
     #heroKv .kv span { font-size: 13px; }
     .hero-name { font-size: 12px; letter-spacing: 0; }
+    .hero-lv-gold { font-size: 11px; }
     .hero-lv { font-size: 10px; }
     .hp-track { height: 12px; border-radius: 6px; }
     .hp-text { font-size: 9px; line-height:12px; }
@@ -1217,34 +1225,37 @@ function drawRadar() {
     ctx.fillStyle = col;
     ctx.fillText(ABILITY_FULL[k], lx, ly);
     radarLabelHits.push({ k, x: lx, y: ly, r: labelFont });
-    // 可加点且未达上限：在属性名下方画一条金色下划线，明确「点我加点」
+    // 可加点且未达上限：在属性名外画一圈金色方框，明确「点我加点」
     if (canAlloc && abilities && abilities[k] < ABILITY_CAP) {
       const tw = ctx.measureText(ABILITY_FULL[k]).width;
-      let ux0, ux1;
-      if (ca > 0.2) { ux0 = lx; ux1 = lx + tw; }
-      else if (ca < -0.2) { ux0 = lx - tw; ux1 = lx; }
-      else { ux0 = lx - tw / 2; ux1 = lx + tw / 2; }
-      ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.4;
-      ctx.beginPath(); ctx.moveTo(ux0, ly + labelFont * 0.62); ctx.lineTo(ux1, ly + labelFont * 0.62); ctx.stroke();
+      const padX = Math.max(3, labelFont * 0.34);
+      const padY = Math.max(2, labelFont * 0.22);
+      const bw = tw + padX * 2;
+      const bh = labelFont + padY * 2;
+      let bx = (ca > 0.2) ? (lx - padX)
+             : (ca < -0.2) ? (lx - tw - padX)
+             : (lx - tw / 2 - padX);
+      bx = Math.max(1, Math.min(cssW - 1 - bw, bx));      // 贴边时收进画布，避免被裁
+      let by = ly - bh / 2;
+      by = Math.max(1, Math.min(cssH - 1 - bh, by));
+      const rr = Math.min(4, bh / 2);
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(bx + rr, by);
+      ctx.lineTo(bx + bw - rr, by);
+      ctx.quadraticCurveTo(bx + bw, by, bx + bw, by + rr);
+      ctx.lineTo(bx + bw, by + bh - rr);
+      ctx.quadraticCurveTo(bx + bw, by + bh, bx + bw - rr, by + bh);
+      ctx.lineTo(bx + rr, by + bh);
+      ctx.quadraticCurveTo(bx, by + bh, bx, by + bh - rr);
+      ctx.lineTo(bx, by + rr);
+      ctx.quadraticCurveTo(bx, by, bx + rr, by);
+      ctx.stroke();
     }
   }
 
-  // 中心原点显示等级（选角色阶段不画）；整体偏金色黄，画布绘制不会裁切
-  // 「Lv 1」同一行显示，字号略小于角色卡内「步数」数值（桌面 15px → 此处约 13px）
-  if (phase !== PHASE.CHAR_SELECT) {
-    ctx.textBaseline = 'middle';
-    const lf = Math.max(11, Math.min(13, Math.round(R * 0.18)));
-    ctx.font = `bold ${lf}px system-ui, sans-serif`;
-    const lvStr = 'Lv ';
-    const numStr = String(heroLevel || 1);
-    const total = ctx.measureText(lvStr).width + ctx.measureText(numStr).width;
-    const startX = cx - total / 2;
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#f5c542';
-    ctx.fillText(lvStr, startX, cy);
-    ctx.fillStyle = '#ffd700';
-    ctx.fillText(numStr, startX + ctx.measureText(lvStr).width, cy);
-  }
+  // 等级已移到角色卡「名字右侧」显示（金色 Lv.N），六维图中心不再绘制，保持留白。
 }
 
 /* =========================================================
@@ -2841,9 +2852,12 @@ function renderHero(opt) {
     const maxed = sp >= opt.sp.max;
     spBar = `<div class="sp-track ${maxed ? 'max' : ''}"><div class="sp-fill" style="width:${(sp / opt.sp.max) * 100}%"></div><span class="sp-text"><i class="bar-lbl">SP</i>${sp}/${opt.sp.max}</span></div>`;
   }
+  const lvBadge = (phase === PHASE.CHAR_SELECT)
+    ? ''
+    : `<span class="hero-lv-gold" title="等级">Lv.${heroLevel || 1}</span>`;
   heroInfoEl.innerHTML = `
     <div class="hero-top">
-      <span class="hero-name">${opt.name}</span>
+      <span class="hero-name">${opt.name}</span>${lvBadge}
       <span class="hero-lv">${opt.tag || ''}</span>
     </div>
     ${hpBar}
@@ -4756,6 +4770,12 @@ function clampLogPanelPos() {
 }
 function setSettingsOpen(open) {
   logPanelEl.classList.toggle('collapsed', !open);
+  if (setOpenBtn) {
+    setOpenBtn.classList.toggle('on', open);
+    setOpenBtn.textContent = open ? '✕' : '⚙';
+    setOpenBtn.title = open ? '收起设置面板' : '设置（点击展开）';
+    setOpenBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
   if (open) {
     logPanelEl.classList.remove('folded');
     requestAnimationFrame(clampLogPanelPos);
@@ -4765,7 +4785,8 @@ function setSettingsOpen(open) {
 }
 if (setOpenBtn) setOpenBtn.addEventListener('click', (e) => {
   e.stopPropagation();
-  setSettingsOpen(true);
+  // 同一个按钮切换：展开 ↔ 收起
+  setSettingsOpen(logPanelEl.classList.contains('collapsed'));
 });
 logFoldBtn.addEventListener('click', (e) => {
   e.stopPropagation();
