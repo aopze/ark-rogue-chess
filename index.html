@@ -266,6 +266,41 @@ function loadConfig(cb){
     .catch(function(){ if(cb) cb(); });
 }
 
+// ===== 实时榜单（直连 bot 的 /api/leaderboard，绕开 Pages 的 CDN 缓存）=====
+// 为什么需要：GitHub Pages 的 leaderboard.json 有 10 分钟 CDN 缓存 + bot 侧提交节流，
+// 刚打完的成绩在那边要等一会儿才出现。bot 的 API 读的是本地权威数据，永远是最新的。
+function apiBase(){
+  var u = APP.reportUrl || '';
+  return u.replace(/\/api\/score\/?$/i, '');
+}
+function applyBoard(d){
+  if(!d || !d.entries) return false;
+  APP.data = {
+    updated_at: d.updated_at || Math.floor(Date.now()/1000),
+    entries: d.entries,
+    bot_username: d.bot_username || APP.botUser || BOT_USER_FALLBACK,
+    report_url: d.report_url || APP.reportUrl
+  };
+  if(d.report_url) APP.reportUrl = d.report_url;
+  if(d.bot_username) APP.botUser = d.bot_username;
+  return true;
+}
+function paintBoard(){
+  renderMiniBoard(); renderPlayer();
+  pushSnapshot(); pushApiBase();
+}
+function refreshBoard(){
+  var b = apiBase();
+  if(!b){ loadConfig(paintBoard); return; }
+  fetch(b + '/api/leaderboard?t=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      if(applyBoard(d)) paintBoard();
+      else loadConfig(paintBoard);           // 隧道挂了就退回 Pages
+    })
+    .catch(function(){ loadConfig(paintBoard); });
+}
+
 // ===== 我的身份（用于高亮/匹配）=====
 function resolveMyId(){
   if(HAS_INIT && W.initDataUnsafe && W.initDataUnsafe.user){
@@ -366,8 +401,11 @@ function reportScore(level, kills){
       body: JSON.stringify({kind:'score', level:level, kills:kills, name:APP.myName||'', initData: W.initData})
     }).then(function(r){ return r.json(); }).then(function(j){
       if(j && j.ok){
-        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n回主页可看排行榜', 5000);
-        setTimeout(function(){ loadConfig(function(){ renderMiniBoard(); renderPlayer(); }); }, 1500);
+        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
+        // 服务端在响应里直接带了最新榜单 → 立即重绘，不用等 Pages
+        if(j.leaderboard && applyBoard(j.leaderboard)) paintBoard();
+        else refreshBoard();
+        setTimeout(refreshBoard, 3000);      // 兜底再拉一次
       } else { deepLinkScore(level, kills); }
     }).catch(function(){ deepLinkScore(level, kills); });
     return;
@@ -401,7 +439,13 @@ function deepLinkScore(level, kills){
 // ===== 排行榜浮层 =====
 function openRank(){
   var p = $('rankPanel'); if(!p) return;
-  p.classList.add('open'); pushMyScore();
+  p.classList.add('open');
+  // 每次打开都强制重载 iframe（带时间戳），避免看到上一次缓存的旧榜
+  var f = $('rankFrame');
+  if(f) f.src = 'leaderboard.html?t=' + Date.now();
+  pushMyScore();
+  pushSnapshot();
+  pushApiBase();
 }
 function closeRank(){ var p=$('rankPanel'); if(p) p.classList.remove('open'); }
 function pushMyScore(){
@@ -412,6 +456,15 @@ function pushMyScore(){
 }
 function pushMyId(){
   try { var f=$('rankFrame'); if(f && f.contentWindow && APP.myId) f.contentWindow.postMessage({type:'my_id', id:APP.myId}, '*'); } catch(e){}
+}
+// 把外壳手里这份（最新的）榜单直接推给浮层，浮层拿到就渲染，不再等它自己 fetch
+function pushSnapshot(){
+  if(!APP.data || !APP.data.entries) return;
+  try { var f=$('rankFrame'); if(f && f.contentWindow) f.contentWindow.postMessage({type:'board', data:APP.data}, '*'); } catch(e){}
+}
+function pushApiBase(){
+  var b = apiBase(); if(!b) return;
+  try { var f=$('rankFrame'); if(f && f.contentWindow) f.contentWindow.postMessage({type:'api_base', base:b}, '*'); } catch(e){}
 }
 
 // ===== 游戏 iframe 加载 + 注入钩子 =====
@@ -441,8 +494,8 @@ function goHome(){
   $('home').hidden = false;
   // 停掉游戏，避免后台继续跑
   var g = $('game'); g.src = '';
-  // 刷新榜单 + 玩家信息
-  loadConfig(function(){ renderMiniBoard(); renderPlayer(); });
+  // 刷新榜单 + 玩家信息（优先走 API，实时）
+  refreshBoard();
   // 顺手把 id 同步给排行榜浮层
   pushMyId();
 }
@@ -459,7 +512,10 @@ function init(){
   }
   $('capNote').textContent = '提示：在 Telegram 里玩才能上榜；用 /play 的键盘按钮或 bot 主页菜单按钮进入均可记成绩。';
 
-  loadConfig(function(){ renderMiniBoard(); renderPlayer(); pushMyId(); });
+  loadConfig(function(){
+    renderMiniBoard(); renderPlayer(); pushMyId();
+    refreshBoard();      // 先拿到 reportUrl，再拉一次实时榜（首屏不等 CDN）
+  });
 
   $('btnStart').addEventListener('click', startGame);
   $('btnHome').addEventListener('click', goHome);
@@ -467,7 +523,7 @@ function init(){
   $('pSave').addEventListener('click', syncName);
   $('pName').addEventListener('keydown', function(e){ if(e.key==='Enter'){ syncName(); } });
   $('rankClose').addEventListener('click', closeRank);
-  $('rankFrame').addEventListener('load', function(){ pushMyScore(); pushMyId(); });
+  $('rankFrame').addEventListener('load', function(){ pushMyScore(); pushMyId(); pushSnapshot(); pushApiBase(); });
 
   // 接收游戏 iframe 的成绩
   window.addEventListener('message', function(e){
