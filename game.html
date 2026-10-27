@@ -536,6 +536,12 @@ const ENEMY_STATS = {
 };
 
 let phase = PHASE.CHAR_SELECT;
+/* 联机模式开关：'solo' 单人 / 'pvp' 对战。
+ * 必须在这里声明（而不是写在文件末尾的联机区块里）：
+ * renderUnits / confirmAction 定义在前，而 setLayout 在顶层就会被调用，
+ * 那时若 mode 还处于 TDZ，会直接抛 ReferenceError。 */
+let mode = 'solo';
+let peer = null;              // 联机时的对手显示单位
 let charCandidates = [];
 let selectedCandidate = null;
 let isMoving = false;
@@ -608,7 +614,7 @@ const BUFF_BY_ID = Object.fromEntries(BUFF_POOL.map(b => [b.id, b]));
 /* 香草沙士：每次获得技力时 30% 额外 +1（返回额外点数） */
 const SASS_CHANCE = 0.3;
 function sassExtraSp() {
-  return (buffs.sass > 0 && Math.random() < SASS_CHANCE) ? 1 : 0;
+  return (buffs.sass > 0 && rng() < SASS_CHANCE) ? 1 : 0;
 }
 function buffMeleeBonus() { return buffs.blade; }
 function buffHpBonus() { return buffs.kettle * 2; }
@@ -696,7 +702,217 @@ radarCanvas.addEventListener('mousemove', (e) => {
 
 const unitEls = new Map();
 
-function randInt(n) { return Math.floor(Math.random() * n); }
+/* =========================================================
+ * ★ 可播种伪随机（mulberry32）
+ * 原来直接用 Math.random，导致同一份输入无法复现同一局：
+ * 联机时两端各掷各的骰子，结果必然对不上。
+ * 现在所有随机都走 rng()，单人用时间播种（行为与旧版一致），
+ * 联机时由服务器下发种子，两端 seedRng(同一颗) 即可完全一致。
+ * ========================================================= */
+let RNG_SEED = 1;
+function seedRng(s) {
+  RNG_SEED = (s >>> 0) || 0x9E3779B9;
+  if (RNG_SEED === 0) RNG_SEED = 0x9E3779B9;
+}
+function rng() {
+  RNG_SEED = (RNG_SEED + 0x6D2B79F5) | 0;
+  let t = RNG_SEED;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+seedRng(Date.now());   // 单人默认：时间播种
+
+function randInt(n) { return Math.floor(rng() * n); }
+
+/* ==== PVP-CORE BEGIN ====
+ * 联机对战的结算核心：纯函数，不碰 DOM、不读全局变量、不用全局 rng()。
+ *
+ * 为什么必须是纯函数：两个客户端要用「同一份代码 + 同一颗种子 + 同一份计划」
+ * 算出「同一串事件」，否则画面会各说各话。任何对全局状态的依赖都会破坏这个等式。
+ *
+ * 约定：
+ *   - slot 0 = 房主，slot 1 = 挑战者，与「谁是本机」无关（对称，不按自己优先排序）。
+ *   - 计划格式 { path: [[x,y],...], attackIndices: [k,...] }，path[0] 是起点格。
+ *   - 返回 { units, events, winner }，winner 为 -1 / 0 / 1。
+ *   - 单测脚本按 PVP-CORE 标记切片 eval，勿在此区间引用外部标识符。
+ * ==== PVP-CORE BEGIN ==== */
+//#PVP_CORE_START
+function pvpRng(seed) {
+  let a = (seed >>> 0) || 0x9E3779B9;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pvpMod(score) { return Math.floor((score - 10) / 2); }
+
+function pvpMakeUnit(chars, charId, slot, x, y) {
+  const a = { ...chars[charId].abilities };
+  return {
+    slot: slot, charId: charId, x: x, y: y,
+    abilities: a,
+    maxHp: a.con, hp: a.con,
+    ac: 5 + Math.floor((a.dex + a.con) / 4),
+    meleeDmg: Math.max(1, 1 + pvpMod(a.str)),
+    rangedDmg: Math.max(1, 1 + pvpMod(a.int)),
+    ranged: chars[charId].attackType === 'ranged',
+    prof: 2,
+    alive: true,
+    dodging: false,
+    facing: { dx: slot === 0 ? 1 : -1, dy: 0 },
+  };
+}
+
+function pvpCheb(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
+function pvpSame(a, b) { return !!a && !!b && a.x === b.x && a.y === b.y; }
+function pvpRangeOf(u) { return u.ranged ? 3 : 1; }
+function pvpDmgOf(u) { return u.ranged ? u.rangedDmg : u.meleeDmg; }
+/* 相杀按「趁乱打击」算：远程角色贴身只有 1 点保底，近战用近战伤害 —— 与单人规则一致 */
+function pvpClashDmgOf(u) { return u.ranged ? 1 : u.meleeDmg; }
+
+function pvpRoll(r, mod, prof, ac) {
+  const d20 = 1 + Math.floor(r() * 20);
+  const total = d20 + mod + prof;
+  if (d20 === 20) return { d20: d20, total: total, hit: true, crit: true };
+  if (d20 === 1) return { d20: d20, total: total, hit: false, crit: false };
+  return { d20: d20, total: total, hit: total >= ac, crit: false };
+}
+
+function pvpResolveTurn(chars, unitsIn, plans, seed) {
+  const r = pvpRng(seed);
+  const u = [JSON.parse(JSON.stringify(unitsIn[0])), JSON.parse(JSON.stringify(unitsIn[1]))];
+  const plansSafe = [plans[0] || {}, plans[1] || {}];
+  const path = [plansSafe[0].path || [], plansSafe[1].path || []];
+  const nodes = [plansSafe[0].attackIndices || [], plansSafe[1].attackIndices || []];
+  const idx = [1, 1];
+  const stopped = [false, false];
+  const events = [];
+  let winner = -1;
+
+  function hurt(s, dmg) {
+    const t = u[s];
+    t.hp -= dmg;
+    if (t.hp <= 0) { t.hp = 0; t.alive = false; if (winner < 0) winner = 1 - s; }
+  }
+
+  function tryAttack(s) {
+    const me = u[s], foe = u[1 - s];
+    if (!me.alive || !foe.alive) return;
+    const ac = foe.ac + (foe.dodging ? 3 : 0);
+    if (pvpCheb(me, foe) > pvpRangeOf(me)) {
+      events.push({ t: 'whiff', slot: s, ac: ac });
+      return;
+    }
+    const mod = pvpMod(me.abilities[me.ranged ? 'int' : 'str']);
+    const res = pvpRoll(r, mod, me.prof, ac);
+    if (!res.hit) {
+      events.push({ t: 'miss', slot: s, d20: res.d20, total: res.total, ac: ac });
+      return;
+    }
+    let dmg = pvpDmgOf(me);
+    if (res.crit) dmg *= 2;
+    hurt(1 - s, dmg);
+    events.push({ t: 'hit', slot: s, d20: res.d20, total: res.total, ac: ac,
+                  crit: res.crit, dmg: dmg, hp: u[1 - s].hp });
+    if (!u[1 - s].alive) events.push({ t: 'death', slot: 1 - s });
+  }
+
+  function clash(cell) {
+    const d0 = u[1].alive ? pvpClashDmgOf(u[1]) * 2 : 0;
+    const d1 = u[0].alive ? pvpClashDmgOf(u[0]) * 2 : 0;
+    if (u[0].alive) hurt(0, d0);
+    if (u[1].alive) hurt(1, d1);
+    events.push({ t: 'clash', cell: { x: cell.x, y: cell.y },
+                  dmg: [d0, d1], hp: [u[0].hp, u[1].hp] });
+    if (!u[0].alive) events.push({ t: 'death', slot: 0 });
+    if (!u[1].alive) events.push({ t: 'death', slot: 1 });
+    /* 相杀是同归于尽：两人都倒 = 平局，不能因为「谁先被扣血」就判另一方赢 */
+    if (!u[0].alive && !u[1].alive) winner = -2;
+    stopped[0] = true; stopped[1] = true;
+  }
+
+  // 行动节点 0：原地攻击（对应单人的 pendingAttack）
+  for (let s = 0; s < 2; s++) {
+    if (nodes[s].indexOf(0) >= 0) tryAttack(s);
+  }
+
+  let guard = 0;
+  while (!(stopped[0] && stopped[1]) && guard++ < 80) {
+    const dest = [null, null], wait = [false, false], want = [false, false];
+
+    for (let s = 0; s < 2; s++) {
+      if (stopped[s] || !u[s].alive || idx[s] >= path[s].length) { stopped[s] = true; continue; }
+      const p = path[s][idx[s]];
+      // 非法步（越格传送 / 缺字段）直接终止该方移动，避免两端因坏计划分叉
+      if (!p || typeof p.x !== 'number' || typeof p.y !== 'number' || pvpCheb(u[s], p) > 1) {
+        stopped[s] = true;
+        events.push({ t: 'invalid', slot: s });
+        continue;
+      }
+      dest[s] = p;
+      if (pvpSame(p, u[s])) { wait[s] = true; }
+      else { want[s] = true; }
+    }
+
+    if (stopped[0] && stopped[1]) break;
+
+    // 等待步 = 闪避（每回合一次，AC +3）
+    for (let s = 0; s < 2; s++) {
+      if (wait[s]) {
+        idx[s]++;
+        if (u[s].alive && !u[s].dodging) {
+          u[s].dodging = true;
+          events.push({ t: 'dodge', slot: s, ac: u[s].ac + 3 });
+        }
+      }
+    }
+
+    const m0 = want[0] && !stopped[0];
+    const m1 = want[1] && !stopped[1];
+
+    if (m0 && m1 && pvpSame(dest[0], dest[1])) {
+      clash(dest[0]);
+      break;
+    }
+    if (m0 && m1 && pvpSame(dest[0], u[1]) && pvpSame(dest[1], u[0])) {
+      clash(dest[0]);
+      break;
+    }
+
+    // 同时推进：目的地被「本 tick 结束后仍占着的人」挡住则停下
+    const otherEnd = [m0 ? dest[0] : u[0], m1 ? dest[1] : u[1]];
+    const arrivals = [];
+    for (let s = 0; s < 2; s++) {
+      if (!(s === 0 ? m0 : m1)) { continue; }
+      if (pvpSame(dest[s], otherEnd[1 - s])) {
+        stopped[s] = true;
+        events.push({ t: 'blocked', slot: s, at: { x: u[s].x, y: u[s].y } });
+        continue;
+      }
+      const from = { x: u[s].x, y: u[s].y };
+      u[s].x = dest[s].x; u[s].y = dest[s].y;
+      const dx = Math.sign(u[s].x - from.x), dy = Math.sign(u[s].y - from.y);
+      if (dx || dy) u[s].facing = { dx: dx, dy: dy };
+      const arrival = idx[s];
+      idx[s]++;
+      events.push({ t: 'move', slot: s, from: from, to: { x: u[s].x, y: u[s].y } });
+      arrivals.push({ slot: s, arrival: arrival });
+    }
+
+    for (const a of arrivals) {
+      if (nodes[a.slot].indexOf(a.arrival) >= 0) tryAttack(a.slot);
+    }
+
+    if (!u[0].alive || !u[1].alive) { stopped[0] = true; stopped[1] = true; }
+  }
+
+  return { units: u, events: events, winner: winner };
+}
+//#PVP_CORE_END
 function dist(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
 function cheb(a, b) { return Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)); }
 function key(x, y) { return x + ',' + y; }
@@ -1249,6 +1465,16 @@ function renderUnits() {
       stunTurns: e.stunTurns || 0,
     });
   }
+  /* 联机对战：对手是玩家控制的单位，不是敌人，单独一个渲染条目 */
+  if (mode === 'pvp' && peer && peer.alive) {
+    toRender.push({
+      key: 'peer', x: peer.x, y: peer.y,
+      icon: (CHARACTERS[peer.charId] && CHARACTERS[peer.charId].icon) || '❓',
+      hp: peer.hp, maxHp: peer.maxHp,
+      isPlayer: false, isPeer: true, isGhost: false,
+      facing: peer.facing, stunTurns: 0,
+    });
+  }
   for (const u of toRender) {
     if (unitEls.has(u.key)) continue;
     const el = document.createElement('div');
@@ -1300,7 +1526,7 @@ function renderUnits() {
     rec.icon.classList.toggle('ghost-icon', !!u.isGhost);
     const pct = u.maxHp > 0 ? Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100)) : 0;
     rec.hpFill.style.width = pct + '%';
-    rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : '#e74c3c';
+    rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : (u.isPeer ? '#e8a33d' : '#e74c3c');
     if (u.facing) {
       const v = FACING_GLYPH[u.facing.dx + ',' + u.facing.dy];
       if (v) {
@@ -1316,6 +1542,9 @@ function renderUnits() {
       rec.el.classList.remove('ua-enemy', 'ua-debug', 'ua-stunned');
       rec.el.classList.toggle('ua-charging', playerCharging);
       rec.el.classList.toggle('ua-attacked', playerAttacked && !playerCharging);
+    } else if (u.isPeer) {
+      rec.el.classList.add('ua-peer');
+      rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-charging', 'ua-attacked', 'ua-debug', 'ua-stunned');
     } else {
       rec.el.classList.add('ua-enemy');
       rec.el.classList.remove('ua-player', 'ua-charging', 'ua-attacked');
@@ -1819,7 +2048,7 @@ function meleeCritTag(target, atk, facingMode = 'target') {
   const facing = facingMode === 'cone' ? isInFacingCone(player, target) : isFacingTarget(player, target);
   if (facing) return '朝向暴击';
   const chance = selectedChar === 'fencer' ? player.critChance + 0.42 : player.critChance;
-  return Math.random() < chance ? '暴击' : '';
+  return rng() < chance ? '暴击' : '';
 }
 
 /* 玩家当前是否处于「免疫本次伤害」的状态（风笛冲锋 / 泥岩满技力反击）。 */
@@ -2149,7 +2378,7 @@ function generateMap(numEnemies, targetWalkable) {
     const cells = [...reach].map(k => { const [x, y] = k.split(',').map(Number); return { x, y }; });
     const far = cells.filter(c => dist(c, playerStart) >= 6 && m[c.y][c.x] === 0);
     if (far.length < numEnemies) continue;
-    const shuffled = far.sort(() => Math.random() - 0.5);
+    const shuffled = far.sort(() => rng() - 0.5);
     const enemyStarts = [];
     for (const c of shuffled) {
       if (enemyStarts.every(s => dist(s, c) >= 2)) {
@@ -2174,7 +2403,7 @@ function generateMap(numEnemies, targetWalkable) {
       }
       /* 基础恢复道具：第 3 关起 70% 概率出现 1 个；
          「急救药箱」每层再额外保证 1 个（必定出现） */
-      const baseCount = (level >= 3 && Math.random() < 0.7) ? 1 : 0;
+      const baseCount = (level >= 3 && rng() < 0.7) ? 1 : 0;
       const want = Math.min(baseCount + Math.max(0, buffs.kit), validSpots.length);
       const pool = validSpots.slice();
       for (let i = 0; i < want; i++) {
@@ -3207,6 +3436,8 @@ function prepareWheelchairCharge() {
 }
 
 function confirmAction() {
+  /* 联机模式：不本地结算，先把这一回合的计划交给房间服务，等两边齐了再一起算 */
+  if (mode === 'pvp') { pvpSubmitPlan(); return; }
   phase = PHASE.RESOLVING;
   resetTurnState();
   clearEnemyArrows();
@@ -3646,7 +3877,7 @@ async function resolvePlayerAttack() {
   const intMod = abilityMod(player.abilities.int);
   /* 不稳定血浆：本关内远程攻击必定命中 + 必定暴击 */
   const vampPlasma = selectedChar === 'vampire' && vampireSkillActive;
-  const actionCrit = vampPlasma || Math.random() < player.critChance;
+  const actionCrit = vampPlasma || rng() < player.critChance;
   if (vampPlasma) log('「不稳定血浆」：本次攻击必定命中、必定暴击、必定留血迹！');
   else if (actionCrit) log('本次攻击行动触发暴击，所有目标共享！');
 
@@ -3667,7 +3898,7 @@ async function resolvePlayerAttack() {
       /* 只要出手（即使 MISS）就能看到目标意图 */
       if (selectedChar === 'amiya') amiyaMarkReveal(target);
       /* 华法琳：血迹只由远程攻击产生 —— 不稳定血浆生效时必定留，平时命中后 50% */
-      if (selectedChar === 'vampire' && hit && (vampPlasma || Math.random() < 0.5)) {
+      if (selectedChar === 'vampire' && hit && (vampPlasma || rng() < 0.5)) {
         addBloodAt(target.x, target.y);
       }
       if (hit) {
@@ -4520,7 +4751,473 @@ logRotateBtn.addEventListener('click', (e) => {
   else setLayout(window.innerWidth <= 760 ? 'v' : 'h', false);
 })();
 
+/* =========================================================
+ * ★ 联机对战（PvP）
+ *
+ * 单人流程完全不受影响：mode 默认为 'solo'，只有从这里进来才切到 'pvp'。
+ *
+ * 同步模型：
+ *   双方各自规划 → 都把计划交给房间服务 → 服务端凑齐后广播两份计划 + 一颗种子
+ *   → 两端各自跑 pvpResolveTurn（纯函数）→ 得到同一串事件 → 各自播动画
+ *   → 都播完报 ready → 服务端推进回合。
+ *
+ * 因为结算是纯函数且种子一致，两端画面必然一致，不需要任何「谁是权威」的仲裁。
+ * 代价是服务端无法校验计划合法性（规则只存在于客户端），只适合熟人局。
+ *
+ * PvP v1 支持：移动 / 普通攻击 / 闪避（等待节点）。
+ * 技能节点（冲锋 / 反击 / 爆发 / 血浆）未接入，规划时会被忽略并提示。
+ * ========================================================= */
+let pvpUnits = null;          // [slot0, slot1] 结算权威状态
+let pvpSlot = 0;              // 我是哪个座位
+let pvpTurn = 0;
+let pvpChars = ['', ''];
+let pvpNames = ['', ''];
+let pvpWaiting = false;       // 已交计划，等对手
+let pvpOver = false;
+let pvpPick = 'vampire';      // 面板里选的角色
+const PVP_SPAWNS = [{ x: 2, y: 4 }, { x: 6, y: 4 }];   // 9x9 竞技场，左右对称
+
+/* ---------------- 传输层（与 net/net.js 同协议，内联以维持单文件） ------------- */
+const PVP_NET = (function () {
+  let base = '', room = null, token = null, slot = 0, seq = 0, alive = false, ctrl = null;
+  const hs = {};
+  function on(k, fn) { (hs[k] = hs[k] || []).push(fn); }
+  function fire(k, d) {
+    (hs[k] || []).forEach(function (f) { try { f(d); } catch (e) { console.error('[PVP]', e); } });
+  }
+  function req(path, body) {
+    const opt = { method: body ? 'POST' : 'GET', cache: 'no-store' };
+    if (body) { opt.headers = { 'Content-Type': 'application/json' }; opt.body = JSON.stringify(body); }
+    return fetch(base + path, opt).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+        return j;
+      });
+    });
+  }
+  function absorb(list) {
+    for (let i = 0; i < list.length; i++) {
+      const ev = list[i];
+      if (ev.seq > seq) seq = ev.seq;
+      if (ev.type === 'turn') pvpTurn = ev.turn + 1;
+      if (ev.type === 'next') pvpTurn = ev.turn;
+      fire(ev.type, ev); fire('*', ev);
+    }
+  }
+  function loop() {
+    if (!alive) return;
+    ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const opt = { cache: 'no-store' };
+    if (ctrl) opt.signal = ctrl.signal;
+    fetch(base + '/api/poll?room=' + encodeURIComponent(room) +
+          '&token=' + encodeURIComponent(token) + '&since=' + seq + '&wait=25', opt)
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.events && j.events.length) absorb(j.events);
+        if (typeof j.turn === 'number' && j.turn > pvpTurn) pvpTurn = j.turn;
+        loop();
+      })
+      .catch(function (e) {
+        if (!alive) return;
+        if (e && (e.status === 403 || e.status === 404)) { alive = false; fire('closed', { reason: e.message }); return; }
+        setTimeout(loop, 1000);
+      });
+  }
+  function start() { if (alive) return; alive = true; loop(); }
+  return {
+    on: on,
+    setBase: function (b) {
+      base = String(b || '').replace(/\/+$/, '');
+      if (location.protocol === 'https:' && /^http:\/\//i.test(base)) {
+        throw new Error('页面是 https，服务地址却是 http://，浏览器会拦截。请改用 https 隧道地址。');
+      }
+    },
+    room: function () { return room; },
+    slot: function () { return slot; },
+    create: function (name, charId) {
+      return req('/api/create', { name: name, charId: charId }).then(function (j) {
+        room = j.room; token = j.token; slot = j.slot; seq = 0; start(); return j;
+      });
+    },
+    join: function (r, name, charId) {
+      return req('/api/join', { room: r, name: name, charId: charId }).then(function (j) {
+        room = String(r).toUpperCase(); token = j.token; slot = j.slot; seq = 0; start(); return j;
+      });
+    },
+    plan: function (t, plan) { return req('/api/plan', { room: room, token: token, turn: t, plan: plan }); },
+    ready: function (t) { return req('/api/ready', { room: room, token: token, turn: t }); }
+  };
+})();
+
+function pvpNameOf(slot) {
+  if (slot === pvpSlot) return '你';
+  return pvpNames[1 - pvpSlot] || '对手';
+}
+
+/* ---------------- 战场初始化 ---------------- */
+function pvpStartMatch() {
+  mode = 'pvp';
+  pvpOver = false;
+  pvpTurn = 0;
+  pvpWaiting = false;
+  debugMode = false;
+  isMoving = false; dragging = false; dragDownCell = null; hasDragged = false;
+  level = 1; levelHpBonus = 0; heroLevel = 1; playerShield = 0;
+  buffs = freshBuffs();
+  bloodDrops = []; rewardItems = [];
+  enemies = []; enemyPaths = []; enemyArrows = [];
+  ROWS = 9; COLS = 9;
+  map = selMap.map(function (r) { return r.slice(); });
+  selectedChar = pvpChars[pvpSlot] || 'fencer';
+
+  playerStats = createPlayerStats(selectedChar);
+  recomputePlayerDerivedStats();
+  playerStats.currentHp = playerStats.maxHp;
+  player = createPlayerUnit(PVP_SPAWNS[pvpSlot]);
+
+  pvpUnits = [
+    pvpMakeUnit(CHARACTERS, pvpChars[0] || 'fencer', 0, PVP_SPAWNS[0].x, PVP_SPAWNS[0].y),
+    pvpMakeUnit(CHARACTERS, pvpChars[1] || 'fencer', 1, PVP_SPAWNS[1].x, PVP_SPAWNS[1].y)
+  ];
+  const foeUnit = pvpUnits[1 - pvpSlot];
+  peer = {
+    charId: pvpChars[1 - pvpSlot] || 'fencer',
+    x: foeUnit.x, y: foeUnit.y, hp: foeUnit.hp, maxHp: foeUnit.maxHp,
+    alive: true, facing: foeUnit.facing, stunTurns: 0
+  };
+  pvpSyncDisplay();
+  playerPath = [{ x: player.x, y: player.y }];
+  attackIndices = []; skillIndices = [];
+  resetTurnState({ clearCounter: true });
+  phase = PHASE.PLANNING;
+  battleRound = 1;
+  clearLog();
+  log('⚔️ 联机对战开始');
+  log('你：' + (CHARACTERS[selectedChar] ? CHARACTERS[selectedChar].name : selectedChar) +
+      '　对手：' + pvpNames[1 - pvpSlot] + '（' + (CHARACTERS[peer.charId] ? CHARACTERS[peer.charId].name : peer.charId) + '）');
+  log('回合 ' + (pvpTurn + 1) + '：规划你的路径与攻击节点，然后点「开始」。');
+  if (typeof updateCellSize === 'function') updateCellSize();
+  render();
+}
+
+function pvpSyncDisplay() {
+  if (!pvpUnits || !player || !peer) return;
+  const mine = pvpUnits[pvpSlot], foe = pvpUnits[1 - pvpSlot];
+  player.x = mine.x; player.y = mine.y;
+  player.hp = mine.hp; player.maxHp = mine.maxHp; player.alive = mine.alive;
+  if (mine.facing) player.facing = mine.facing;
+  playerStats.currentHp = mine.hp;
+  peer.x = foe.x; peer.y = foe.y;
+  peer.hp = foe.hp; peer.maxHp = foe.maxHp; peer.alive = foe.alive;
+  if (foe.facing) peer.facing = foe.facing;
+}
+
+/* ---------------- 回合：提交计划 ---------------- */
+function pvpSubmitPlan() {
+  if (pvpOver || pvpWaiting || phase !== PHASE.PLANNING) return;
+  if (skillIndices.length) log('⚠️ 联机模式暂不支持技能节点，本回合的技能标记已被忽略。');
+  const plan = {
+    charId: selectedChar,
+    path: playerPath.map(function (p) { return { x: p.x, y: p.y }; }),
+    attackIndices: attackIndices.slice()
+  };
+  pvpWaiting = true;
+  phase = PHASE.RESOLVING;
+  log('📤 计划已提交，等待对手…');
+  render();
+  PVP_NET.plan(pvpTurn, plan).then(function (r) {
+    if (!r.waiting) log('双方计划齐备，开始结算…');
+  }).catch(function (e) {
+    pvpWaiting = false;
+    phase = PHASE.PLANNING;
+    log('⚠️ 提交失败：' + e.message);
+    render();
+  });
+}
+
+/* ---------------- 回合：播放结算 ---------------- */
+async function pvpPlayTurn(turn, plans, seed) {
+  log('—— 第 ' + (turn + 1) + ' 回合结算（seed ' + seed + '）——');
+  let res;
+  try {
+    res = pvpResolveTurn(CHARACTERS, pvpUnits, plans, seed);
+  } catch (e) {
+    log('⚠️ 结算异常：' + e.message);
+    return;
+  }
+  /* 播放动画失败不能拖死整局：ready 必须照发，否则对手会一直卡在等待 */
+  try {
+    await pvpPlayEvents(res.events);
+  } catch (e) {
+    log('⚠️ 结算动画异常（已跳过剩余特效）：' + e.message);
+    console.error('[PVP] playEvents', e);
+  }
+  pvpUnits = res.units;
+  pvpSyncDisplay();
+  refreshUnits();
+  if (res.winner >= 0) { pvpFinish(res.winner); return; }
+  PVP_NET.ready(turn).catch(function () {});
+}
+
+async function pvpPlayEvents(events) {
+  for (let i = 0; i < events.length; i++) {
+    const ev = events[i];
+    const mine = (ev.slot === pvpSlot);
+    if (ev.t === 'move') {
+      const d = mine ? player : peer;
+      d.x = ev.to.x; d.y = ev.to.y;
+      refreshUnits();
+      await sleep(UNIT_MOVE_MS);
+    } else if (ev.t === 'dodge') {
+      const d = mine ? player : peer;
+      floatText(d.x, d.y, '闪避 +3AC', '#7dd3fc', true);
+      ringFx(d.x, d.y, '#7dd3fc');
+      log(pvpNameOf(ev.slot) + ' 驻足闪避，AC → ' + ev.ac);
+      await sleep(200);
+    } else if (ev.t === 'hit') {
+      const t = mine ? peer : player;
+      slashFx(t.x, t.y, '#ff4500');
+      hitFlashCell(t.x, t.y);
+      floatText(t.x, t.y, (ev.crit ? '暴击 -' : '-') + ev.dmg, ev.crit ? '#ffd700' : '#ff5c5c', true);
+      t.hp = ev.hp;
+      refreshUnits();
+      log(pvpNameOf(ev.slot) + ' 命中 ' + pvpNameOf(1 - ev.slot) + '，' + (ev.crit ? '暴击 ' : '') +
+          ev.dmg + ' 点（d20=' + ev.d20 + (ev.crit ? ' 自然20' : '') + ' vs AC' + ev.ac + '）');
+      await sleep(280);
+    } else if (ev.t === 'miss') {
+      const t = mine ? peer : player;
+      missFx(t.x, t.y);
+      log(pvpNameOf(ev.slot) + ' 落空（d20=' + ev.d20 + ' vs AC' + ev.ac + '）');
+      await sleep(220);
+    } else if (ev.t === 'whiff') {
+      const d = mine ? player : peer;
+      floatText(d.x, d.y, '射程外', '#888');
+      log(pvpNameOf(ev.slot) + ' 的攻击够不着对手，空挥');
+      await sleep(200);
+    } else if (ev.t === 'clash') {
+      floatText(ev.cell.x, ev.cell.y, '相杀！', '#ff4500', true);
+      ringFx(ev.cell.x, ev.cell.y, '#ff4500');
+      slashFx(ev.cell.x, ev.cell.y, '#ff4500');
+      player.hp = ev.hp[pvpSlot];
+      peer.hp = ev.hp[1 - pvpSlot];
+      refreshUnits();
+      log('相杀！双方各受暴击 ' + ev.dmg[0] + ' / ' + ev.dmg[1] + ' 点');
+      await sleep(400);
+    } else if (ev.t === 'blocked') {
+      const d = mine ? player : peer;
+      floatText(d.x, d.y, '被挡', '#bbb');
+      log(pvpNameOf(ev.slot) + ' 被挡住，停止移动');
+      await sleep(160);
+    } else if (ev.t === 'invalid') {
+      log('⚠️ ' + pvpNameOf(ev.slot) + ' 的计划含非法步，移动被中止');
+    } else if (ev.t === 'death') {
+      const d = (ev.slot === pvpSlot) ? player : peer;
+      d.alive = false;
+      refreshUnits();
+      log('💀 ' + pvpNameOf(ev.slot) + ' 倒下了');
+      await sleep(320);
+    }
+  }
+}
+
+function pvpFinish(winner) {
+  pvpOver = true;
+  pvpWaiting = false;
+  const draw = winner < 0;
+  const win = (winner === pvpSlot);
+  phase = PHASE.GAMEOVER;
+  log(draw ? '🤝 同归于尽，平局。' : (win ? '🏆 你赢了！' : '💀 你输了。'));
+  render();
+  pvpShowResult(draw ? null : win);
+}
+
+function pvpShowResult(result) {
+  const draw = (result === null);
+  const title = draw ? '🤝 平局' : (result ? '🏆 胜利' : '💀 落败');
+  const color = draw ? '#9aa0c0' : (result ? '#ffd166' : '#e74c3c');
+  const mask = document.createElement('div');
+  mask.className = 'pvp-result';
+  mask.innerHTML =
+    '<div class="pvp-result-card">' +
+      '<div class="pvp-result-title" style="color:' + color + '">' + title + '</div>' +
+      '<div class="pvp-result-sub">对手：' + (pvpNames[1 - pvpSlot] || '对手') + '</div>' +
+      '<button id="pvpBack">返回角色选择</button>' +
+    '</div>';
+  document.body.appendChild(mask);
+  mask.querySelector('#pvpBack').onclick = function () {
+    mask.remove();
+    mode = 'solo';
+    pvpUnits = null; peer = null;
+    initCharSelect();
+  };
+}
+
+/* ---------------- 事件接线 ---------------- */
+PVP_NET.on('start', function (ev) {
+  pvpNames = ev.slots || ['房主', '挑战者'];
+  pvpChars = ev.chars || ['', ''];
+  pvpSlot = PVP_NET.slot();
+  pvpClosePanel();
+  pvpStartMatch();
+});
+PVP_NET.on('turn', function (ev) {
+  if (mode !== 'pvp' || pvpOver) return;
+  const plans = [ev.plans && ev.plans['0'], ev.plans && ev.plans['1']];
+  if (!plans[0] || !plans[1]) { log('⚠️ 对手计划缺失，本回合跳过'); return; }
+  pvpPlayTurn(ev.turn, plans, ev.seed).catch(function (e) {
+    log('⚠️ 回合结算失败：' + e.message);
+    console.error('[PVP] playTurn', e);
+    PVP_NET.ready(ev.turn).catch(function () {});   // 兜底推进，避免双方互相等待
+  });
+});
+PVP_NET.on('next', function (ev) {
+  if (mode !== 'pvp' || pvpOver) return;
+  pvpTurn = ev.turn;
+  pvpWaiting = false;
+  playerPath = [{ x: player.x, y: player.y }];
+  attackIndices = []; skillIndices = [];
+  resetTurnState({ clearCounter: true });
+  phase = PHASE.PLANNING;
+  log('—— 第 ' + (ev.turn + 1) + ' 回合：请规划 ——');
+  render();
+});
+PVP_NET.on('peer_left', function (ev) {
+  if (mode !== 'pvp') return;
+  log('⚠️ 对手离开了房间');
+  pvpOver = true;
+  phase = PHASE.GAMEOVER;
+  render();
+  pvpShowResult(true);
+});
+PVP_NET.on('closed', function (ev) {
+  if (mode !== 'pvp') return;
+  log('⚠️ 与房间服务的连接断开：' + ev.reason);
+  pvpOver = true;
+  phase = PHASE.GAMEOVER;
+  render();
+});
+
+/* ---------------- UI ---------------- */
+function pvpInjectUI() {
+  const style = document.createElement('style');
+  style.textContent = [
+    '#pvpBtn{position:fixed;right:10px;bottom:64px;z-index:9000;padding:9px 14px;border-radius:22px;',
+    'font-size:14px;font-weight:600;font-family:inherit;background:rgba(45,108,223,.9);color:#fff;',
+    'border:1px solid rgba(255,255,255,.25);cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.4)}',
+    '#pvpMask{position:fixed;inset:0;z-index:10000;display:none;align-items:center;justify-content:center;',
+    'background:rgba(6,8,20,.9);padding:16px;font-family:inherit}',
+    '#pvpMask.open{display:flex}',
+    '.pvp-card{width:100%;max-width:380px;background:#1b1e3a;border:1px solid #2f3460;border-radius:14px;',
+    'padding:16px;color:#e8e8f0}',
+    '.pvp-card h3{margin:0 0 12px;font-size:16px}',
+    '.pvp-card label{display:block;font-size:12px;color:#9aa0c0;margin:10px 0 4px}',
+    '.pvp-card input{width:100%;padding:9px 10px;border-radius:8px;border:1px solid #33385f;',
+    'background:#12142a;color:#e8e8f0;font-size:14px;box-sizing:border-box}',
+    '.pvp-chars{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}',
+    '.pvp-chars button{padding:8px 0;border-radius:8px;border:1px solid #33385f;background:#20244a;',
+    'color:#cfd3e8;font-size:12px;cursor:pointer;font-family:inherit}',
+    '.pvp-chars button.on{border-color:#ffd166;background:#3a3410;color:#ffd166}',
+    '.pvp-actions{display:flex;gap:8px;margin-top:14px}',
+    '.pvp-actions button{flex:1;padding:10px;border-radius:8px;border:1px solid #3a3f6e;',
+    'background:#2a2e52;color:#e8e8f0;font-size:14px;cursor:pointer;font-family:inherit}',
+    '.pvp-actions button.primary{background:#2d6cdf;border-color:#2d6cdf;font-weight:600}',
+    '#pvpStatus{margin-top:12px;font-size:12px;color:#9aa0c0;line-height:1.6;word-break:break-all}',
+    '#pvpRoom{color:#ffd166;font-size:18px;font-weight:700;letter-spacing:3px}',
+    '.pvp-result{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;',
+    'background:rgba(6,8,20,.92);font-family:inherit}',
+    '.pvp-result-card{background:#1b1e3a;border:1px solid #2f3460;border-radius:14px;padding:26px 30px;text-align:center}',
+    '.pvp-result-title{font-size:26px;font-weight:700;margin-bottom:8px}',
+    '.pvp-result-sub{color:#9aa0c0;font-size:13px;margin-bottom:18px}',
+    '.pvp-result-card button{padding:10px 18px;border-radius:8px;border:1px solid #3a3f6e;background:#2a2e52;',
+    'color:#e8e8f0;font-size:14px;cursor:pointer;font-family:inherit}'
+  ].join('');
+
+  document.head.appendChild(style);
+  const btn = document.createElement('button');
+  btn.id = 'pvpBtn';
+  btn.textContent = '⚔️ 联机';
+  document.body.appendChild(btn);
+
+  const mask = document.createElement('div');
+  mask.id = 'pvpMask';
+  mask.innerHTML =
+    '<div class="pvp-card">' +
+      '<h3>⚔️ 联机对战</h3>' +
+      '<label>房间服务地址（https 隧道域名，末尾不要斜杠）</label>' +
+      '<input id="pvpBase" placeholder="https://xxx.trycloudflare.com">' +
+      '<label>昵称</label>' +
+      '<input id="pvpName" value="玩家">' +
+      '<label>选角色</label>' +
+      '<div class="pvp-chars" id="pvpChars"></div>' +
+      '<label>房间号（加入时填）</label>' +
+      '<input id="pvpRoomIn" placeholder="A1B2C3" style="text-transform:uppercase">' +
+      '<div class="pvp-actions">' +
+        '<button class="primary" id="pvpCreate">建房</button>' +
+        '<button id="pvpJoin">加入</button>' +
+      '</div>' +
+      '<div id="pvpStatus"></div>' +
+    '</div>';
+  document.body.appendChild(mask);
+
+  const charsBox = mask.querySelector('#pvpChars');
+  Object.keys(CHARACTERS).forEach(function (id) {
+    const b = document.createElement('button');
+    b.textContent = CHARACTERS[id].icon + ' ' + CHARACTERS[id].name;
+    b.dataset.id = id;
+    if (id === pvpPick) b.classList.add('on');
+    b.onclick = function () {
+      pvpPick = id;
+      charsBox.querySelectorAll('button').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on');
+    };
+    charsBox.appendChild(b);
+  });
+
+  try {
+    const saved = localStorage.getItem('ark_pvp_base');
+    if (saved) mask.querySelector('#pvpBase').value = saved;
+  } catch (e) {}
+
+  function status(t) { mask.querySelector('#pvpStatus').innerHTML = t; }
+  function base() {
+    const b = mask.querySelector('#pvpBase').value.trim();
+    if (!b) { status('⚠️ 先填房间服务地址'); return null; }
+    try {
+      PVP_NET.setBase(b);
+      try { localStorage.setItem('ark_pvp_base', b); } catch (e) {}
+      return b;
+    } catch (e) { status('⚠️ ' + e.message); return null; }
+  }
+
+  btn.onclick = function () { mask.classList.add('open'); };
+  mask.onclick = function (e) { if (e.target === mask) mask.classList.remove('open'); };
+
+  mask.querySelector('#pvpCreate').onclick = function () {
+    if (!base()) return;
+    status('建房中…');
+    PVP_NET.create(mask.querySelector('#pvpName').value.trim() || '房主', pvpPick)
+      .then(function (j) {
+        status('房间已创建，把房间号发给对手：<br><span id="pvpRoom">' + j.room + '</span><br>等他加入…');
+      })
+      .catch(function (e) { status('⚠️ 建房失败：' + e.message); });
+  };
+  mask.querySelector('#pvpJoin').onclick = function () {
+    if (!base()) return;
+    const r = mask.querySelector('#pvpRoomIn').value.trim().toUpperCase();
+    if (!r) { status('⚠️ 先填房间号'); return; }
+    status('加入中…');
+    PVP_NET.join(r, mask.querySelector('#pvpName').value.trim() || '挑战者', pvpPick)
+      .catch(function (e) { status('⚠️ 加入失败：' + e.message); });
+  };
+}
+
+function pvpClosePanel() {
+  const m = document.getElementById('pvpMask');
+  if (m) m.classList.remove('open');
+}
+
 initCharSelect();
+pvpInjectUI();
 </script>
 </body>
 </html>
