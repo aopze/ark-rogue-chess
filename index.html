@@ -203,8 +203,11 @@
 var W = (window.Telegram && window.Telegram.WebApp) || null;
 var HAS_SDK = !!W;
 var HAS_INIT = !!(W && W.initData);
-var CAN_REPORT = HAS_SDK && !HAS_INIT;          // 键盘按钮入口：sendData 可用
+// 注意：普通浏览器里 telegram-web-app.js 也会注入 WebApp，但 platform === 'unknown'
+// 且 sendData 是空壳。不排除这种情况会导致「提示已提交、实际没记录」。
 var IN_TG = HAS_SDK && W.platform !== 'unknown';
+var CAN_REPORT = IN_TG && !HAS_INIT;            // 键盘按钮入口：sendData 可用
+var IS_WEB = !HAS_INIT;                         // 没有 initData（含纯浏览器）→ 走设备身份
 
 // ===== 全局状态 =====
 var APP = {
@@ -251,6 +254,23 @@ function saveName(name){
   try { if(name) localStorage.setItem('ark_player_name', name); else localStorage.removeItem('ark_player_name'); } catch(e){}
 }
 
+// ===== 设备身份（网页直接打开时用，替代 initData）=====
+function deviceId(){
+  var k = 'ark_device_id';
+  try {
+    var v = localStorage.getItem(k);
+    if(v && v.length >= 8) return v;
+    var id = '';
+    if(window.crypto && crypto.randomUUID){ id = crypto.randomUUID().replace(/-/g,''); }
+    else {
+      var s = 'abcdef0123456789';
+      for(var i=0;i<32;i++) id += s.charAt(Math.floor(Math.random()*16));
+    }
+    localStorage.setItem(k, id);
+    return id;
+  } catch(e){ return ''; }
+}
+
 // ===== 读取排行榜数据（含上报地址、bot 用户名）=====
 function loadConfig(cb){
   fetch('leaderboard.json?t=' + Date.now(), {cache:'no-store'})
@@ -260,6 +280,8 @@ function loadConfig(cb){
       if(APP.data){
         APP.reportUrl = APP.data.report_url || REPORT_URL_FALLBACK || '';
         APP.botUser = APP.data.bot_username || BOT_USER_FALLBACK || APP.botUser || '';
+        // 由隧道域名自己提供游戏时，上报走同源，不依赖 leaderboard.json 里写的地址
+        if(onOurDomain()) APP.reportUrl = location.origin + '/api/score';
       }
       if(cb) cb();
     })
@@ -269,7 +291,13 @@ function loadConfig(cb){
 // ===== 实时榜单（直连 bot 的 /api/leaderboard，绕开 Pages 的 CDN 缓存）=====
 // 为什么需要：GitHub Pages 的 leaderboard.json 有 10 分钟 CDN 缓存 + bot 侧提交节流，
 // 刚打完的成绩在那边要等一会儿才出现。bot 的 API 读的是本地权威数据，永远是最新的。
+// 如果游戏本身就是隧道域名提供的（arkroguelike.top），直接走同源，连跨域都省了。
+function onOurDomain(){
+  var h = (location.hostname || '').toLowerCase();
+  return h === 'arkroguelike.top' || /\.arkroguelike\.top$/.test(h);
+}
 function apiBase(){
+  if(onOurDomain()) return location.origin;
   var u = APP.reportUrl || '';
   return u.replace(/\/api\/score\/?$/i, '');
 }
@@ -281,7 +309,7 @@ function applyBoard(d){
     bot_username: d.bot_username || APP.botUser || BOT_USER_FALLBACK,
     report_url: d.report_url || APP.reportUrl
   };
-  if(d.report_url) APP.reportUrl = d.report_url;
+  if(d.report_url && !onOurDomain()) APP.reportUrl = d.report_url;
   if(d.bot_username) APP.botUser = d.bot_username;
   return true;
 }
@@ -305,7 +333,11 @@ function refreshBoard(){
 function resolveMyId(){
   if(HAS_INIT && W.initDataUnsafe && W.initDataUnsafe.user){
     APP.myId = W.initDataUnsafe.user.id || 0;
-  } else { APP.myId = 0; }
+  } else {
+    // 网页直开：用设备 id 当身份，这样「我」那一行也能高亮
+    var dev = deviceId();
+    APP.myId = dev ? ('dev_' + dev) : 0;
+  }
 }
 
 // ===== 渲染玩家信息卡 =====
@@ -369,12 +401,15 @@ function syncName(){
     // 键盘入口：走 sendData（无网络/CORS，最稳）
     try { W.sendData(JSON.stringify({type:'rename', name:name})); toast('✅ 名字已保存，回聊天确认同步', 4000); }
     catch(e){ toast('名字已在本机保存', 3000); }
-  } else if(HAS_INIT && APP.reportUrl){
+  } else if(APP.reportUrl && (HAS_INIT || IS_WEB)){
+    var body = {kind:'rename', name:name};
+    if(HAS_INIT){ body.initData = W.initData; }
+    else { body.device = deviceId(); }
     fetch(APP.reportUrl, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({kind:'rename', name:name, initData: W.initData})
+      body: JSON.stringify(body)
     }).then(function(r){ return r.json(); }).then(function(j){
-      if(j && j.ok) toast('✅ 名字已同步到排行榜', 4000);
+      if(j && j.ok){ toast('✅ 名字已同步到排行榜', 4000); refreshBoard(); }
       else toast('名字已本机保存（同步失败）', 4000);
     }).catch(function(){ toast('名字已本机保存（同步失败）', 4000); });
   } else {
@@ -395,10 +430,18 @@ function reportScore(level, kills){
     toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n回主页可看排行榜', 5000);
     return;
   }
-  if(HAS_INIT && APP.reportUrl){
+  // 两条网络通道共用同一段逻辑：Telegram 用 initData，网页用设备 id
+  if(APP.reportUrl && (HAS_INIT || IS_WEB)){
+    var body = {kind:'score', level:level, kills:kills, name:APP.myName||''};
+    if(HAS_INIT){ body.initData = W.initData; }
+    else {
+      var dev = deviceId();
+      if(!dev){ toast('⚠️ 浏览器禁用了本地存储，无法识别身份。\n请在 Telegram 内打开。', 9000); return; }
+      body.device = dev;
+    }
     fetch(APP.reportUrl, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({kind:'score', level:level, kills:kills, name:APP.myName||'', initData: W.initData})
+      body: JSON.stringify(body)
     }).then(function(r){ return r.json(); }).then(function(j){
       if(j && j.ok){
         toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
@@ -406,8 +449,12 @@ function reportScore(level, kills){
         if(j.leaderboard && applyBoard(j.leaderboard)) paintBoard();
         else refreshBoard();
         setTimeout(refreshBoard, 3000);      // 兜底再拉一次
-      } else { deepLinkScore(level, kills); }
-    }).catch(function(){ deepLinkScore(level, kills); });
+      } else if(HAS_INIT){ deepLinkScore(level, kills); }
+      else { toast('⚠️ 成绩记录失败（服务器拒绝了请求）。\n稍后再打一局试试。', 8000); }
+    }).catch(function(){
+      if(HAS_INIT){ deepLinkScore(level, kills); }
+      else { toast('⚠️ 连不上成绩服务器。\n确认 bot 正在运行后重试。', 8000); }
+    });
     return;
   }
   if(HAS_INIT && APP.botUser){
@@ -416,6 +463,8 @@ function reportScore(level, kills){
   }
   if(IN_TG){
     toast('⚠️ 当前入口无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
+  } else if(!APP.reportUrl){
+    toast('⚠️ 成绩服务器地址还没加载到（bot 可能没启动）。\n你的成绩：第 '+level+' 层 / 击杀 '+kills, 8000);
   } else {
     toast('🌐 浏览器预览模式，成绩不会记录。\n（你的成绩：第 '+level+' 层 / 击杀 '+kills+'）', 7000);
   }
@@ -508,13 +557,21 @@ function init(){
     if(CAN_REPORT){ showHint('✅ 键盘入口 · 成绩会自动记录', true); setTimeout(hideHint, 4000); }
     else { showHint('✅ 主页/菜单入口 · 成绩也会记录（改名同步排行榜）', true); setTimeout(hideHint, 4500); }
   } else {
-    showHint('🌐 浏览器预览模式：成绩不会记录（需在 Telegram 内打开）', false);
+    showHint('🌐 网页模式 · 正在连接成绩服务器…', false);
   }
-  $('capNote').textContent = '提示：在 Telegram 里玩才能上榜；用 /play 的键盘按钮或 bot 主页菜单按钮进入均可记成绩。';
+  $('capNote').textContent = '提示：在 Telegram 里玩或用浏览器直接打开都能上榜；成绩进的是同一份排行榜。';
 
   loadConfig(function(){
     renderMiniBoard(); renderPlayer(); pushMyId();
     refreshBoard();      // 先拿到 reportUrl，再拉一次实时榜（首屏不等 CDN）
+    if(!IN_TG){
+      if(APP.reportUrl){
+        showHint('✅ 网页模式 · 成绩会自动记录（同一份排行榜）', true);
+        setTimeout(hideHint, 4500);
+      } else {
+        showHint('⚠️ 网页模式 · 成绩服务未连接（bot 没启动？本局成绩不会记录）', false);
+      }
+    }
   });
 
   $('btnStart').addEventListener('click', startGame);
