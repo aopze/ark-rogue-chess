@@ -426,6 +426,10 @@ const PHASE = Object.freeze({
   RESOLVING:   'resolving',
   LEVELCLEAR:  'levelclear',
   GAMEOVER:    'gameover',
+  // 联机专用结束态。必须与 GAMEOVER 区分：正式版主页（index.html）会把
+  // phase === 'gameover' 当成单人死亡，向排行榜上报 {level, kills}。
+  // 联机局没有关卡与击杀语义，复用 'gameover' 会往榜单灌假成绩。
+  PVP_OVER:    'pvp_over',
 });
 // 四方向表。顺序会影响 BFS 的先验路径（同距离时先探哪格），因此保留两套原始顺序，勿随意合并。
 const DIR4 = [[1, 0], [-1, 0], [0, 1], [0, -1]];      // 邻格扫描 / 连通性
@@ -5025,7 +5029,7 @@ function pvpFinish(winner) {
   pvpWaiting = false;
   const draw = winner < 0;
   const win = (winner === pvpSlot);
-  phase = PHASE.GAMEOVER;
+  phase = PHASE.PVP_OVER;   // 不能是 GAMEOVER，否则会被主页钩子当成单人死亡上报成绩
   log(draw ? '🤝 同归于尽，平局。' : (win ? '🏆 你赢了！' : '💀 你输了。'));
   render();
   pvpShowResult(draw ? null : win);
@@ -5085,7 +5089,7 @@ PVP_NET.on('peer_left', function (ev) {
   if (mode !== 'pvp') return;
   log('⚠️ 对手离开了房间');
   pvpOver = true;
-  phase = PHASE.GAMEOVER;
+  phase = PHASE.PVP_OVER;
   render();
   pvpShowResult(true);
 });
@@ -5093,7 +5097,7 @@ PVP_NET.on('closed', function (ev) {
   if (mode !== 'pvp') return;
   log('⚠️ 与房间服务的连接断开：' + ev.reason);
   pvpOver = true;
-  phase = PHASE.GAMEOVER;
+  phase = PHASE.PVP_OVER;
   render();
 });
 
