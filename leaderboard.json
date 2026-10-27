@@ -1,5 +1,5 @@
 {
- "updated_at": 1793119764,
+ "updated_at": 1793119784,
  "entries": [
   {
    "id": "5648491503",
@@ -10,9 +10,16 @@
   },
   {
    "id": "dev_aabbccddeeff00112233445566778899",
-   "name": "网页自检",
+   "name": "网页改名后",
    "level": 4,
    "kills": 9,
+   "runs": 1
+  },
+  {
+   "id": "991122336",
+   "name": "TG自检",
+   "level": 2,
+   "kills": 3,
    "runs": 1
   }
  ],
