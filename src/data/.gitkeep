@@ -1,0 +1,3 @@
+# 占位（P0.1-2 建立骨架）：src/data/  角色/敌人/遗物/事件/节点模板/数值（balance.json 为唯一数值出口）
+# 内容待 P0.1-4 机械拆分从 game.html 搬运而来。
+# 目录职责见 docs/ARCHITECTURE.md

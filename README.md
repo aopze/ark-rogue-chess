@@ -9,7 +9,7 @@
 | 线上入口 | <https://aopze.github.io/ark-rogue-chess/>（DLC 外壳）· 游戏本体 `/game.html` |
 | 代码基线 | `game.html` @ `0e0b7200`（246,695 B / 5,427 行） |
 | 当前阶段 | **0.1 原型整理**（未启动，任务见 §5.1） |
-| 文档版本 | v2.5 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
+| 文档版本 | v2.6 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
 | 参与方 | 人类维护者 + 多个 AI 协作代理（并行开发） |
 | **改动入口** | **`issues/` 目录 —— 想改游戏就写文件进去，不要直接改 `game.html`（见 §0.0）** |
 
@@ -167,7 +167,7 @@ issues/ISSUE-<YYYYMMDD>-<两位序号>-<英文短标签>.md
 
 | 阶段 | 状态 | 负责人 | 当前焦点 | 阻塞项 |
 |---|---|---|---|---|
-| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；下一步 `P0.1-2` 目录落地 / `P0.1-3` 构建脚本（含 `AC-23` 双 BUILD 自动注入） | 无 |
+| M0.1 工程基线 | 🔵 进行中 | WorkBuddy | `P0.1-1` 冻结基线已交付（tag `v0.1.0-prototype` + `CHANGELOG.md` + 版本号注入）；`P0.1-7` 部分完成（`push_api.py` 覆盖保护 + 离线单测已上线，首次实战即拦下一次真实覆盖）；`P0.1-2` 目录已落地（`src/` `templates/` `build/` `tests/` `tools/` `docs/` 骨架 + `docs/ARCHITECTURE.md`，**未动 `game.html`**）；下一步 `P0.1-3` 构建脚本（含 `AC-23` 双 BUILD 自动注入）/ `P0.1-4` 机械拆分 | 无 |
 | M0.2 规则可验证 | 🟡 未开始 | 待认领 | 依赖 M0.1 | M0.1 |
 | M0.3 内容扩展 | 🟡 未开始 | 待认领 | 依赖 M0.2 | M0.2 |
 | M0.4 联机可靠 | 🟡 未开始 | 待认领 | 可与 M0.3 并行 | M0.2 |
@@ -842,6 +842,7 @@ ark-rogue-chess/
 | v2.3 | 2026-10-28 | 发布链路加固（`P0.1-7` 部分）：§0.6 新增**「发布前覆盖保护（强制）」**条款；`net/push_api.py` 内置并发覆盖保护（基线比对 + 退出码 3 中止，修复原 422 重试"检测到冲突仍坚持覆盖"的缺陷），新增 `--base` / `--force` / `--sync-baseline`；新增离线单测 `net/push_guard_test.py`（10 项）。**首次实战即拦下一次真实覆盖**：推送时检出 `README.md` 已被他方推进（`4aabf6ad`），遂 rebase 而非覆盖 |
 | v2.4 | 2026-10-28 | 把「双 BUILD 同步」从人工纪律升为机器校验：新增 **`AC-23`**（`P0.1-3` 验收项）——构建时自动注入 `__ARK_VERSION__.build`，并在构建结束前校验 `index.html` 的 `var BUILD` 是否一致，不一致则构建失败（`index.html` 只读，脚本只校验不改写）；同时消除 `P0.1-1` 的已知限制（`commit` 改为构建时注入真实 sha）。§0.5 看板同步 `P0.1-7` 进展 |
 | v2.5 | 2026-10-28 | **新增 §0.0 铁律：不直接改游戏，先写 issue 文件**（人类维护者定）。想改游戏一律写成 `issues/ISSUE-<日期>-<序号>-<标签>.md`（含模板、命名、状态流转 draft/ready/implementing/done）；只有人类维护者说「版本更新」时，才一次性按 `issues/` 全部条目实施，完成后删除对应文件。配套改动：§0.2 所有权表中 `game.html` 由「可按任务修改」改为**「禁止直接修改」**并新增 `issues/` 行；§0.3 开工步骤 4→5 步；§0.4 交付检查 6→8 项；§6 目录结构加 `issues/`；§8 新增红线 **NB-11**（绕过 issues 直接改）与 **NB-12**（未获指令自行发版） |
+| v2.6 | 2026-10-28 | `P0.1-2` 目录落地：按 §6 建立 `src/`（data/rules/ui/net）`templates/` `build/` `tests/`（unit/replay/property/e2e/fixtures）`tools/` `docs/` 骨架；新增 `docs/ARCHITECTURE.md`（架构、目录职责、构建流程、拆分原则）与 RULES/CONTENT/ONLINE/COMPAT/RELEASE 占位；`src/README.md`、`tests/README.md` 说明归属与「内容待 `P0.1-4` 搬运」。**`game.html` 等红线文件零改动**。§0.5 看板同步 |
 
 ---
 

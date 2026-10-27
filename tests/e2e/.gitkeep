@@ -1,0 +1,3 @@
+# 占位（P0.1-2 建立骨架）：tests/e2e/      Playwright：布局/设备/无障碍（现存脚本在 net/，P0.1-5 收编）
+# 内容待 P0.1-4 机械拆分从 game.html 搬运而来。
+# 目录职责见 docs/ARCHITECTURE.md
