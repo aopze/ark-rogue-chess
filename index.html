@@ -5,101 +5,181 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>方舟战棋</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-  html, body { margin:0; padding:0; height:100%; background:#1a1a2e; overflow:hidden; }
-  #game { position:fixed; inset:0; width:100%; height:100%; border:0; }
-  #loading {
-    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
-    color:#eee; font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-    font-size:15px;
-  }
-  /* 提示条：说明当前入口能不能上报成绩 */
-  #hint {
-    position:fixed; left:0; right:0; top:0; z-index:9999;
-    padding:9px 12px; font-size:13px; line-height:1.5;
+<style>
+  html, body { margin:0; padding:0; min-height:100%; background:#14142b; color:#eef0ff;
     font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:#8a5a00; color:#fff; text-align:center;
-  }
+    -webkit-tap-highlight-color:transparent; }
+  * { box-sizing:border-box; }
+  .screen { min-height:100vh; }
+  [hidden] { display:none !important; }
+
+  /* ===== 开始主页 ===== */
+  #home { padding:18px 16px 28px; max-width:540px; margin:0 auto; }
+  .hero { text-align:center; padding:14px 0 6px; }
+  .hero .logo { font-size:46px; line-height:1; filter:drop-shadow(0 4px 14px rgba(255,209,102,.35)); }
+  .hero h1 { margin:8px 0 2px; font-size:26px; letter-spacing:2px; font-weight:800;
+    background:linear-gradient(90deg,#ffd166,#ff8a5c); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .hero .tagline { margin:0; font-size:12px; color:#9aa0c0; letter-spacing:1px; }
+
+  .card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
+    border-radius:16px; padding:14px; margin:14px 0; }
+  #playerCard { display:flex; gap:12px; align-items:center; }
+  .avatar { width:52px; height:52px; flex:0 0 52px; border-radius:14px; display:flex; align-items:center;
+    justify-content:center; font-size:26px; background:linear-gradient(135deg,#2b2e55,#3a2f63);
+    border:1px solid rgba(255,209,102,.3); }
+  .pinfo { flex:1; min-width:0; }
+  .pnameRow { display:flex; gap:8px; align-items:center; }
+  .pname { flex:1; min-width:0; background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.14);
+    color:#fff; border-radius:10px; padding:9px 11px; font-size:15px; font-weight:600; outline:none; }
+  .pname:focus { border-color:#ffd166; }
+  .psave { flex:0 0 auto; background:#ffd166; color:#3a2a00; border:0; border-radius:10px;
+    padding:9px 14px; font-size:13px; font-weight:700; cursor:pointer; }
+  .psave:active { transform:scale(.96); }
+  .pstats { margin-top:8px; font-size:12px; color:#9aa0c0; }
+  .pstats b { color:#ffd166; font-size:14px; }
+
+  .boardHead { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+    font-size:14px; font-weight:700; }
+  .boardHead .meta { font-size:11px; color:#9aa0c0; font-weight:400; }
+  ol#miniBoard { list-style:none; margin:0; padding:0; }
+  ol#miniBoard li { display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.08); border-radius:10px; padding:8px 10px; margin-bottom:6px; }
+  ol#miniBoard li.me { border-color:#3ddc84; box-shadow:0 0 0 1px rgba(61,220,132,.3) inset; }
+  .rk { width:24px; height:24px; flex:0 0 24px; border-radius:50%; display:flex; align-items:center;
+    justify-content:center; font-size:12px; font-weight:700; background:rgba(255,255,255,.08); color:#9aa0c0; }
+  ol#miniBoard li:nth-child(1) .rk { background:#ffd166; color:#3a2a00; }
+  ol#miniBoard li:nth-child(2) .rk { background:#cfd6e6; color:#2c3244; }
+  ol#miniBoard li:nth-child(3) .rk { background:#d9a066; color:#3a2400; }
+  .who { flex:1; min-width:0; }
+  .nm { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .me .nm { color:#3ddc84; }
+  .sc { font-size:11px; color:#9aa0c0; margin-top:1px; }
+  .lv { font-size:13px; font-weight:700; color:#ffd166; white-space:nowrap; }
+  .tag { font-size:9px; background:#3ddc84; color:#063; padding:1px 5px; border-radius:6px; margin-left:5px; vertical-align:middle; }
+  .empty { text-align:center; color:#9aa0c0; padding:24px 10px; font-size:13px; }
+
+  .primary { display:block; width:100%; margin-top:6px; background:linear-gradient(90deg,#ffd166,#ff8a5c);
+    color:#3a2200; border:0; border-radius:14px; padding:15px; font-size:17px; font-weight:800;
+    cursor:pointer; box-shadow:0 6px 18px rgba(255,138,92,.35); }
+  .primary:active { transform:scale(.98); }
+  .ghost { display:block; width:100%; margin-top:10px; background:rgba(255,255,255,.06);
+    color:#cfd2ff; border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:12px;
+    font-size:14px; font-weight:600; cursor:pointer; }
+  .ghost:active { transform:scale(.98); }
+  .capnote { text-align:center; font-size:11px; color:#7d83a8; margin-top:12px; line-height:1.6; }
+
+  /* ===== 游戏视图 ===== */
+  #gameWrap { position:fixed; inset:0; background:#1a1a2e; }
+  #game { position:fixed; inset:0; width:100%; height:100%; border:0; }
+  #loading { position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    color:#eee; font-size:15px; background:#1a1a2e; z-index:5; }
+  .homeBtn { position:fixed; left:10px; top:10px; z-index:6; padding:8px 14px; border-radius:20px;
+    font-size:14px; font-weight:600; background:rgba(20,22,44,.82); color:#ffd166;
+    border:1px solid rgba(255,209,102,.45); box-shadow:0 4px 16px rgba(0,0,0,.45); cursor:pointer; }
+  .homeBtn:active { transform:scale(.96); }
+  #ghint { position:fixed; left:50%; transform:translateX(-50%); top:12px; z-index:6; padding:7px 14px;
+    border-radius:18px; font-size:12px; background:rgba(20,22,44,.82); color:#cfd2ff;
+    border:1px solid rgba(255,255,255,.12); max-width:80%; text-align:center; }
+
+  /* ===== 顶部提示条 ===== */
+  #hint { position:fixed; left:0; right:0; top:0; z-index:9999; padding:9px 12px; font-size:13px;
+    line-height:1.5; font-family:inherit; background:#8a5a00; color:#fff; text-align:center; }
   #hint.ok { background:#1f6f3f; }
   #hint.hide { display:none; }
-  #toast {
-    position:fixed; left:50%; bottom:14%; transform:translateX(-50%); z-index:9999;
-    max-width:86%; padding:12px 16px; border-radius:10px; font-size:14px; line-height:1.6;
-    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:rgba(0,0,0,.82); color:#fff; text-align:center; display:none;
-  }
+  #toast { position:fixed; left:50%; bottom:14%; transform:translateX(-50%); z-index:9999; max-width:86%;
+    padding:12px 16px; border-radius:10px; font-size:14px; line-height:1.6; background:rgba(0,0,0,.82);
+    color:#fff; text-align:center; display:none; white-space:pre-line; }
+
   /* ===== 排行榜浮层（DLC 模块入口）===== */
-  #rankBtn {
-    position:fixed; right:10px; bottom:14px; z-index:9998;
-    padding:9px 14px; border-radius:22px; font-size:14px; font-weight:600;
-    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-    background:rgba(20,22,44,.82); color:#ffd166; border:1px solid rgba(255,209,102,.45);
-    box-shadow:0 4px 16px rgba(0,0,0,.45); cursor:pointer; -webkit-tap-highlight-color:transparent;
-  }
+  #rankBtn { position:fixed; right:10px; bottom:14px; z-index:9998; padding:9px 14px; border-radius:22px;
+    font-size:14px; font-weight:600; background:rgba(20,22,44,.82); color:#ffd166;
+    border:1px solid rgba(255,209,102,.45); box-shadow:0 4px 16px rgba(0,0,0,.45); cursor:pointer; }
   #rankBtn:active { transform:scale(.96); }
-  #rankPanel {
-    position:fixed; inset:0; z-index:10000; display:none;
-    background:rgba(8,9,20,.94); backdrop-filter:blur(3px);
-  }
+  #rankPanel { position:fixed; inset:0; z-index:10000; display:none; background:rgba(8,9,20,.94); }
   #rankPanel.open { display:block; }
   #rankPanel iframe { position:absolute; left:0; top:0; width:100%; height:100%; border:0; }
-  #rankClose {
-    position:absolute; right:12px; top:12px; z-index:10001;
-    width:34px; height:34px; border-radius:50%; border:1px solid rgba(255,255,255,.2);
-    background:rgba(30,32,58,.9); color:#fff; font-size:18px; line-height:1; cursor:pointer;
-  }
-  </style>
+  #rankClose { position:absolute; right:12px; top:12px; z-index:10001; width:34px; height:34px;
+    border-radius:50%; border:1px solid rgba(255,255,255,.2); background:rgba(30,32,58,.9); color:#fff;
+    font-size:18px; line-height:1; cursor:pointer; }
+</style>
 </head>
 <body>
-<div id="loading">游戏加载中…</div>
+
+<!-- ===== 开始主页 ===== -->
+<div id="home" class="screen">
+  <div class="hero">
+    <div class="logo">🏴</div>
+    <h1>方舟战棋</h1>
+    <p class="tagline">ROGUELIKE · 越深越强</p>
+  </div>
+
+  <div class="card" id="playerCard">
+    <div class="avatar" id="pAvatar">🦊</div>
+    <div class="pinfo">
+      <div class="pnameRow">
+        <input id="pName" class="pname" maxlength="24" placeholder="输入你的玩家名" />
+        <button id="pSave" class="psave">保存</button>
+      </div>
+      <div class="pstats" id="pStats">尚未上榜</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="boardHead">
+      <span>🏆 排行榜 · Top 10</span>
+      <span class="meta" id="boardMeta"></span>
+    </div>
+    <ol id="miniBoard"></ol>
+    <div class="empty" id="boardEmpty" hidden>还没有人上榜<br>去玩一把，把名字留在上面 ✦</div>
+  </div>
+
+  <button id="btnStart" class="primary">🎮 开始游戏</button>
+  <button id="btnFullRank" class="ghost">📊 查看完整排行榜</button>
+  <div class="capnote" id="capNote"></div>
+</div>
+
+<!-- ===== 游戏视图 ===== -->
+<div id="gameWrap" class="screen" hidden>
+  <div id="loading">游戏加载中…</div>
+  <div id="ghint" class="hide"></div>
+  <button id="btnHome" class="homeBtn">🏠 主页</button>
+  <iframe id="game" src="" onload="onGameLoad()"></iframe>
+</div>
+
 <div id="hint" class="hide"></div>
 <div id="toast"></div>
-<button id="rankBtn">🏆 排行榜</button>
+<button id="rankBtn" hidden>🏆 排行榜</button>
 <div id="rankPanel">
   <button id="rankClose">✕</button>
   <iframe id="rankFrame" src="leaderboard.html"></iframe>
 </div>
-<iframe id="game" src="game.html" onload="onGameLoad()"></iframe>
 
 <!--
   成绩上报钩子源码（type=text/plain 不会被浏览器执行，仅作为文本被注入到游戏 iframe 中）。
   它通过轮询游戏的顶层变量判定「游戏结束」并上报，与具体游戏版本解耦：
   只要游戏仍用 phase / level / enemies 这三个变量名，换 HTML 内容也无需改动此处。
-
-  kills 语义 = 整局累计击杀：
-    游戏每关会重建 enemies 数组（enemies = [] 后重新 push），且没有内置累计击杀变量，
-    所以钩子自己维护 carry —— 检测到 enemies 数组引用变化（=换关）时，
-    把上一关的击杀数并入 carry；检测到 level 回退（= 重新开新一局）时清零。
+  kills 语义 = 整局累计击杀（跨关累计、重开清零）。
 -->
 <script id="hooksrc" type="text/plain">
 (function () {
   var sent = false;
-  var prevEnemies = null;   // 上一 tick 的 enemies 数组引用
-  var prevDead = 0;         // 上一 tick 的本关已死数
-  var carry = 0;            // 已结束关卡的累计击杀
-  var prevLevel = 0;        // 上一 tick 的层数
+  var prevEnemies = null;
+  var prevDead = 0;
+  var carry = 0;
+  var prevLevel = 0;
 
   function collect() {
     var p = (typeof phase !== 'undefined') ? phase : null;
     var lvl = (typeof level !== 'undefined') ? level : 0;
     var en = (typeof enemies !== 'undefined') ? enemies : null;
 
-    // 换关：enemies 数组被重建 → 上一关的击杀并入累计
-    if (prevEnemies !== null && en !== prevEnemies) {
-      carry += prevDead;
-      prevDead = 0;
-    }
-    // 新一局：层数回退 → 累计清零
-    if (lvl < prevLevel) {
-      carry = 0;
-      prevDead = 0;
-    }
+    if (prevEnemies !== null && en !== prevEnemies) { carry += prevDead; prevDead = 0; }
+    if (lvl < prevLevel) { carry = 0; prevDead = 0; }
     prevLevel = lvl;
 
     var dead = (en && en.filter) ? en.filter(function (e) { return !e.alive; }).length : 0;
     prevEnemies = en;
     prevDead = dead;
-
     return { phase: p, level: lvl, kills: carry + dead };
   }
 
@@ -111,9 +191,7 @@
           sent = true;
           parent.postMessage({ type: 'rogue_score', level: s.level, kills: s.kills }, '*');
         }
-      } else {
-        sent = false; // 下一局重新开始判定
-      }
+      } else { sent = false; }
     } catch (e) {}
     setTimeout(tick, 300);
   }
@@ -122,133 +200,262 @@
 </script>
 
 <script>
-// ===== 入口能力判定 =====
-// Telegram 官方规定：Telegram.WebApp.sendData **只在 keyboard button（回复键盘上的
-// web_app 按钮）入口下可用**；inline button / menu button 打开的 Mini App
-// 调 sendData 不会产生任何 web_app_data 更新（那两个入口只有 initData）。
-// 反过来 keyboard button 入口的 initData 是空的。
-// 所以：initData 为空 => 是 keyboard 入口 => 能上报；initData 非空 => 不能上报。
+// ===== Telegram 入口能力判定 =====
 var W = (window.Telegram && window.Telegram.WebApp) || null;
 var HAS_SDK = !!W;
-var HAS_INIT = !!(W && W.initData);              // 非空 = inline/menu 入口
-var CAN_REPORT = HAS_SDK && !HAS_INIT;           // keyboard 按钮入口才可上报
-var IN_TG = HAS_SDK && W.platform !== 'unknown';  // 是否在真实 Telegram 客户端里
+var HAS_INIT = !!(W && W.initData);
+var CAN_REPORT = HAS_SDK && !HAS_INIT;          // 键盘按钮入口：sendData 可用
+var IN_TG = HAS_SDK && W.platform !== 'unknown';
 
-function showHint(text, ok) {
-  var h = document.getElementById('hint');
-  if (!h) return;
-  h.textContent = text;
-  h.className = ok ? 'ok' : '';
+// ===== 全局状态 =====
+var APP = {
+  data: null,            // leaderboard.json 内容
+  myId: 0,               // 我的 Telegram user id（菜单/内联入口才有）
+  myName: '',            // 本地玩家名
+  reportUrl: '',         // 上报端点地址（bot 写入 leaderboard.json）
+  botUser: ''            // bot @username
+};
+var MY_SCORE = null;     // 本局成绩（用于排行榜高亮）
+
+// 默认上报地址兜底（bot 启动后会把真实地址写进 leaderboard.json，覆盖此值）
+var REPORT_URL_FALLBACK = '';
+
+function $(id){ return document.getElementById(id); }
+
+function showHint(text, ok){
+  var h = $('hint'); if(!h) return;
+  h.textContent = text; h.className = ok ? 'ok' : '';
 }
-function hideHint() {
-  var h = document.getElementById('hint');
-  if (h) h.className = 'hide';
-}
-function toast(text, ms) {
-  var t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = text;
-  t.style.display = 'block';
-  setTimeout(function () { t.style.display = 'none'; }, ms || 6000);
+function hideHint(){ var h = $('hint'); if(h) h.className = 'hide'; }
+function toast(text, ms){
+  var t = $('toast'); if(!t) return;
+  t.textContent = text; t.style.display = 'block';
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ t.style.display='none'; }, ms||6000);
 }
 
-// 入口提示
-if (IN_TG) {
-  if (CAN_REPORT) {
-    showHint('✅ 键盘入口 · 成绩会自动记录', true);
-    setTimeout(hideHint, 4000);
-  } else {
-    showHint('⚠️ 当前入口不记录成绩。请私聊 bot 发 /play，点键盘上的「▶️ 方舟战棋」进入（那个入口才能上报）', false);
+// ===== 本地玩家名 =====
+function loadLocalName(){
+  try { APP.myName = localStorage.getItem('ark_player_name') || ''; } catch(e){ APP.myName=''; }
+  // 菜单/内联入口：用 Telegram 名字作默认
+  if(!APP.myName && HAS_INIT && W.initDataUnsafe && W.initDataUnsafe.user){
+    APP.myName = W.initDataUnsafe.user.first_name || '';
   }
-} else {
-  showHint('🌐 浏览器预览模式：成绩不会记录（需在 Telegram 内从键盘按钮进入）', false);
 }
-// ===== 排行榜浮层（DLC 模块）=====
-var MY_SCORE = null;   // 我这次的成绩，游戏结束时写入
+function saveName(name){
+  name = (name||'').trim().slice(0,24);
+  APP.myName = name;
+  try { if(name) localStorage.setItem('ark_player_name', name); else localStorage.removeItem('ark_player_name'); } catch(e){}
+}
 
-function openRank(){
-  var p = document.getElementById('rankPanel');
-  if (!p) return;
-  p.classList.add('open');
-  // 浮层刚开，iframe 可能还没 ready → 先把成绩存着，onload 时补发
+// ===== 读取排行榜数据（含上报地址、bot 用户名）=====
+function loadConfig(cb){
+  fetch('leaderboard.json?t=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(d){
+      APP.data = d || APP.data;
+      if(APP.data){
+        APP.reportUrl = APP.data.report_url || REPORT_URL_FALLBACK || '';
+        APP.botUser = APP.data.bot_username || APP.botUser || '';
+      }
+      if(cb) cb();
+    })
+    .catch(function(){ if(cb) cb(); });
+}
+
+// ===== 我的身份（用于高亮/匹配）=====
+function resolveMyId(){
+  if(HAS_INIT && W.initDataUnsafe && W.initDataUnsafe.user){
+    APP.myId = W.initDataUnsafe.user.id || 0;
+  } else { APP.myId = 0; }
+}
+
+// ===== 渲染玩家信息卡 =====
+function renderPlayer(){
+  var nameInput = $('pName');
+  nameInput.value = APP.myName || '';
+  // 统计：优先按 id 匹配，否则按名字匹配
+  var me = findMe();
+  var stats = $('pStats');
+  if(me){
+    stats.innerHTML = '最深层数 <b>'+(me.best_level||0)+'</b> · 累计击杀 <b>'+(me.best_kills||0)+'</b> · 游玩 <b>'+(me.runs||0)+'</b> 次';
+  } else {
+    stats.textContent = APP.myName ? '改好名字，开一局就上榜 ✦' : '输入名字，开一局就上榜 ✦';
+  }
+}
+function findMe(){
+  if(!APP.data || !APP.data.entries) return null;
+  var list = APP.data.entries;
+  if(APP.myId){ for(var i=0;i<list.length;i++){ if(String(list[i].id)===String(APP.myId)) return list[i]; } }
+  if(APP.myName){ for(var j=0;j<list.length;j++){ if(list[j].name===APP.myName) return list[j]; } }
+  return null;
+}
+
+// ===== 渲染迷你排行榜 =====
+function renderMiniBoard(){
+  var list = (APP.data && APP.data.entries) ? APP.data.entries.slice().sort(function(a,b){
+    if((b.level||0)!==(a.level||0)) return (b.level||0)-(a.level||0);
+    return (b.kills||0)-(a.kills||0);
+  }) : [];
+  var ol = $('miniBoard'), empty = $('boardEmpty'), meta = $('boardMeta');
+  ol.innerHTML = '';
+  if(!list.length){ empty.hidden = false; meta.textContent=''; return; }
+  empty.hidden = true;
+  if(APP.data && APP.data.updated_at){
+    var dt = new Date(APP.data.updated_at*1000);
+    function p(n){ return n<10?'0'+n:''+n; }
+    meta.textContent = '更新 ' + dt.getMonth()+1 + '-' + p(dt.getDate()) + ' ' + p(dt.getHours())+':'+p(dt.getMinutes());
+  }
+  list.slice(0,10).forEach(function(u,i){
+    var isMe = (APP.myId && String(u.id)===String(APP.myId)) || (!APP.myId && APP.myName && u.name===APP.myName);
+    var li = document.createElement('li'); if(isMe) li.className='me';
+    var rk = document.createElement('div'); rk.className='rk'; rk.textContent=(i+1);
+    var who = document.createElement('div'); who.className='who';
+    var nm = document.createElement('div'); nm.className='nm'; nm.textContent = u.name||'匿名';
+    if(isMe){ var tag=document.createElement('span'); tag.className='tag'; tag.textContent='我'; nm.appendChild(tag); }
+    var sc = document.createElement('div'); sc.className='sc'; sc.textContent='击杀 '+(u.kills||0)+' · 挑战 '+(u.runs||1)+' 次';
+    who.appendChild(nm); who.appendChild(sc);
+    var lv = document.createElement('div'); lv.className='lv'; lv.textContent='第 '+(u.level||0)+' 层';
+    li.appendChild(rk); li.appendChild(who); li.appendChild(lv);
+    ol.appendChild(li);
+  });
+}
+
+// ===== 改名并同步到 bot =====
+function syncName(){
+  var name = $('pName').value || '';
+  saveName(name);
+  renderPlayer();
+  if(!name){ return; }
+  if(CAN_REPORT && W && W.sendData){
+    // 键盘入口：走 sendData（无网络/CORS，最稳）
+    try { W.sendData(JSON.stringify({type:'rename', name:name})); toast('✅ 名字已保存，回聊天确认同步', 4000); }
+    catch(e){ toast('名字已在本机保存', 3000); }
+  } else if(HAS_INIT && APP.reportUrl){
+    fetch(APP.reportUrl, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind:'rename', name:name, initData: W.initData})
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if(j && j.ok) toast('✅ 名字已同步到排行榜', 4000);
+      else toast('名字已本机保存（同步失败）', 4000);
+    }).catch(function(){ toast('名字已本机保存（同步失败）', 4000); });
+  } else {
+    toast('名字已在本机保存', 3000);
+  }
+}
+
+// ===== 成绩上报（双通道）=====
+function reportScore(level, kills){
+  MY_SCORE = {level:level, kills:kills};
   pushMyScore();
+  if(CAN_REPORT && W && W.sendData){
+    // 键盘入口：sendData 直接回 bot
+    W.sendData(JSON.stringify({type:'rogue_score', level:level, kills:kills, tg_id:0, tg_name:APP.myName||'', initData:''}));
+    toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
+  } else if(HAS_INIT && APP.reportUrl){
+    // 菜单/内联入口：fetch POST 到 bot 上报端点（initData 验签认身份，支持中文名）
+    fetch(APP.reportUrl, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind:'score', level:level, kills:kills, name:APP.myName||'', initData: W.initData})
+    }).then(function(r){ return r.json(); }).then(function(j){
+      if(j && j.ok) toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
+      else toast('⚠️ 成绩同步失败，稍后重试', 5000);
+    }).catch(function(){ toast('⚠️ 成绩同步失败（网络/CORS），稍后重试', 5000); });
+    // 顺手刷新榜单，让主页/排行榜尽快更新
+    setTimeout(function(){ loadConfig(function(){ renderMiniBoard(); renderPlayer(); }); }, 1500);
+  } else if(IN_TG){
+    toast('⚠️ 当前入口无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
+  } else {
+    toast('🌐 浏览器预览模式，成绩不会记录。\n（你的成绩：第 '+level+' 层 / 击杀 '+kills+'）', 7000);
+  }
 }
-function closeRank(){
-  var p = document.getElementById('rankPanel');
-  if (p) p.classList.remove('open');
+
+// ===== 排行榜浮层 =====
+function openRank(){
+  var p = $('rankPanel'); if(!p) return;
+  p.classList.add('open'); pushMyScore();
 }
+function closeRank(){ var p=$('rankPanel'); if(p) p.classList.remove('open'); }
 function pushMyScore(){
-  if (!MY_SCORE) return;
-  try {
-    var f = document.getElementById('rankFrame');
-    if (f && f.contentWindow) {
-      f.contentWindow.postMessage({type:'my_score', level: MY_SCORE.level, kills: MY_SCORE.kills}, '*');
-    }
-  } catch (e) {}
+  if(!MY_SCORE) return;
+  try { var f=$('rankFrame'); if(f && f.contentWindow) f.contentWindow.postMessage({type:'my_score', level:MY_SCORE.level, kills:MY_SCORE.kills}, '*'); } catch(e){}
+  // 同时把我的 id 传过去用于高亮
+  try { var f2=$('rankFrame'); if(f2 && f2.contentWindow && APP.myId) f2.contentWindow.postMessage({type:'my_id', id:APP.myId}, '*'); } catch(e){}
 }
-document.addEventListener('DOMContentLoaded', function(){
-  var b = document.getElementById('rankBtn');
-  var c = document.getElementById('rankClose');
-  var f = document.getElementById('rankFrame');
-  if (b) b.addEventListener('click', openRank);
-  if (c) c.addEventListener('click', closeRank);
-  if (f) f.addEventListener('load', pushMyScore);
-});
-
-// ===== 游戏 iframe 加载完成后，把上报钩子注入进去 =====
-function onGameLoad() {
-  var l = document.getElementById('loading');
-  if (l) l.remove();
-  try { injectHook(); } catch (e) {}
+function pushMyId(){
+  try { var f=$('rankFrame'); if(f && f.contentWindow && APP.myId) f.contentWindow.postMessage({type:'my_id', id:APP.myId}, '*'); } catch(e){}
 }
 
-function injectHook() {
-  var f = document.getElementById('game');
+// ===== 游戏 iframe 加载 + 注入钩子 =====
+function onGameLoad(){
+  var l = $('loading'); if(l) l.remove();
+  try { injectHook(); } catch(e){}
+}
+function injectHook(){
+  var f = $('game');
   var d = f.contentDocument || (f.contentWindow && f.contentWindow.document);
-  if (!d || !d.body) return;
+  if(!d || !d.body) return;
   var s = d.createElement('script');
-  s.textContent = document.getElementById('hooksrc').textContent;
+  s.textContent = $('hooksrc').textContent;
   d.body.appendChild(s);
 }
 
-// ===== 接收游戏 iframe 的成绩，补上 Telegram 身份后 sendData 回 bot =====
-window.addEventListener('message', function (e) {
-  try {
-    var d = e.data;
-    if (!d || d.type !== 'rogue_score') return;
-    var payload = {
-      type: 'rogue_score',
-      level: d.level || 0,
-      kills: d.kills || 0,
-      tg_id: 0,
-      tg_name: '',
-      initData: (W && W.initData) || ''
-    };
-    // 记下我的成绩 → 排行榜浮层里高亮「我」的那一行
-    MY_SCORE = {level: payload.level, kills: payload.kills};
-    pushMyScore();
+// ===== 屏幕切换 =====
+function startGame(){
+  $('home').hidden = true;
+  $('gameWrap').hidden = false;
+  $('rankBtn').hidden = true;
+  var g = $('game');
+  if(!g.src || g.src.indexOf('game.html') < 0){ g.src = 'game.html'; }
+  var gh = $('ghint'); gh.className='hide';
+}
+function goHome(){
+  $('gameWrap').hidden = true;
+  $('home').hidden = false;
+  $('rankBtn').hidden = false;
+  // 停掉游戏，避免后台继续跑
+  var g = $('game'); g.src = '';
+  // 刷新榜单 + 玩家信息
+  loadConfig(function(){ renderMiniBoard(); renderPlayer(); });
+  // 顺手把 id 同步给排行榜浮层
+  pushMyId();
+}
 
-    if (CAN_REPORT && W && W.sendData) {
-      W.sendData(JSON.stringify(payload));
-      toast('📊 成绩已提交：第 ' + payload.level + ' 层 / 击杀 ' + payload.kills
-            + '\n点右下角 🏆 看排行榜', 5000);
-    } else if (IN_TG) {
-      // inline / 菜单入口：sendData 无效，明确告诉玩家怎么才能记成绩
-      toast('⚠️ 这个入口不能记录成绩。\n请私聊 bot 发 /play，点键盘上的「▶️ 方舟战棋」重开一局。', 9000);
-      showHint('⚠️ 当前入口不记录成绩 · 请用 /play 的键盘按钮进入', false);
-    } else {
-      toast('🌐 浏览器预览模式，成绩不会记录。\n（你的成绩：第 ' + payload.level + ' 层 / 击杀 ' + payload.kills + '）', 7000);
-    }
-  } catch (e) {}
-});
-
-// ===== Telegram Mini App 初始化 =====
-try {
-  if (W) {
-    W.ready();
-    W.expand();
+// ===== 入口提示 + 初始化 =====
+function init(){
+  resolveMyId();
+  loadLocalName();
+  if(IN_TG){
+    if(CAN_REPORT){ showHint('✅ 键盘入口 · 成绩会自动记录', true); setTimeout(hideHint, 4000); }
+    else { showHint('✅ 主页/菜单入口 · 成绩也会记录（改名同步排行榜）', true); setTimeout(hideHint, 4500); }
+  } else {
+    showHint('🌐 浏览器预览模式：成绩不会记录（需在 Telegram 内打开）', false);
   }
-} catch (e) {}
+  $('capNote').textContent = '提示：在 Telegram 里玩才能上榜；用 /play 的键盘按钮或 bot 主页菜单按钮进入均可记成绩。';
+
+  loadConfig(function(){ renderMiniBoard(); renderPlayer(); pushMyId(); });
+
+  $('btnStart').addEventListener('click', startGame);
+  $('btnHome').addEventListener('click', goHome);
+  $('btnFullRank').addEventListener('click', openRank);
+  $('pSave').addEventListener('click', syncName);
+  $('pName').addEventListener('keydown', function(e){ if(e.key==='Enter'){ syncName(); } });
+  $('rankBtn').addEventListener('click', openRank);
+  $('rankClose').addEventListener('click', closeRank);
+  $('rankFrame').addEventListener('load', function(){ pushMyScore(); pushMyId(); });
+
+  // 接收游戏 iframe 的成绩
+  window.addEventListener('message', function(e){
+    try{
+      var d = e.data; if(!d || d.type !== 'rogue_score') return;
+      reportScore(d.level||0, d.kills||0);
+    }catch(err){}
+  });
+
+  try { if(W){ W.ready(); W.expand(); } } catch(e){}
+}
+
+if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', init); }
+else { init(); }
 </script>
 </body>
 </html>

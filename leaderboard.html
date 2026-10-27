@@ -66,6 +66,7 @@
 </div>
 <script>
 var MY = null;      // 我这次的成绩 {level, kills}
+var MY_ID = 0;      // 我的 Telegram id（外壳传入，优先用于高亮）
 var LIST = [];
 var UPDATED = 0;
 
@@ -88,7 +89,9 @@ function render(){
   }
   empty.classList.add('hide');
   LIST.forEach(function(u, i){
-    var isMe = !!(MY && u.level === MY.level && u.kills === MY.kills);
+    var isMe = false;
+    if(MY_ID && String(u.id) === String(MY_ID)) isMe = true;
+    else if(MY && u.level === MY.level && u.kills === MY.kills) isMe = true;
     var li = document.createElement('li');
     if(isMe) li.className = 'me';
 
@@ -146,12 +149,17 @@ function load(){
 
 document.getElementById('btnRefresh').addEventListener('click', load);
 
-// 接收游戏外壳传来的「我的成绩」→ 高亮对应行
+// 接收游戏外壳传来的「我的成绩 / 我的 id」→ 高亮对应行
 window.addEventListener('message', function(e){
   var d = e.data;
-  if(!d || d.type !== 'my_score') return;
-  MY = {level: d.level || 0, kills: d.kills || 0};
-  render();
+  if(!d) return;
+  if(d.type === 'my_score'){
+    MY = {level: d.level || 0, kills: d.kills || 0};
+    render();
+  } else if(d.type === 'my_id'){
+    MY_ID = d.id || 0;
+    render();
+  }
 });
 
 load();
