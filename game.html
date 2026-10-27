@@ -20,6 +20,9 @@
   .cell.void { background:transparent; cursor:default; pointer-events:none; }
   .cell.wall { background:#4a4a5a; cursor:not-allowed; border-radius:4px; }
   .cell.path { background:#3a5a8c; }
+  /* 闪避节点：第一次等待（蓝色描边 + 内部蓝调） */
+  .cell.dodge { box-shadow: inset 0 0 0 2px #7dd3fc; background:#2f5578; }
+  .cell.dodge.attack { box-shadow: inset 0 0 0 2px #7dd3fc, inset 0 0 0 999px rgba(192,57,43,.35); }
   .cell.attack { background:#c0392b; }
   .cell.attack.used { background:#5c2b29; }
   /* 倾泻射击节点（阿米娅：等待 → 攻击）：金色底 + 👑 */
@@ -384,7 +387,8 @@ const CHARACTERS = {
     tips: [
       '技力：同方向连续移动 ≥2 步获得技力',
       '技能：攻击变为冲锋，免疫所有伤害，沿直线前进',
-      '[高效冲击]：冲锋状态未造成伤害，则撞墙后失去当前 HP 的一半'
+      '[高效冲击]：冲锋状态未造成伤害，则撞墙后失去当前 HP 的一半',
+      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3（与攻击二选一）'
     ]
   },
   vampire: {
@@ -397,7 +401,8 @@ const CHARACTERS = {
       '技力：获得血迹 +1 技力',
       '技能：起始点攻击触发',
       '[不稳定血浆]：本次战斗必定暴击，必定触发血迹，攻击后失去 1HP',
-      '被动：远程攻击命中后 50% 在目标格留下血迹，战斗结束时获得全场血迹（血迹：恢复 2 HP）'
+      '被动：远程攻击命中后 50% 在目标格留下血迹，战斗结束时获得全场血迹（血迹：恢复 2 HP）',
+      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3（与攻击二选一）'
     ]
   },
   fencer: {
@@ -409,7 +414,8 @@ const CHARACTERS = {
     tips: [
       '技力：受到攻击时 +1 技力',
       '技能：等待 2 次触发',
-      '[岩崩锤]：免疫攻击，受到攻击时攻击周围 8 格所有单位并造成眩晕 2 回合 + 回复 1/2 最大 HP'
+      '[岩崩锤]：免疫攻击，受到攻击时攻击周围 8 格所有单位并造成眩晕 2 回合 + 回复 1/2 最大 HP',
+      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3（与攻击二选一）；连续等待 2 次为反击技能，不算闪避'
     ]
   },
   amiya: {
@@ -422,7 +428,8 @@ const CHARACTERS = {
       '技力：每击败 1 个敌人 +2 技力，每次攻击 +1 技力',
       '技能：等待后射击触发技能，技力未满可触发',
       '[精神爆发]：消耗已有技力，进行等量次数必定命中、必定暴击的远程攻击（范围同普通射程，击杀不获得技力）',
-      '被动：被阿米娅攻击的单位，额外显示移动意图'
+      '被动：被阿米娅攻击的单位，额外显示移动意图',
+      '[闪避]：一回合的第一次等待 = 闪避，本回合 AC +3；但「等待+攻击」整段算技能节点，该等待不结算、不给 AC'
     ]
   }
 };
@@ -496,6 +503,13 @@ let debugMode = false;
 let lastPathSignature = '';
 let playerChargingThisTurn = false;
 let playerAttacksDone = 0;
+// 闪避机制：回合内第一次「等待」= 闪避动作（AC 加成，持续到回合结束）
+let playerDodging = false;
+let playerDodgeACBonus = 0;
+// 本回合闪避触发的路径下标（-1 = 本回合不闪避）
+let dodgeTriggerIndex = -1;
+// 本回合已使用的「动作」数：一回合只能进行一次动作（闪避 / 攻击 / 技能）
+let playerActionsUsed = 0;
 let fencerCounterActive = false;
 let playerStats = {};
 let playerChargeStopReason = null;
@@ -1035,6 +1049,112 @@ function countWaitSteps(path) {
     if (path[i].x === path[i-1].x && path[i].y === path[i-1].y) n++;
   }
   return n;
+}
+
+/* =========================================================
+ * ★ 闪避 / 动作机制
+ *
+ * 规则：
+ *  - 路径中的「等待」= 同格重复步。
+ *  - 回合内【第一次】等待 → 闪避节点：给玩家 AC 加成（闪避动作），并且占用本回合唯一的一次动作。
+ *  - 之后再有等待 → 只是普通的「拖延」，不再给加成、也不再占动作。
+ *  - 攻击节点 = 一次动作。
+ *  - 技能节点（泥岩反击 / 风笛冲锋 / 华法琳血浆 / 阿米娅倾泻）不算额外动作。
+ *  - 阿米娅特例：「等待 + 攻击」整段算一个【技能节点】，那一段等待【不结算】
+ *    （不会变成闪避、不会给 AC 加成），因此阿米娅依然能一回合打出倾泻。
+ * ========================================================= */
+const DODGE_AC_BONUS = 3;
+
+// 路径里第一个「等待」步的下标；没有则 -1
+function firstWaitIndex(path) {
+  const p = path || playerPath;
+  for (let i = 1; i < p.length; i++) {
+    if (p[i].x === p[i-1].x && p[i].y === p[i-1].y) return i;
+  }
+  return -1;
+}
+
+// 阿米娅的「等待+攻击」段：返回该等待步下标，没有则 -1
+// 条件：等待步上放了一个攻击节点，且这一段只包含这一个攻击节点
+// 说明：这是阿米娅独有的技能机制 —— 「等待+攻击」整段算【技能节点】，
+//       该等待【不结算】（不触发闪避、不给 AC 加成），因此等待与攻击合为一次动作。
+//       技力是否足够只影响技能能否真正发动，不影响「这段是技能节点」的判定。
+function amiyaDodgeSkipIndex(path) {
+  if (selectedChar !== 'amiya') return -1;
+  const p = path || playerPath;
+  const wIdx = firstWaitIndex(p);
+  if (wIdx < 0) return -1;
+  if (!attackIndices.includes(wIdx)) return -1;
+  // 同一格可能有多步等待；只要该格上挂了攻击节点，就视为「等待+攻击」段
+  const pos = p[wIdx];
+  const onSameCell = attackIndices.filter(i => i < p.length && p[i].x === pos.x && p[i].y === pos.y);
+  if (onSameCell.length !== 1) return -1;
+  return wIdx;
+}
+
+// 泥岩的「连续等待 2 次」= 技能节点（进入反击状态），不是闪避
+// 返回该技能段的【第一个】等待下标（没有连续等待则 -1）
+function fencerSkillWaitIndex(path) {
+  if (selectedChar !== 'fencer') return -1;
+  const p = path || playerPath;
+  const act = findFirstDoubleWaitIndex(p);
+  if (act <= 0) return -1;
+  // findFirstDoubleWaitIndex 返回 act = i+2（三连同格里的最后一个），
+  // 第一次「等待」步发生在 i+1 = act-1
+  return act - 1;
+}
+
+// 本回合规划出来的「动作」占用情况：{ dodge: 是否闪避, actions: 动作数 }
+function plannedActionInfo(path, atkIdxs) {
+  const p = path || playerPath;
+  const atk = atkIdxs || attackIndices;
+  const wIdx = firstWaitIndex(p);
+  const skipIdx = amiyaDodgeSkipIndex(p);
+  const fencerIdx = fencerSkillWaitIndex(p);
+
+  let dodge = false;
+  let actions = 0;
+  if (wIdx >= 0 && wIdx !== skipIdx && wIdx !== fencerIdx) {
+    dodge = true;
+    actions += 1;                 // 闪避占一次动作
+  }
+  // 阿米娅的「等待+攻击」整段算 1 个动作（技能节点 = 倾泻），不再单独计攻击
+  const burstIdx = skipIdx >= 0 ? skipIdx : null;
+  const realAttacks = atk.filter(i => i !== burstIdx).length;
+  actions += realAttacks;
+  if (burstIdx !== null && realAttacks === 0) {
+    actions += 1;                 // 倾泻本身占用这一次动作
+  }
+  return {
+    dodge, actions,
+    dodgeIndex: (dodge ? wIdx : -1),
+    burstIndex: burstIdx,
+    fencerIndex: fencerIdx
+  };
+}
+
+// 一回合只能进行一次动作：判断再加一个动作是否超限
+function actionBudgetLeft(path, atkIdxs) {
+  const info = plannedActionInfo(path, atkIdxs);
+  return 1 - info.actions;
+}
+
+/* 玩家当前有效 AC：闪避状态下额外 +N（闪避持续到本回合结束） */
+function playerEffectiveAC() {
+  let ac = player ? player.ac : 10;
+  if (playerDodging) ac += playerDodgeACBonus;
+  return ac;
+}
+
+/* ★ 动作预算：一回合只能进行一次动作。
+ * 闪避节点与攻击节点互斥 —— 闪避后不能再攻击，攻击后也不能再闪避。
+ * scout 奖励提供的额外攻击次数同样受动作预算限制。
+ * playerActionsUsed = 本回合已消耗的动作数（闪避占 1，攻击每执行一次占 1）。 */
+function maxActionsThisTurn() {
+  return 1 + (player ? player.extraAttacks : 0);
+}
+function canPerformAttackAction() {
+  return playerActionsUsed < maxActionsThisTurn();
 }
 function clearUnitLayer() {
   unitEls.forEach(rec => rec.el.remove());
@@ -2154,9 +2274,11 @@ function buildBoardHtml() {
       previewCounter = canEnterCounterState(playerPath);
     }
   }
-  /* 攻击范围高亮 / 阿米娅倾泻节点（只在规划阶段生效） */
+  /* 攻击范围高亮 / 阿米娅倾泻节点 / 闪避节点（只在规划阶段生效） */
   const rangeSet = (phase === 'planning' && showRangeOverlay) ? playerAttackRangeCells() : null;
   const burstIdx = (phase === 'planning' && selectedChar === 'amiya') ? amiyaBurstAttackIndex(playerPath) : null;
+  const planInfo = (phase === 'planning') ? plannedActionInfo(playerPath, attackIndices) : null;
+  const dodgeIdx = planInfo ? planInfo.dodgeIndex : -1;
   for (let y = bbox.minY; y <= bbox.maxY; y++) {
     for (let x = bbox.minX; x <= bbox.maxX; x++) {
       let cls = 'cell';
@@ -2185,6 +2307,8 @@ function buildBoardHtml() {
             if (burstIdx !== null && stepsAtCell.includes(burstIdx)) cls += ' burst';
             if (playerAttacksDone >= 1 + player.extraAttacks) cls += ' used';
           }
+          /* 闪避节点：第一次等待 → 蓝色标记 */
+          if (dodgeIdx >= 0 && stepsAtCell.includes(dodgeIdx)) cls += ' dodge';
         }
         const playerHere = player.alive && player.x === x && player.y === y;
         const enemyHere = enemies.find(e => e.alive && e.x === x && e.y === y);
@@ -2206,6 +2330,7 @@ function buildBoardHtml() {
           if (hasAttack) {
             content = (burstIdx !== null && attackIndices.includes(burstIdx)) ? '👑' : '🎯';
           }
+          else if (dodgeIdx >= 0 && stepsAtCell.includes(dodgeIdx)) content = '💨';
           else if (stepsAtCell.length > 1) content = `⏳${lastIdx}`;
           else if (lastIdx > 0) content = `${lastIdx}`;
           else content = '';
@@ -2373,11 +2498,17 @@ function updateStats() {
   /* 角色只有一种伤害方式（攻击节点类型决定），只显示对应的那一个，另一格留空保持 2×2 */
   const dmgVal = isRanged ? player.rangedDmg : player.meleeDmg;
   const dmgProf = isRanged ? player.rangedProf : player.meleeProf;
+  /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = 1（scout 奖励可 +1） */
+  const planInfo = plannedActionInfo(playerPath, attackIndices);
+  const actionUsed = planInfo.actions;
+  const actionMax = 1 + (player.extraAttacks || 0);
+  const actionLabel = planInfo.dodge ? '闪避' : ((planInfo.burstIndex !== null || planInfo.fencerIndex >= 0) ? '技能' : (actionUsed > 0 ? '攻击' : '—'));
   const kvGrid = renderKvGrid([
     ['步数', `${moveUsed}/${player.move}`, moveUsed >= player.move ? 'hi' : '', 'wait'],
     ['攻击', `${atkNodes}`, atkNodes > 0 ? 'on' : 'dim', 'attack'],
     [charDmgLabel(selectedChar), `${dmgVal}`, dmgProf ? 'prof' : '', 'range', showRangeOverlay],
-    null,
+    ['动作', `${actionLabel}${actionMax > 1 ? ` (${actionUsed}/${actionMax})` : ''}`,
+      actionUsed > actionMax ? 'hi' : (actionUsed > 0 ? 'on' : 'dim')],
   ]);
   /* 技力槽：泥岩固定上限 5；阿米娅上限 = 感知；风笛上限 5（沿直线移动积累，规划时预览增量）；华法琳上限 5（捡血迹） */
   let spInfo = null;
@@ -2387,7 +2518,7 @@ function updateStats() {
   else if (selectedChar === 'vampire') spInfo = { cur: vampireSp, max: VAMPIRE_SP_MAX };
   renderHero({
     name: `${charInfo ? charInfo.name : '未知'} ${charInfo ? charInfo.icon : ''}`,
-    tag: `第 ${level} 关 · AC ${player.ac}`,
+    tag: `第 ${level} 关 · AC ${playerEffectiveAC()}${playerDodging ? ` (+${playerDodgeACBonus})` : ''}`,
     hp: player.hp, maxHp: player.maxHp,
     shield: playerShield,
     sp: spInfo,
@@ -2429,6 +2560,22 @@ function updateStats() {
   }
   if (playerShield > 0) badges.push(`<span class="badge white">🛡 护盾 ×${playerShield}</span>`);
   if (levelHpBonus > 0) badges.push(`<span class="badge teal">升级 +${levelHpBonus} HP</span>`);
+  /* 闪避 / 技能节点 / 动作冲突 提示 */
+  if (phase === 'planning' && planInfo) {
+    if (planInfo.burstIndex !== null) {
+      badges.push('<span class="badge teal">👑 技能节点 · 等待不结算</span>');
+    } else if (planInfo.fencerIndex >= 0) {
+      badges.push('<span class="badge teal">⚙️ 技能节点 · 反击准备</span>');
+    } else if (planInfo.dodge) {
+      badges.push(`<span class="badge teal">💨 闪避节点 · AC +${DODGE_AC_BONUS}</span>`);
+    }
+    if (planInfo.dodge && atkNodes > 0) {
+      badges.push('<span class="badge red">⚠️ 闪避与攻击只能二选一</span>');
+    }
+  }
+  if (playerDodging) {
+    badges.push(`<span class="badge teal">💨 闪避中 · AC ${playerEffectiveAC()}</span>`);
+  }
   const buffChips = BUFF_POOL.filter(b => buffs[b.id] > 0)
     .map(b => `<span class="chip buff" title="${b.name}：${b.desc}">${b.icon} ${b.name}${buffs[b.id] > 1 ? ' ×' + buffs[b.id] : ''}</span>`)
     .join('');
@@ -2498,8 +2645,8 @@ function renderControls() {
     tip.style.cssText = 'font-size:12px; color:#888; text-align:center; padding:2px; line-height:1.35; white-space:pre-wrap;';
     const isMobile = window.innerWidth <= 760;
     tip.textContent = isMobile
-      ? '点击移动 · 点卡面「步数」等待 · 「攻击」切攻击 · 点伤害看范围\n长按地块也可追加等待 · 空格确认 · X 重置路径'
-      : 'WASD/点击移动 · E 攻击 · Q 等待 · 空格确认\n点卡面「步数」=等待 · 「攻击」=攻击节点 · 点伤害=显示攻击范围\n长按追加等待 · 点击路径节点切换攻击 · X 重置路径 · F12 调试模式';
+      ? '点击移动 · 点卡面「步数」等待 · 「攻击」切攻击 · 点伤害看范围\n长按地块也可追加等待 · 空格确认 · X 重置路径\n一回合一次动作：第一次等待=闪避(AC+3) 或 攻击，二选一'
+      : 'WASD/点击移动 · E 攻击 · Q 等待 · 空格确认\n点卡面「步数」=等待 · 「攻击」=攻击节点 · 点伤害=显示攻击范围\n长按追加等待 · 点击路径节点切换攻击 · X 重置路径 · F12 调试模式\n一回合一次动作：第一次等待=闪避(AC+3) 或 攻击，二选一';
     controlsEl.appendChild(tip);
   } else if (phase === 'gameover') {
     const btn = document.createElement('button');
@@ -2685,8 +2832,23 @@ function toggleAttack(idx) {
     return;
   }
   const ai = attackIndices.indexOf(idx);
-  if (ai >= 0) attackIndices.splice(ai, 1);
-  else if (attackIndices.length < 1 + player.extraAttacks) attackIndices.push(idx);
+  if (ai >= 0) {
+    attackIndices.splice(ai, 1);
+  } else {
+    /* ★ 动作预算：一回合只能进行一次动作（闪避 / 攻击 / 技能）
+     * 已有攻击节点时，额外攻击需要 scout 奖励（额外攻击次数）才允许。 */
+    const maxAttacks = 1 + player.extraAttacks;
+    if (attackIndices.length >= maxAttacks) {
+      log(`本回合最多 ${maxAttacks} 个攻击节点（动作上限），无法再添加。`);
+      return;
+    }
+    /* 已有闪避节点 → 闪避与攻击二选一，提示但不强制阻止（结算时攻击不生效） */
+    const cur = plannedActionInfo(playerPath, attackIndices);
+    if (cur.dodge) {
+      log('⚠️ 本回合已规划闪避：闪避与攻击只能二选一，这个攻击节点将不会生效。');
+    }
+    attackIndices.push(idx);
+  }
 }
 function tryExtendPath(x, y) {
   if (countMoveSteps(playerPath) >= player.move) return false;
@@ -2813,6 +2975,10 @@ function confirmAction() {
   phase = 'resolving';
   playerChargingThisTurn = false;
   playerAttacksDone = 0;
+  playerActionsUsed = 0;
+  playerDodging = false;
+  playerDodgeACBonus = 0;
+  dodgeTriggerIndex = -1;
   pendingAttack = false;
   pendingChargeInfo = null;
   pendingCounterInfo = null;
@@ -2821,6 +2987,11 @@ function confirmAction() {
   clearEnemyArrows();
   playerChargeStopReason = null;
   playerChargeCausedDamage = false;
+
+  /* ★ 动作规划（必须在技能改写 attackIndices 之前算）：
+   * 闪避节点 / 攻击节点 / 技能节点 —— 一回合只能进行一次动作 */
+  const plan = plannedActionInfo(playerPath, attackIndices);
+  dodgeTriggerIndex = plan.dodgeIndex;
 
   if (attackIndices.includes(0)) {
     pendingAttack = true;
@@ -2903,6 +3074,24 @@ function confirmAction() {
       pendingCounterInfo = null;
     }
   }
+  /* =========================================================
+   * ★ 动作结算说明（plan 已在函数开头算好）
+   * ========================================================= */
+  if (plan.dodge) {
+    log(`⚡ 闪避节点：本回合的第一次等待视为闪避动作（AC +${DODGE_AC_BONUS}，持续到回合结束），占用本回合唯一的一次动作。`);
+  } else if (plan.burstIndex !== null) {
+    /* 阿米娅特例：等待+攻击 = 技能节点，等待不结算（不触发闪避） */
+    log('👑 技能节点：等待+攻击 合为「精神爆发」，该等待不再结算为闪避。');
+  }
+
+  // 攻击节点占用动作：闪避与攻击二选一（scout 的额外攻击次数可放宽上限）
+  const realAttackCount = attackIndices.filter(i => i !== plan.burstIndex).length;
+  if (realAttackCount > 0 && plan.dodge) {
+    log(`⚠️ 本回合同时规划了闪避与攻击：闪避与攻击只能二选一，攻击将不会生效。`);
+  } else if (realAttackCount > maxActionsThisTurn()) {
+    log(`⚠️ 本回合规划了 ${realAttackCount} 个攻击节点，超出动作上限（${maxActionsThisTurn()}），多余的攻击不会生效。`);
+  }
+
   render();
   setTimeout(() => resolveStep(1, 0), 300);
 }
@@ -3230,6 +3419,25 @@ async function resolveStep(pIdxIn, eIdx) {
     const targetPos = playerPath[pathIdx];
     const playerFrom = { x: player.x, y: player.y };
 
+    /* ★ 闪避：回合内第一次「等待」步 → 闪避动作，AC +N，持续到本回合结束 */
+    if (!playerDodging && pathIdx > 0 &&
+        playerPath[pathIdx].x === playerPath[pathIdx - 1].x &&
+        playerPath[pathIdx].y === playerPath[pathIdx - 1].y &&
+        pathIdx === dodgeTriggerIndex) {
+      if (playerActionsUsed >= maxActionsThisTurn()) {
+        // 本回合的动作已被攻击占用 → 闪避不成立（攻击与闪避二选一）
+        log('本回合的动作已用于攻击，闪避不成立。');
+        floatText(player.x, player.y, '无法闪避', '#bbb');
+      } else {
+        playerDodging = true;
+        playerDodgeACBonus = DODGE_AC_BONUS;
+        playerActionsUsed += 1;   // 闪避占用本回合唯一的一次动作
+        log(`闪避！你选择驻足闪避，本回合 AC +${DODGE_AC_BONUS}（${player.ac} → ${playerEffectiveAC()}）。`);
+        floatText(player.x, player.y, `闪避 +${DODGE_AC_BONUS}AC`, '#7dd3fc', true);
+        ringFx(player.x, player.y, '#7dd3fc');
+      }
+    }
+
     const shootouts = [];
     for (const em of enemyMoves) {
       const isSwap = playerFrom.x === em.to.x && playerFrom.y === em.to.y &&
@@ -3474,8 +3682,9 @@ async function resolveStep(pIdxIn, eIdx) {
       floatText(player.x, player.y, '禁止攻击', '#bbb');
     } else if (selectedChar === 'wheelchair' || selectedChar === 'fencer') {
       const maxAttacks = 1 + player.extraAttacks;
-      if (playerAttacksDone < maxAttacks) {
+      if (playerAttacksDone < maxAttacks && canPerformAttackAction()) {
         playerAttacksDone++;
+        playerActionsUsed++;   // 攻击占用一次动作
         const targets = enemies.filter(e => e.alive && cheb(e, player) === 1);
         if (targets.length === 0) {
           log('近战范围攻击挥空，未命中任何敌人。');
@@ -3531,7 +3740,7 @@ async function resolveStep(pIdxIn, eIdx) {
       if (playerChargingThisTurn) {
         log('冲锋中无法远程攻击。');
       } else {
-        if (playerAttacksDone < maxAttacks) {
+        if (playerAttacksDone < maxAttacks && canPerformAttackAction()) {
           const fromPos = { x: player.x, y: player.y, range: player.range };
           let targets = enemies.filter(e => e.alive && canRangedAttack(fromPos, e));
           if (targets.length > 0) {
@@ -3605,6 +3814,7 @@ async function resolveStep(pIdxIn, eIdx) {
               }
             }
             playerAttacksDone++;
+            playerActionsUsed++;   // 攻击占用一次动作（闪避与攻击二选一）
             refreshUnits();
             await sleep(220);
           } else {
@@ -3723,9 +3933,10 @@ async function resolveStep(pIdxIn, eIdx) {
         const eStrMod = abilityMod(e.abilities.str);
         const eProf = (e.type !== 'alien') ? e.prof : 0;
         const useDefenseAdvantage = selectedChar === 'fencer' && fencerCounterActive;
+        const pAC = playerEffectiveAC();
         const atk = useDefenseAdvantage
-          ? attackRollDisadvantage(eStrMod, eProf, player.ac)
-          : attackRoll(eStrMod, eProf, player.ac);
+          ? attackRollDisadvantage(eStrMod, eProf, pAC)
+          : attackRoll(eStrMod, eProf, pAC);
         slashFx(player.x, player.y, '#ff6b6b');
         hitFlashCell(player.x, player.y);
         if (atk.hit) {
@@ -3756,11 +3967,11 @@ async function resolveStep(pIdxIn, eIdx) {
             debugMode ? '无敌' : (meleeRes.shielded ? '护盾抵消' : ((critTag ? critTag + ' -' : '-') + ed)),
             debugMode ? '#ffcc00' : (meleeRes.shielded ? '#ffffff' : (critTag ? '#ffd700' : '#ff6b6b')),
             !debugMode && !meleeRes.shielded && !!critTag);
-          log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}${debugMode ? '（调试：玩家无敌）' : (meleeRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, player.ac)})`);
+          log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}${debugMode ? '（调试：玩家无敌）' : (meleeRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
           if (player.hp > 0) triggerFencerCounter();
         } else {
           missFx(player.x, player.y);
-          log(`敌人${i+1}近战未命中 (${fmtRoll(atk, player.ac)})`);
+          log(`敌人${i+1}近战未命中 (${fmtRoll(atk, pAC)})`);
         }
         refreshUnits();
         await sleep(240);
@@ -3823,9 +4034,10 @@ async function resolveAlienShots(eIdx) {
     gainFencerSp(1);
     const intMod = abilityMod(e.abilities.int);
     const useDefenseAdvantage = selectedChar === 'fencer' && fencerCounterActive;
+    const pAC = playerEffectiveAC();
     const atk = useDefenseAdvantage
-      ? attackRollDisadvantage(intMod, e.prof, player.ac)
-      : attackRoll(intMod, e.prof, player.ac);
+      ? attackRollDisadvantage(intMod, e.prof, pAC)
+      : attackRoll(intMod, e.prof, pAC);
     await animateBullet({ x: e.x, y: e.y }, 'player', player, atk.nat20, true, 'enemy-' + e.id);
     if (atk.hit) {
       let ed = e.rangedDmg;
@@ -3851,11 +4063,11 @@ async function resolveAlienShots(eIdx) {
         debugMode ? '无敌' : (shotRes.shielded ? '护盾抵消' : ((atk.nat20 ? '自然20暴击 -' : '-') + ed)),
         debugMode ? '#ffcc00' : (shotRes.shielded ? '#ffffff' : (atk.nat20 ? '#ffd700' : '#a55eea')),
         !debugMode && !shotRes.shielded && atk.nat20);
-      log(`外星人${i+1}远程命中${debugMode ? '（调试：玩家无敌）' : (shotRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, player.ac)})`);
+      log(`外星人${i+1}远程命中${debugMode ? '（调试：玩家无敌）' : (shotRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
       if (player.hp > 0) triggerFencerCounter();
     } else {
       missFx(player.x, player.y);
-      log(`外星人${i+1}远程未命中 (${fmtRoll(atk, player.ac)})`);
+      log(`外星人${i+1}远程未命中 (${fmtRoll(atk, pAC)})`);
     }
     refreshUnits();
     await sleep(240);
@@ -3870,6 +4082,11 @@ async function endRound() {
   attackIndices = []; enemyPaths = [];
   playerChargingThisTurn = false; playerAttacksDone = 0; fencerCounterActive = false;
   pendingAttack = false;
+  // 闪避状态到回合结束为止
+  playerDodging = false;
+  playerDodgeACBonus = 0;
+  dodgeTriggerIndex = -1;
+  playerActionsUsed = 0;
   pendingChargeInfo = null;
   pendingCounterInfo = null;
   amiyaBurstPlan = null;
