@@ -219,6 +219,8 @@ var MY_SCORE = null;     // 本局成绩（用于排行榜高亮）
 
 // 默认上报地址兜底（bot 启动后会把真实地址写进 leaderboard.json，覆盖此值）
 var REPORT_URL_FALLBACK = '';
+// bot @username 兜底（深链回传成绩用，防止 leaderboard.json 取不到时落到空/错误用户名）
+var BOT_USER_FALLBACK = 'yu7_bot';
 
 function $(id){ return document.getElementById(id); }
 
@@ -255,7 +257,7 @@ function loadConfig(cb){
       APP.data = d || APP.data;
       if(APP.data){
         APP.reportUrl = APP.data.report_url || REPORT_URL_FALLBACK || '';
-        APP.botUser = APP.data.bot_username || APP.botUser || '';
+        APP.botUser = APP.data.bot_username || BOT_USER_FALLBACK || APP.botUser || '';
       }
       if(cb) cb();
     })
@@ -380,7 +382,12 @@ function reportScore(level, kills){
 }
 function deepLinkScore(level, kills){
   try {
-    var dl = 'https://t.me/' + APP.botUser + '?start=score:' + level + '_' + kills;
+    var bot = APP.botUser || BOT_USER_FALLBACK;
+    if(!bot){
+      toast('⚠️ 未配置 bot 用户名，无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
+      return;
+    }
+    var dl = 'https://t.me/' + bot + '?start=score:' + level + '_' + kills;
     if(W && W.openTelegramLink){ W.openTelegramLink(dl); }
     else { window.location.href = dl; }
     toast('📊 正在记录成绩…（已切到聊天）\n点机器人回复里的 /rank 看排行榜', 5000);
