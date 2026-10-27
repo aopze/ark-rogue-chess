@@ -1,4 +1,5 @@
-/* P0.1-4 拆分 · 20261028b 基线 487-522 行 · 常量与方向表 */
+/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 487-522 行原样搬移（常量与方向表）。
+ * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
 const SPAWN_CLEAR_RADIUS = 2;
 const OBSTACLE_MAX_GROUP = 4;
 const OBSTACLE_GROUPS_TRY = 8;
@@ -8,6 +9,12 @@ const ABILITY_CAP = 20;
  * 旧常量 ABILITY_POINTS_PER_LEVEL = 1 已移除（曾每通关 1 关给 1 点）。 */
 const ABILITY_POINTS_PER_LEVELUP = 2;
 const PLAYER_RANGE = 3;   // 远程角色的攻击节点射程（近战角色攻击节点只打相邻 1 格）
+/* 玩家基础 HP 加成（ISSUE-20261028-04 配套）。
+ * 敌人伤害从「常量 1」改为骰子后，首关承伤期望从每回合 0.99 涨到 1.38（+39%），
+ * 玩家 HP10 撑不到清场，实测「第 1 关即死」比例 40% → 55%。补 4 点基础 HP 把它拉回来：
+ * 前期收益最大（10→14，+40%），后期被 con/升级稀释（20→24，+20%），符合「前期该更宽容」。
+ * 校准记录：+2 时 80 局测试仍为 -43%（旧 1.21 关 → 新 0.69 关），故提到 +4。 */
+const BASE_HP_BONUS = 4;
 
 const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const ABILITY_FULL = { str: '力量', dex: '敏捷', con: '体质', int: '智力', wis: '感知', cha: '魅力' };
