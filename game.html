@@ -166,6 +166,10 @@
   .chip.green { background:#20380f; color:#8fe28a; }
   #stats { flex: 1 1 auto; min-height: 0; overflow-y: auto; display:flex; flex-direction:column; gap:6px; }
   #footBar { flex-shrink:0; }
+  /* 竖屏：把「开始行动」按钮放到六维图上方（横屏时按钮仍在底部 #controls） */
+  #actionSlot { display: none; }
+  body.layout-v #actionSlot { display: block; flex: 0 0 auto; }
+  body.layout-v #actionSlot .start-btn { width: 100%; }
   #controls { flex-shrink: 0; display:flex; flex-direction:column; gap:8px; min-height: 90px; }
   #controls:empty { min-height: 0; }
   /* ---- 战斗日志：左上角悬浮窗（可拖动，标题栏带重开/旋转/折叠） ---- */
@@ -339,6 +343,7 @@
   </div>
   <div id="dragHandle" title="拖动调整地图与右侧UI的比例"><span class="grip"></span></div>
   <div id="sidebar">
+    <div id="actionSlot"></div>
     <div id="hero">
       <div id="radarWrap"><canvas id="radarCanvas"></canvas></div>
       <div id="heroRight">
@@ -612,6 +617,7 @@ const footEl = document.getElementById('footBar');
 const heroInfoEl = document.getElementById('heroInfo');
 const heroKvEl = document.getElementById('heroKv');
 const controlsEl = document.getElementById('controls');
+const actionSlotEl = document.getElementById('actionSlot');   // 竖屏时「开始行动」按钮的槽位（在六维图上方）
 const radarCanvas = document.getElementById('radarCanvas');
 let radarLabelHits = [];   // drawRadar 写入：六维图 6 个属性文字的命中框，供点击加点用
 
@@ -2628,19 +2634,24 @@ function allocateAbilityPoint(abilityKey) {
 
 function updateStartBtn() {
   if (phase !== 'planning') return;
-  const btn = controlsEl.querySelector('.start-btn');
+  // 开始行动按钮可能位于 #controls（横屏）或 #actionSlot（竖屏，放在六维图上方）
+  const btn = controlsEl.querySelector('.start-btn') || (actionSlotEl ? actionSlotEl.querySelector('.start-btn') : null);
   if (btn) btn.disabled = playerPath.length === 0;
 }
 
 function renderControls() {
   controlsEl.innerHTML = '';
+  if (actionSlotEl) actionSlotEl.innerHTML = '';
+  /* 竖屏（layout-v）：「开始行动」按钮放到六维图上方的 #actionSlot；横屏则留在底部 #controls */
+  const vertical = document.body.classList.contains('layout-v');
+  const btnHost = (vertical && actionSlotEl) ? actionSlotEl : controlsEl;
   if (phase === 'planning') {
     const confirm = document.createElement('button');
     confirm.className = 'start-btn';
     confirm.textContent = '⚔️ 开始行动';
     confirm.disabled = playerPath.length === 0;
     confirm.onclick = confirmAction;
-    controlsEl.appendChild(confirm);
+    btnHost.appendChild(confirm);
     const tip = document.createElement('div');
     tip.style.cssText = 'font-size:12px; color:#888; text-align:center; padding:2px; line-height:1.35; white-space:pre-wrap;';
     const isMobile = window.innerWidth <= 760;
@@ -2650,9 +2661,10 @@ function renderControls() {
     controlsEl.appendChild(tip);
   } else if (phase === 'gameover') {
     const btn = document.createElement('button');
+    btn.className = 'start-btn';
     btn.textContent = '重新开始';
     btn.onclick = () => initCharSelect();
-    controlsEl.appendChild(btn);
+    btnHost.appendChild(btn);
   } else if (phase === 'levelclear') {
     const tip = document.createElement('div');
     tip.style.cssText = 'font-size:13px; color:#ffd700; text-align:center; padding:4px;';
@@ -2675,7 +2687,7 @@ function renderControls() {
         btn.textContent = '⬇️ 下一关';
         btn.onclick = proceedNextLevel;
       }
-      controlsEl.appendChild(btn);
+      btnHost.appendChild(btn);
     } else {
       // 保险：定时器万一被清掉，也不会卡在通关界面
       setTimeout(() => openLevelUp(), 400);
