@@ -23,20 +23,51 @@
   成绩上报钩子源码（type=text/plain 不会被浏览器执行，仅作为文本被注入到游戏 iframe 中）。
   它通过轮询游戏的顶层变量判定「游戏结束」并上报，与具体游戏版本解耦：
   只要游戏仍用 phase / level / enemies 这三个变量名，换 HTML 内容也无需改动此处。
+
+  kills 语义 = 整局累计击杀：
+    游戏每关会重建 enemies 数组（enemies = [] 后重新 push），且没有内置累计击杀变量，
+    所以钩子自己维护 carry —— 检测到 enemies 数组引用变化（=换关）时，
+    把上一关的击杀数并入 carry；检测到 level 回退（= 重新开新一局）时清零。
 -->
 <script id="hooksrc" type="text/plain">
 (function () {
   var sent = false;
+  var prevEnemies = null;   // 上一 tick 的 enemies 数组引用
+  var prevDead = 0;         // 上一 tick 的本关已死数
+  var carry = 0;            // 已结束关卡的累计击杀
+  var prevLevel = 0;        // 上一 tick 的层数
+
+  function collect() {
+    var p = (typeof phase !== 'undefined') ? phase : null;
+    var lvl = (typeof level !== 'undefined') ? level : 0;
+    var en = (typeof enemies !== 'undefined') ? enemies : null;
+
+    // 换关：enemies 数组被重建 → 上一关的击杀并入累计
+    if (prevEnemies !== null && en !== prevEnemies) {
+      carry += prevDead;
+      prevDead = 0;
+    }
+    // 新一局：层数回退 → 累计清零
+    if (lvl < prevLevel) {
+      carry = 0;
+      prevDead = 0;
+    }
+    prevLevel = lvl;
+
+    var dead = (en && en.filter) ? en.filter(function (e) { return !e.alive; }).length : 0;
+    prevEnemies = en;
+    prevDead = dead;
+
+    return { phase: p, level: lvl, kills: carry + dead };
+  }
+
   function tick() {
     try {
-      var p = (typeof phase !== 'undefined') ? phase : null;
-      if (p === 'gameover') {
+      var s = collect();
+      if (s.phase === 'gameover') {
         if (!sent) {
           sent = true;
-          var en = (typeof enemies !== 'undefined') ? enemies : [];
-          var kills = (en && en.filter) ? en.filter(function (e) { return !e.alive; }).length : 0;
-          var lvl = (typeof level !== 'undefined') ? level : 0;
-          parent.postMessage({ type: 'rogue_score', level: lvl, kills: kills }, '*');
+          parent.postMessage({ type: 'rogue_score', level: s.level, kills: s.kills }, '*');
         }
       } else {
         sent = false; // 下一局重新开始判定
