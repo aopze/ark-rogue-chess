@@ -1,5 +1,5 @@
 {
- "updated_at": 1793120144,
+ "updated_at": 1793120836,
  "entries": [
   {
    "id": "5648491503",
@@ -14,6 +14,13 @@
    "level": 3,
    "kills": 6,
    "runs": 1
+  },
+  {
+   "id": "dev_795886eefd284d10919125f63b913f0f",
+   "name": "雨",
+   "level": 0,
+   "kills": 0,
+   "runs": 0
   }
  ],
  "bot_username": "yu7_bot",
