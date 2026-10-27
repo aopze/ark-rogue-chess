@@ -43,9 +43,10 @@ function renderUnits() {
   }
   for (const e of enemies) {
     if (!e.alive) continue;
-    let icon = '💀', isGhost = false;
-    if (e.type === 'ghost') { icon = '👻'; isGhost = true; }
-    else if (e.type === 'alien') { icon = '👾'; }
+    /* 图标统一由数据层提供（ISSUE-20261028-04 新增盾卫/自爆虫） */
+    const stat = ENEMY_STATS[e.type] || {};
+    const icon = stat.icon || '💀';
+    const isGhost = e.type === 'ghost';
     toRender.push({
       key: 'enemy-' + e.id, x: e.x, y: e.y,
       icon, hp: e.hp, maxHp: e.maxHp,
