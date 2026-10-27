@@ -198,6 +198,50 @@ export function checkStructure(artifactPath) {
   };
 }
 
+/* ------------------------------------------- 4. 无重复定义（NB-12 防回归） */
+
+/**
+ * 机械拆分期的典型事故：模块已搬进 src/，但模板里那段代码忘了删，
+ * 于是产物里同一个函数被定义两次（2026-10-28 build 20261028c 真实事故：
+ * `function isWalkable` 在产物中出现 2 次，模板被回退成旧版所致）。
+ *
+ * 本检查扫描 manifest 里每个模块的顶层定义名，要求它们在产物中**各只定义 1 次**。
+ */
+export function collectTopLevelNames(moduleBody) {
+  const names = new Set();
+  const re = /^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|^(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/gm;
+  let m;
+  while ((m = re.exec(moduleBody))) names.add(m[1] || m[2]);
+  return [...names];
+}
+
+export function checkNoDuplicateDefinitions(artifactPath, { manifestPath = null } = {}) {
+  const mp = manifestPath || path.join(ROOT, 'build', 'manifest.json');
+  if (!fs.existsSync(mp)) {
+    return { pass: true, skipped: true, title: '无重复定义', detail: 'manifest.json 不存在，跳过' };
+  }
+  const manifest = JSON.parse(readText(mp));
+  const art = readText(artifactPath);
+  const dup = [];
+  for (const rel of manifest.modules || []) {
+    const body = readText(path.join(ROOT, rel));
+    for (const name of collectTopLevelNames(body)) {
+      // 只匹配「顶层定义」：行首无缩进，避免把函数内的同名局部变量算进来
+      const pats = [
+        new RegExp(`(?:^|\\n)(?:async\\s+)?function\\s+${name}\\s*\\(`, 'g'),
+        new RegExp(`(?:^|\\n)(?:const|let|var)\\s+${name}\\s*=`, 'g'),
+      ];
+      const n = pats.reduce((acc, p) => acc + (art.match(p) || []).length, 0);
+      if (n > 1) dup.push(`${name} ×${n}`);
+    }
+  }
+  return {
+    pass: dup.length === 0,
+    title: '无重复定义',
+    detail: dup.length ? `重复定义（模板残留已拆代码？）：${dup.join('、')}` : 'manifest 各模块顶层定义均唯一',
+  };
+}
+
 /* ------------------------------------------------------- 汇总入口 */
 
 export function runVerify(artifactPath, opts = {}) {
@@ -209,6 +253,7 @@ export function runVerify(artifactPath, opts = {}) {
 
   results.push(checkOfflineSelfContained(artifactPath));
   results.push(checkStructure(artifactPath));
+  results.push(checkNoDuplicateDefinitions(artifactPath));
   if (prev) results.push(checkArtifactEquivalence(artifactPath, prev));
 
   const size = fs.existsSync(artifactPath) ? fs.statSync(artifactPath).size : 0;

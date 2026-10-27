@@ -7,7 +7,7 @@
  *       （真实产物链路的验证见 build/bundle.mjs --self-test）
  * ========================================================================= */
 import { bumpBuild, stripModuleSyntax, injectVersion } from './bundle.mjs';
-import { validateBuild, readVersionFromArtifact, normalize } from './verify.mjs';
+import { validateBuild, readVersionFromArtifact, normalize, collectTopLevelNames } from './verify.mjs';
 
 let pass = 0;
 const failed = [];
@@ -118,6 +118,16 @@ console.log('\n[单测] normalize —— 一致性比对的归一化');
   const c = `const x = 2;`;
   check('实质改动仍能被检出', normalize(a) !== normalize(c));
   check('不抹平版本时差异可见', normalize(a, { stripVersion: false }) !== normalize(b, { stripVersion: false }));
+}
+
+console.log('\n[单测] collectTopLevelNames —— 顶层定义名提取（无重复定义校验的前置）');
+{
+  const body = `function alpha(a) {\n  const beta = 1;\n  function gamma() {}\n}\nconst delta = { x: 1 };\nlet eps = 2;`;
+  const names = collectTopLevelNames(body);
+  check('顶层 function 被提取', names.includes('alpha'));
+  check('顶层 const / let 被提取', names.includes('delta') && names.includes('eps'));
+  check('函数内嵌套定义不算顶层', !names.includes('beta') && !names.includes('gamma'));
+  check('async function 被提取', collectTopLevelNames('async function zeta() {}').includes('zeta'));
 }
 
 console.log(`\n${failed.length === 0 ? `全部通过（${pass} 项）` : `失败 ${failed.length} 项：${failed.join(', ')}`}`);

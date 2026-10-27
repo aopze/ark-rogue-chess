@@ -4,6 +4,52 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
+## [未发布] — 机械拆分第六批 + 基线复核（`P0.1-4`，build `20261028c`）
+
+> 本节**不涉及线上产物**：根目录 `game.html` 未改动（272,067 B / `959b59d2`）。
+> 拆分产物只落在 `build/out/game.html`，**发布需人类授权**（§0.0 / NB-12）。
+
+### 基线复核（承接 README v3.6 的模板误覆盖事故）
+
+人类发版 build `20261028c`（`game.html` 261,228 B → **272,067 B**，ISSUE-04 敌人差异化 + ISSUE-07 熟练加值）。
+发版过程中出现过一次**模板误覆盖**（README v3.6 已记录并由发版方修复），本批在其修复版上继续：
+
+- 复核结果：远端 `templates/game.html` 205,408 B（第 1–6 区已骨架化）、`manifest.json` 15 模块 —— 两者**已匹配**，
+  我本地独立修复出的模板与该版**逐字节相同**（说明修复口径一致，无二次偏差）。
+- 复核 `src/**` 与 `game.html` 的整段命中情况：15 个模块全部命中，无需重取。
+- 复核 `src/ui/units.js`：发版方已按通告把 `renderUnits` 的图标改动落到该模块（5,686 B），与本批一致。
+
+### 第六批（第 7 区：状态重置与棋盘特效，20261028c 基线 1908-2340 行）
+
+- `src/rules/reset.js` —— 状态重置（1908-2003 行）：`freshBuffs` / `clearLevelUpOverlay` /
+  `resetSkillState` / `resetRunProgress` / `resetTurnState` / `createPlayerStats` /
+  `createPlayerUnit` / `syncPlayerFromStats`
+- `src/ui/char-select.js` —— 角色选择流程（2005-2050 行）：`initCharSelect` / `selectCharacter`
+- `src/ui/board-fx.js` —— 棋盘几何与特效（2052-2340 行）：`findPath`（BFS 寻路）/ `getBoundingBox` /
+  `getCellEl` / `cellCenter` / `unitCenter` / `facingIndicatorHtml` / `unitHtml` / `hasLineOfSight` /
+  `canRangedAttack` / `playerAttackRangeCells` / 敌人首步箭头 / `floatText` / `ringFx` / `slashFx` /
+  `animateBullet` / `hitFlashCell` / `refreshUnits` / `hitFx` / `missFx`
+
+产物 **271,481 B vs 基线 272,067 B = −586 B**（模块头注释开销被第 5 批的压缩策略抵消），
+归一化后与基线**完全一致**；e2e 六套件全绿。
+
+> ℹ️ 归属说明：`board-fx.js` 里的 `findPath` / `hasLineOfSight` / `canRangedAttack` 是**纯函数**，
+> 但与原段 DOM 代码交织、无法在不改代码的前提下分离，故暂归 `src/ui/`，
+> 已标注于模块头注释，留待 `P0.1-5` 重构期移入 `src/rules/`。
+
+### 新增：`checkNoDuplicateDefinitions`（防止 v3.6 事故复发）
+
+`build/verify.mjs` 新增第 5 项校验，已接入 `runVerify` 与 `bundle.mjs`：
+
+- **做什么**：读 `manifest.json` 的 `modules`，对每个模块提取**顶层定义名**（`function` / `const` / `let` / `var`），
+  要求它们在产物中**各只定义 1 次**。
+- **为什么**：v3.6 那类事故的后果是静默的 —— `function` 重复定义不报错、后者覆盖前者；
+  若是 `let/const` 重复则直接 SyntaxError。人眼在 27 万字节里看不出。
+- **精度**：只匹配**行首无缩进**的定义形式，避免函数内同名局部变量误报
+  （首版用 `\s*` 允许缩进，导致 `radar.js` 的 `const dist`、`tools.js` 的 `const key` 被误判，已修正）。
+- **反向验证**：故意把 `function isWalkable` 塞回模板 → 校验打红 `isWalkable ×2`；恢复后转绿。
+- **单测**：`build/bundle_test.mjs` 加 4 项（顶层提取 / 嵌套不计 / `async function` / `const`+`let`），34 → 38 项。
+
 ## [未发布] — 机械拆分第一、二批 + `20261028b` 基线重新对齐（`P0.1-4`）
 
 > 本节**不涉及线上产物**：根目录 `game.html` 未改动（现 261,228 B / `4cb46640`，build `20261028b`）。

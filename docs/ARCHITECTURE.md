@@ -107,7 +107,14 @@ node build/verify.mjs <产物> --prev <旧产物>
 | 3 | 第 3 区「DOM 引用与基础工具」（`20261028b` 基线 489-740 行） | `ui/dom-refs.js`、`rules/rng.js`、`net/pvp-core.js` | ✅ 已完成 |
 | 4 | 第 4-5 区「掷骰与面板 / 六维雷达图」（`20261028b` 基线 489-776 行） | `ui/tools.js`、`rules/dnd.js`、`ui/radar.js` | ✅ 已完成 |
 | 5 | 第 6 区「规则判定」（`20261028b` 基线 1352-1768 行） | `rules/path.js`、`rules/actions.js`、`ui/units.js` | ✅ 已完成 |
-| 6+ | 第 7–15 区（DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
+| 6 | 第 7 区「状态重置与棋盘特效」（`20261028c` 基线 1908-2340 行） | `rules/reset.js`、`ui/char-select.js`、`ui/board-fx.js` | ✅ 已完成 |
+| 7+ | 第 8–15 区（结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 联机 / 启动） | 待定 | ⬜ 待做 |
+
+> ⚠️ **每批必过的第五项校验**：`checkNoDuplicateDefinitions`（`build/verify.mjs`）。
+> 扫描 manifest 各模块的**顶层定义名**，要求产物中各只出现 1 次。
+> 起因是 build `20261028c` 发版时的模板误覆盖 —— 模板仍含已拆的第 6 区代码，
+> 产物里 `function isWalkable` 被定义两遍且**静默不报错**（后者覆盖前者）。
+> 只匹配行首无缩进的定义形式，避免函数内同名局部变量误报。
 
 ### 前两批的等价性证明（重要）
 
