@@ -242,6 +242,24 @@ export function checkNoDuplicateDefinitions(artifactPath, { manifestPath = null 
   };
 }
 
+/* ------------------------------------------------ 4. 注入标记残留检查 */
+
+/**
+ * 多槽位注入（`<!-- @inject:scripts:<id> -->`）的兜底：
+ * 标记若没被替换就留在产物里，虽然因为 `<!--` 在 JS 里等同行注释而**不会报错**，
+ * 但意味着某段代码没被内联 —— 静默少代码比报错更危险。
+ */
+export function checkNoInjectionMarkers(artifactPath) {
+  const src = readText(artifactPath);
+  const hits = src.match(/<!--\s*@inject:[A-Za-z0-9_.:-]+\s*-->/g) || [];
+  const uniq = [...new Set(hits)];
+  return {
+    pass: uniq.length === 0,
+    title: '注入标记无残留',
+    detail: uniq.length ? `产物中残留未替换的占位符：${uniq.join('、')}` : '模板占位符已全部替换',
+  };
+}
+
 /* ------------------------------------------------------- 汇总入口 */
 
 export function runVerify(artifactPath, opts = {}) {
@@ -253,6 +271,7 @@ export function runVerify(artifactPath, opts = {}) {
 
   results.push(checkOfflineSelfContained(artifactPath));
   results.push(checkStructure(artifactPath));
+  results.push(checkNoInjectionMarkers(artifactPath));
   results.push(checkNoDuplicateDefinitions(artifactPath));
   if (prev) results.push(checkArtifactEquivalence(artifactPath, prev));
 

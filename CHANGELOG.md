@@ -4,6 +4,77 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
+## [未发布] — 机械拆分第七批（按热度分级）+ 构建「多点注入」（`P0.1-4`，build `20261028c`）
+
+> 本节**不涉及线上产物**：根目录 `game.html` 未改动（272,067 B / `959b59d2`）。
+> 拆分产物只落在 `build/out/game.html`，**发布需人类授权**（§0.0 / NB-12）。
+
+### 为什么这批不按行号顺序拆
+
+按 `ISSUE-20261028-08-split-by-heat.md`（人类维护者 03:40 确认）：剩下 8 区里有 3 处是
+`issues/` 里 05（精英词缀）/ 06（遗物事件）/ 07-icon 的**必改热区** ——
+`initLevel` / `finishLevel` / `openLevelUp`（06 要往里插事件 phase）、`resolveTurn` 与敌人 AI（05 改结算）、
+`renderUnits`（07-icon）。按行号拆等于「拆完立刻被改」，白拆两遍。
+
+判断标准：**拆完能撑过 1.5 轮发版（约 45–60 分钟的重取区成本）才划算**。
+已实测每轮发版后的「重新取区对齐」成本 30–40 分钟，且已发生 4 次。
+
+### 前置改造：构建支持「多点注入」（本批能成立的前提）
+
+`layout` 与 `chrome` 各是**两段不连续**代码（layout 在模板 1078 与 3382 行、chrome 在 3268 与 3893 行）。
+旧构建只有一个占位符、且位于最前，于是：
+
+- **拼接成一个模块 = 改动求值顺序**：合并后第二段会在模板里 `const dragHandle` / `const logRotateBtn`
+  声明之前执行 → **TDZ ReferenceError**（归一化比对看不出来，页面直接白屏）。
+- **只拆前面连续段 = 只能拆热区**，与本 issue 的目的相反。
+
+所以先给构建加能力（基建，§0.0 豁免）：
+
+| 文件 | 改动 |
+|---|---|
+| `build/bundle.mjs` | 新增 `splitBySlot()`：模块内 `/* @slot:<id> */` 切段；`inlineModules()` 把每段注入模板同名 `<!-- @inject:scripts:<id> -->`。**跨槽位置由模板决定（= 求值顺序不变）**，同槽内顺序 = `modules` 顺序；槽位缺失/多余标记均**抛错**（不静默） |
+| `build/verify.mjs` | 新增第 6 项校验 `checkNoInjectionMarkers`：产物不得残留 `@inject` 标记。理由：`<!--` 在 JS 里等同行注释，**标记没被替换也不会报错**，只会静默少一段代码 |
+| `build/bundle_test.mjs` | 加 10 项单测（切段 / 空段丢弃 / 行内提及不误判 / 残留标记判红与判绿）→ 38 变 **48 项** |
+| `net/layout_chrome_test.mjs` | **新增 38 项**：横竖切换、竖版拖拽比例与 `localStorage` 往返、设置面板开合、DLC 外壳 iframe 接管（隐藏 `#btnHome`、`#ghint` 空则隐藏/有字则右上角、劫持 `showHint`） |
+
+### 第七批（3 组低热度代码，模板行号）
+
+| 模块 | 区间 | 内容 |
+|---|---|---|
+| `src/rules/mapgen.js` | 701-927 | `bfsReachable` / `growRegion` / `smoothRegion` / `clearSpawnArea` / `countWalkable` / `placeObstacles` / `generateMap`（纯逻辑，零 DOM） |
+| `src/ui/layout.js` | **1078-1161** + **3382-3428** | 竖版地图高度比例拖动（`gameEl` / `MAP_V_KEY` / `mapVRatio` / `vGameBox` / `vMapBounds` / `applyMapVHeight` / `syncMapVHeight` / `clearMapVHeight` / 拖动状态 / `endSideDrag`）+ 横竖切换（`LAYOUT_KEY` / `currentLayout` / `setLayout` / `initLayoutMode`） |
+| `src/ui/chrome.js` | **3268-3380** + **3893-3959** | 设置/日志面板外壳（日志面板 DOM ref / `LOG_POS_KEY` / `setOpenBtn` / `clampLogPanelPos` / `setSettingsOpen` / `bindLogDrag` / 重开 / 主页）+ `patchDLCChrome`（隐藏外壳 `#btnHome` / 劫持 `showHint` / `#ghint` 同步） |
+
+`modules` 18 → **21**（`src/data/` 3 + `src/rules/` 9 + `src/ui/` 8 + `src/net/` 1）。
+`templates/game.html` 188,313 B → **166,663 B**（减 21,650 B / 3,432 行）。
+
+### 与 issue 原区间的差异（已按实际边界修正）
+
+issue 写的是 `layout` 1087-1162 + 3366-3445、`chrome` 3269-3368 + 3897-尾。实际取区时按**语义边界**调整：
+
+- `layout` 第 1 段上移到 **1078**（issue 列的 `gameEl` / `MAP_V_KEY` / `mapVRatio` 都在 1079-1081，按 1087 起会把这几个顶层 `const` 留在模板里，而搬走的函数要用它们）。
+- `layout` 第 2 段收为 **3382-3428**（3366 附近仍是「重开」按钮，属 chrome）。
+- `chrome` 第 1 段延到 **3380**，把「重开」「主页」两个按钮的监听一起带走（issue 把 `setHomeBtn` 列为 chrome 内容，但区间写的是 3368 截止）。
+- `chrome` 第 2 段收为 **3893-3959**（只搬 `patchDLCChrome` 及其文档注释）。**不搬**文件尾的 `initCharSelect()` / `pvpInjectUI()` —— 那是启动入口，不是外壳接管。
+- 两段之间的空行归属按「跟着上下文的段落走」处理，`--prev` 归一化比对已确认无实质差异。
+
+### 验证
+
+1. **文本等价**：`node build/bundle.mjs --prev game.html` → 归一化后与基线**完全一致**；
+   产物 272,787 vs 272,067 B = **+720 B（0.26%）**，远低于 `AC-01` 的 2%。
+2. **无残留**：21 个关键函数/常量（`bfsReachable` … `generateMap`、`vGameBox` … `endSideDrag`、
+   `currentLayout`/`setLayout`、`clampLogPanelPos`/`setSettingsOpen`、`MAP_V_KEY`/`LAYOUT_KEY`/`LOG_POS_KEY`/`gameEl`）
+   在**产物中各 1 次、模板中各 0 次**。
+3. **真运行**：e2e 六套件全绿（`dom_load` 23 / `pvp_core` 20 / `pvp_e2e` 16 / `pvp_browser` 16 /
+   `hook_integration` 8 + 联机 `client`）；新增 `net/layout_chrome_test.mjs` **38 项全绿**；
+   `bundle_test` **48 项**、`push_guard` 10 项全绿。
+
+### 留给后续
+
+- 热区（`initLevel`/`finishLevel`/`openLevelUp`、`resolveTurn` 与敌人 AI、`renderUnits`）**等 05/06/07 落地后再拆**。
+- 本批严格「纯移动」：不做 NB-13 的命名对齐、不把魔法数字搬进 `constants.js`。
+  混两件事会让「归一化后完全一致」这个唯一可靠的等价判据失效。
+
 ## [未发布] — 机械拆分第六批 + 基线复核（`P0.1-4`，build `20261028c`）
 
 > 本节**不涉及线上产物**：根目录 `game.html` 未改动（272,067 B / `959b59d2`）。

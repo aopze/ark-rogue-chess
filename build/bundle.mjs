@@ -143,7 +143,45 @@ export function stripModuleSyntax(code, fileLabel) {
   return out;
 }
 
-/** 按清单顺序内联模块到模板占位处。 */
+/* --------------------------------------------------- 多槽位内联（P0.1-4 按热度拆分） */
+
+/**
+ * 模块内的分段标记：`/* @slot:<id> *\/`
+ *
+ * 为什么需要它：占位符如果只有一个且在最前，所有模块就都在**模板剩余代码之前**求值。
+ * 但「按热度分批」拆出的代码往往**不连续**（例如 `layout` 的第 1 段在模板中部、
+ * 第 2 段在模板尾部），把两段拼成一个模块会改动求值顺序 —— 第二段会在模板里
+ * `const dragHandle` / `const logRotateBtn` 声明之前执行，直接 TDZ 报错。
+ *
+ * 于是允许一个模块文件用标记切成多段，每段落到模板里对应的同名槽位：
+ *   - 文件开头到第一个标记之间算默认槽 `default`（即最前面的 `<!-- @inject:scripts -->`）
+ *   - 之后每个 `@slot:<id>` 开启一个新段，落到 `<!-- @inject:scripts:<id> -->`
+ * 这样每段代码**回到它原来所在的位置**，求值顺序不变、产物可与基线逐字节等价。
+ */
+const SLOT_MARKER_RE = /^\s*\/\*\s*@slot:([A-Za-z0-9_.-]+)\s*\*\/\s*$/;
+
+/** 把模块源码按 `@slot:` 标记切段，返回 [{ slot, code }]（空段丢弃）。 */
+export function splitBySlot(code) {
+  const segs = [];
+  let cur = { slot: 'default', lines: [] };
+  for (const line of code.split('\n')) {
+    const m = line.match(SLOT_MARKER_RE);
+    if (m) { segs.push(cur); cur = { slot: m[1], lines: [] }; }
+    else cur.lines.push(line);
+  }
+  segs.push(cur);
+  return segs
+    .map((s) => ({ slot: s.slot, code: s.lines.join('\n').trim() }))
+    .filter((s) => s.code.length > 0);
+}
+
+/** 模板中的槽位占位符（default 用原写法，其余带 id）。 */
+function slotMarker(slot, fallback) {
+  if (slot === 'default') return fallback || '<!-- @inject:scripts -->';
+  return `<!-- @inject:scripts:${slot} -->`;
+}
+
+/** 按槽位内联模块。同槽内顺序 = 清单顺序；跨槽位置 = 模板中的标记位置。 */
 export function inlineModules(templateHtml, manifest, label = 'manifest') {
   const modules = Array.isArray(manifest.modules) ? manifest.modules : [];
   const placeholder = manifest.placeholder || '<!-- @inject:scripts -->';
@@ -152,21 +190,50 @@ export function inlineModules(templateHtml, manifest, label = 'manifest') {
     return { html: templateHtml, count: 0, warning: `${label} 的 modules 为空（P0.1-4 拆分前属正常）` };
   }
 
-  const chunks = [];
+  // 1) 收集各槽位的代码块
+  const bySlot = new Map();
   for (const mod of modules) {
     const rel = typeof mod === 'string' ? mod : mod.path;
     const abs = path.join(ROOT, rel);
     if (!fs.existsSync(abs)) throw new Error(`清单中的模块不存在：${rel}`);
-    const code = stripModuleSyntax(fs.readFileSync(abs, 'utf8'), rel);
-    chunks.push(`/* src: ${rel} */\n${code.trim()}`);
+    const parts = splitBySlot(stripModuleSyntax(fs.readFileSync(abs, 'utf8'), rel));
+    if (parts.length === 0) throw new Error(`模块内容为空：${rel}`);
+    const multi = parts.length > 1;
+    parts.forEach((p, i) => {
+      const tag = multi ? `${rel} 第 ${i + 1} 段/${p.slot}` : rel;
+      if (!bySlot.has(p.slot)) bySlot.set(p.slot, []);
+      bySlot.get(p.slot).push(`/* src: ${tag} */\n${p.code}`);
+    });
   }
-  const joined = chunks.join('\n\n');
 
-  const ph = new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  if (!ph.test(templateHtml)) {
-    throw new Error(`模板中未找到占位符：${placeholder}`);
+  // 2) 逐个槽位替换（先算后替换，避免替换出的内容被后续正则二次命中）
+  let html = templateHtml;
+  const missing = [];
+  for (const [slot, chunks] of bySlot) {
+    const mk = slotMarker(slot, placeholder);
+    if (!html.includes(mk)) { missing.push(mk); continue; }
+    html = html.replace(mk, chunks.join('\n\n'));
   }
-  return { html: templateHtml.replace(ph, joined), count: modules.length };
+  if (missing.length) {
+    throw new Error(
+      `模板中缺少槽位占位符：${missing.join('、')}\n`
+      + '        → 模块用了 /* @slot:<id> */ 分段，模板对应位置必须有同名 <!-- @inject:scripts:<id> -->。'
+    );
+  }
+
+  // 3) 残留标记检测：模板里留了标记却没有模块，说明清单漏了东西
+  const leftover = html.match(/<!--\s*@inject:scripts(?::[A-Za-z0-9_.-]+)?\s*-->/g);
+  if (leftover) {
+    throw new Error(
+      `模板中还有未被填充的占位符：${[...new Set(leftover)].join('、')}\n`
+      + '        → 该槽位没有模块，或清单漏写了；请删除多余标记或补上模块。'
+    );
+  }
+  // 槽位按其占位符在模板中的先后排序（= 代码求值顺序），便于构建日志核对
+  const ordered = [...bySlot.keys()].sort(
+    (a, b) => templateHtml.indexOf(slotMarker(a, placeholder)) - templateHtml.indexOf(slotMarker(b, placeholder))
+  );
+  return { html, count: modules.length, slots: ordered };
 }
 
 /* ------------------------------------------------------------ 主流程 */
@@ -213,7 +280,8 @@ function build(args) {
   let html = fs.readFileSync(tpl.path, 'utf8');
   const inlined = inlineModules(html, manifest, path.relative(ROOT, args.manifest));
   html = inlined.html;
-  console.log(`  内联模块：${inlined.count} 个${inlined.warning ? `  （${inlined.warning}）` : ''}`);
+  console.log(`  内联模块：${inlined.count} 个${inlined.warning ? `  （${inlined.warning}）` : ''}`
+    + (inlined.slots ? `  槽位：${inlined.slots.join(' → ')}` : ''));
 
   // 4) 版本注入（AC-23：build 由构建注入，人工不得手改）
   const commit = resolveCommit();

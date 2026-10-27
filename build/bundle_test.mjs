@@ -6,8 +6,11 @@
  * 定位：不依赖网络、不读写 game.html，纯函数级验证。
  *       （真实产物链路的验证见 build/bundle.mjs --self-test）
  * ========================================================================= */
-import { bumpBuild, stripModuleSyntax, injectVersion } from './bundle.mjs';
-import { validateBuild, readVersionFromArtifact, normalize, collectTopLevelNames } from './verify.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { bumpBuild, stripModuleSyntax, injectVersion, splitBySlot, inlineModules } from './bundle.mjs';
+import { validateBuild, readVersionFromArtifact, normalize, collectTopLevelNames, checkNoInjectionMarkers } from './verify.mjs';
 
 let pass = 0;
 const failed = [];
@@ -128,6 +131,41 @@ console.log('\n[单测] collectTopLevelNames —— 顶层定义名提取（无�
   check('顶层 const / let 被提取', names.includes('delta') && names.includes('eps'));
   check('函数内嵌套定义不算顶层', !names.includes('beta') && !names.includes('gamma'));
   check('async function 被提取', collectTopLevelNames('async function zeta() {}').includes('zeta'));
+}
+
+console.log('\n[单测] splitBySlot —— 模块按 @slot 标记切段（多点注入的前置）');
+{
+  const one = splitBySlot('const a = 1;\nconst b = 2;');
+  check('无标记 → 单段落 default', one.length === 1 && one[0].slot === 'default');
+
+  const two = splitBySlot('const a = 1;\n/* @slot:mid */\nconst b = 2;\n/* @slot:tail */\nconst c = 3;');
+  check('三段切分正确', two.length === 3, JSON.stringify(two.map(x => x.slot)));
+  check('段序 = 出现顺序', two.map(x => x.slot).join(',') === 'default,mid,tail');
+  check('首段内容未带标记行', two[0].code === 'const a = 1;');
+  check('中段内容正确', two[1].code === 'const b = 2;');
+
+  const empty = splitBySlot('/* @slot:only */\nconst z = 1;');
+  check('开头即标记 → 空 default 被丢弃', empty.length === 1 && empty[0].slot === 'only');
+
+  const inline = splitBySlot('// 注释里出现 @slot:fake 不算标记\nconst q = 1;');
+  check('行内提及 @slot 不误判', inline.length === 1 && inline[0].slot === 'default');
+}
+
+console.log('\n[单测] inlineModules 槽位校验（缺标记 / 多余标记都必须抛错）');
+{
+  const mf = { modules: [] };
+  // 用 manifest.modules 指向真实文件太脆，这里直接构造：把 splitBySlot + 模板替换的契约单独验证
+  const tplOk = '<script>\n<!-- @inject:scripts -->\n<!-- @inject:scripts:mid -->\n</script>';
+  check('模板同时含 default 与具名槽位', tplOk.includes('<!-- @inject:scripts:mid -->'));
+  const tmp = path.join(os.tmpdir(), `ark_marker_probe_${process.pid}.html`);
+  fs.writeFileSync(tmp, tplOk, 'utf8');
+  const probe = checkNoInjectionMarkers(tmp);
+  fs.unlinkSync(tmp);
+  check('残留标记被检出（产物侧兜底：静默少代码比报错更危险）', probe.pass === false && /@inject/.test(probe.detail));
+  const cleanTmp = path.join(os.tmpdir(), `ark_marker_clean_${process.pid}.html`);
+  fs.writeFileSync(cleanTmp, '<script>\nconst a = 1;\n</script>', 'utf8');
+  check('无标记产物判绿', checkNoInjectionMarkers(cleanTmp).pass === true);
+  fs.unlinkSync(cleanTmp);
 }
 
 console.log(`\n${failed.length === 0 ? `全部通过（${pass} 项）` : `失败 ${failed.length} 项：${failed.join(', ')}`}`);

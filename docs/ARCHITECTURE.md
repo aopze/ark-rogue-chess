@@ -108,7 +108,15 @@ node build/verify.mjs <产物> --prev <旧产物>
 | 4 | 第 4-5 区「掷骰与面板 / 六维雷达图」（`20261028b` 基线 489-776 行） | `ui/tools.js`、`rules/dnd.js`、`ui/radar.js` | ✅ 已完成 |
 | 5 | 第 6 区「规则判定」（`20261028b` 基线 1352-1768 行） | `rules/path.js`、`rules/actions.js`、`ui/units.js` | ✅ 已完成 |
 | 6 | 第 7 区「状态重置与棋盘特效」（`20261028c` 基线 1908-2340 行） | `rules/reset.js`、`ui/char-select.js`、`ui/board-fx.js` | ✅ 已完成 |
-| 7+ | 第 8–15 区（结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 联机 / 启动） | 待定 | ⬜ 待做 |
+| 7 | 按热度分级首轮（模板 701-927 / 1078-1161 / 3268-3380 / 3382-3428 / 3893-3959 共 5 段） | `rules/mapgen.js`、`ui/layout.js`（2 段）、`ui/chrome.js`（2 段） | ✅ 已完成 |
+| 8+ | 剩余热区（`initLevel`/`finishLevel`/`openLevelUp`、`resolveTurn` 与敌人 AI、`renderUnits` 等） | 待定 | ⏸ **等 05/06/07 落地后再拆**（`issues/ISSUE-20261028-08-split-by-heat.md`） |
+
+> 🧩 **多段模块（多点注入）**：模块可用 `/* @slot:<id> */` 切成多段，各段落到模板里同名
+> `<!-- @inject:scripts:<id> -->` 槽位。**跨槽顺序由模板位置决定**，因此拆不连续的代码段
+> 也不会改变求值顺序 —— 这是「按热度跳段拆」能保持归一化等价的前提。
+> 拼接注入会踩的坑：第二段若落到模板 `const dragHandle` / `logRotateBtn` 声明之前，直接 TDZ。
+> 兜底：`checkNoInjectionMarkers` 要求产物无 `@inject` 残留（`<!--` 在 JS 里等同注释，
+> 标记没被替换**不会报错**，只会静默少代码）。
 
 > ⚠️ **每批必过的第五项校验**：`checkNoDuplicateDefinitions`（`build/verify.mjs`）。
 > 扫描 manifest 各模块的**顶层定义名**，要求产物中各只出现 1 次。
