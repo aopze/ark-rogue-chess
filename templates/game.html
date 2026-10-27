@@ -447,7 +447,7 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '20261028a',
+  build:   '20261028b',
   commit:  '9a4137c2e7273788655a03b2effc231c6640c01d',
   builtAt: '2026-10-27T16:12:52Z'
 };
@@ -530,9 +530,14 @@ const unitEls = new Map();
  * 联机时由服务器下发种子，两端 seedRng(同一颗) 即可完全一致。
  * ========================================================= */
 let RNG_SEED = 1;
+/* ★ 本局初始种子（ISSUE-20261028-03 新增）。
+ * 敌人成长要「同一局同一关永远算出同一套面板」，所以需要一颗**不滚动**的种子；
+ * RNG_SEED 每一次 rng() 都在变，不能当种子用，必须在 seedRng() 里单独记一份。 */
+let RUN_SEED = 1;
 function seedRng(s) {
   RNG_SEED = (s >>> 0) || 0x9E3779B9;
   if (RNG_SEED === 0) RNG_SEED = 0x9E3779B9;
+  RUN_SEED = RNG_SEED;                       // ← 锁定本局种子（关卡内不会重掷）
 }
 function rng() {
   RNG_SEED = (RNG_SEED + 0x6D2B79F5) | 0;
@@ -845,13 +850,12 @@ function recomputePlayerDerivedStats() {
   playerStats.rangedProf = playerStats.profRanged ? playerStats.prof : 0;
 }
 
-// ★ 敌人面板读取函数（无成长）
+/* ★ 以下三个只读「基础面板（L1）」。
+ * 运行时数值请一律用 computeEnemyGrowth(type, level, idx, RUN_SEED) —— 见上方 ISSUE-20261028-03。
+ * 保留它们是为了让「基础值」的语义还查得到，不要再拿它们给场上单位赋值。 */
 function getEnemyAbilities(type) { return { ...ENEMY_STATS[type].abilities }; }
 function getEnemyProf(type) { return ENEMY_STATS[type].prof; }
-function computeEnemyHp(type) {
-  const s = ENEMY_STATS[type];
-  return s.hpFixed != null ? s.hpFixed : s.abilities.con;
-}
+function computeEnemyHp(type) { return ENEMY_STATS[type].abilities.con; }
 function computeEnemyMove(type) {
   return Math.max(1, Math.floor(ENEMY_STATS[type].abilities.dex / 2));
 }
@@ -1111,14 +1115,30 @@ function findChargeSkillIndex(path, sp) {
   return idxs.length ? idxs[0] : null;
 }
 function pathHasCharge(path, sp) { return findChargeSkillIndex(path, sp) !== null; }
-function computeStraightChargePath(path, trigger) {
+/* 规划期预览：若在当前路径上发动冲锋，额度（= 剩余移动步数）是多少（ISSUE-20261028-01）。
+ * 返回 null 表示当前不满足发动条件；返回 0 表示额度不够、发不动。 */
+function previewChargeBudget(path) {
+  const p = path || playerPath;
+  if (!p || !player) return null;
+  const idx = findChargeSkillIndex(p, wheelchairPreviewSp());
+  if (idx === null) return null;
+  const usedMove = countMoveSteps(p.slice(0, idx + 1));
+  return Math.max(0, (player.move || 1) - usedMove);
+}
+/* 生成冲锋段。maxSteps = 本回合剩余移动步数（ISSUE-20261028-01）：
+ * 冲锋距离不再「一路到墙」，而是最多推进 maxSteps 格——剩几步就冲几格、打几次。
+ * 撞墙/出界提前结束返回 'wall'；走满额度仍未撞墙返回 'budget'（日志要区分这两种）。
+ * maxSteps 省略时退回旧行为（到墙为止），仅供调试/兼容调用。 */
+function computeStraightChargePath(path, trigger, maxSteps) {
   const startPos = path[trigger.endIdx];
   const dir = trigger.dir;
   const result = [];
+  const limit = (maxSteps === undefined || maxSteps === null) ? Infinity : Math.max(0, maxSteps | 0);
   let cx = startPos.x, cy = startPos.y;
   let safety = 0;
   const maxSafety = COLS + ROWS + 4;
   while (safety < maxSafety) {
+    if (result.length >= limit) return { chargePath: result, stopReason: 'budget' };
     safety++;
     const nx = cx + dir.dx, ny = cy + dir.dy;
     if (!inBounds(nx, ny) || map[ny][nx] === 1) {
@@ -1128,6 +1148,50 @@ function computeStraightChargePath(path, trigger) {
     cx = nx; cy = ny;
   }
   return { chargePath: result, stopReason: 'maxSafety' };
+}
+
+/* 冲锋停下后，找出「朝向前方 maxDist 格」内的存活敌人（由近到远，遇墙截断视线）。
+ * 只认朝向直线上的格子，侧后方一律不吃冲锋伤害。 */
+function findFacingEnemiesWithin(origin, dir, maxDist) {
+  const out = [];
+  if (!origin || !dir || (!dir.dx && !dir.dy)) return out;
+  for (let k = 1; k <= maxDist; k++) {
+    const x = origin.x + dir.dx * k, y = origin.y + dir.dy * k;
+    if (!inBounds(x, y) || map[y][x] === 1) break;      // 墙挡视线
+    for (const e of enemies) {
+      if (!e.alive || e.hp <= 0) continue;
+      if (e.x === x && e.y === y) out.push(e);
+    }
+  }
+  return out;
+}
+
+/* 结算冲锋「剩余额度」（ISSUE-20261028-01）：
+ * 撞到没秒掉的敌人会立即停下，但剩余攻击次数不作废 —— 继续按朝向逐次输出，
+ * 直到额度用完或前方 3 格内再无可命中的敌人。每次伤害与冲锋撞击一致（meleeDmg × 2）。 */
+function resolveChargeRemainingHits() {
+  if (!playerChargingThisTurn || !player || !player.alive || playerChargeBudget <= 0) return;
+  const origin = { x: player.x, y: player.y };
+  let guard = 0;
+  while (playerChargeBudget > 0 && guard++ < 60) {
+    const list = findFacingEnemiesWithin(origin, playerChargeDir, CHARGE_FINISH_RANGE);
+    if (list.length === 0) break;
+    const target = list[0];                 // 优先最近的
+    const dmg = player.meleeDmg * 2;
+    target.hp -= dmg;
+    playerChargeCausedDamage = true;
+    playerChargeBudget -= 1;
+    playerChargeHits += 1;
+    slashFx(target.x, target.y, '#ffd700');
+    ringFx(target.x, target.y, '#ff4500');
+    hitFlashCell(target.x, target.y);
+    floatText(target.x, target.y, `冲锋追击 -${dmg}`, '#ffd700', true);
+    log(`冲锋追击敌人${target.id + 1}，造成${dmg}点伤害！（剩余 ${playerChargeBudget} 次）`);
+    if (target.hp <= 0) killEnemy(target, { logText: `敌人${target.id + 1}被冲锋追击击倒` });
+  }
+  if (playerChargeBudget > 0 && playerChargeHits > 0) {
+    log(`冲锋结束：朝向前方 ${CHARGE_FINISH_RANGE} 格内已无可命中目标，剩余 ${playerChargeBudget} 次攻击作废。`);
+  }
 }
 
 /* ===== 技能节点 =====
@@ -1426,6 +1490,8 @@ function resetTurnState({ clearCounter = false } = {}) {
   pendingChargeInfo = null;
   playerChargeStopReason = null;
   playerChargeCausedDamage = false;
+  playerChargeBudget = 0;
+  playerChargeHits = 0;
   if (clearCounter) fencerCounterActive = false;
 }
 
@@ -1480,6 +1546,9 @@ function initCharSelect() {
   phase = PHASE.CHAR_SELECT;
   debugMode = false;
   lastPathSignature = '';
+  /* 新的一局 = 新的种子（ISSUE-20261028-03）：敌人成长按 RUN_SEED 推演，
+   * 不重掷的话「重开」会得到和上一局完全相同的敌人面板序列。联机进入房间后由服务器再覆盖。 */
+  seedRng(Date.now());
   resetTurnState({ clearCounter: true });
   resetRunProgress();
   isMoving = false;
@@ -2279,17 +2348,21 @@ function initLevel() {
     for (let i = 0; i < numEnemies; i++) {
       const s = gen.enemyStarts[i];
       const type = ENEMY_TYPES[randInt(ENEMY_TYPES.length)];
-      const eAbilities = getEnemyAbilities(type);
+      /* 成长面板（ISSUE-20261028-03）：第 level 关的敌人已推演过 level 次属性提升 + 每 3 关的升级 */
+      const grow = computeEnemyGrowth(type, level, i, RUN_SEED);
+      const eAbilities = grow.abilities;
       const eProf = getEnemyProf(type);
       const eAC = computeAC(eAbilities);
-      const eMove = computeEnemyMove(type);
-      const hp = computeEnemyHp(type);
+      const eMove = Math.max(1, Math.floor(eAbilities.dex / 2));
+      const hp = grow.maxHp;
       enemies.push({
         id: i, x: s.x, y: s.y, hp, maxHp: hp, type,
         move: eMove,
         abilities: { ...eAbilities },
         ac: eAC,
         prof: eProf,
+        enemyLevel: grow.level,
+        enemyGrowths: level,
         meleeDmg: Math.max(1, 1 + abilityMod(eAbilities.str)),
         rangedDmg: Math.max(1, 1 + abilityMod(eAbilities.int)),
         alive: true, attackedThisRound: false,
@@ -2321,19 +2394,19 @@ function initLevel() {
     if (selectedChar === 'fencer') {
       log(`泥岩技力：${fencerSp}/${FENCER_SP_MAX}（跨关继承）`);
     }
-    log('敌人面板（固定，无等级成长）：');
-    ['skeleton', 'ghost', 'alien'].forEach(t => {
-      const a = ENEMY_STATS[t].abilities;
-      const ac = computeAC(a);
-      const hp = computeEnemyHp(t);
-      const mv = computeEnemyMove(t);
-      const melee = Math.max(1, 1 + abilityMod(a.str));
-      const ranged = Math.max(1, 1 + abilityMod(a.int));
-      log(`  ${ENEMY_STATS[t].name}：STR${a.str}(+${abilityMod(a.str)}) DEX${a.dex}(+${abilityMod(a.dex)}) CON${a.con} INT${a.int}(+${abilityMod(a.int)}) AC${ac} 熟练+${ENEMY_STATS[t].prof} 移动${mv} HP${hp} 近战${melee} 远程${ranged}`);
+    /* 敌人面板按「本关实际生成的单位」打印（ISSUE-20261028-03）：
+     * 成长是个体化的（依赖实例下标），所以不能再打印一份固定的三类模板，否则日志与场上数值对不上。 */
+    const eLv = Math.floor(level / LEVELUP_EVERY_N_LEVELS);
+    const fmtMod = (v) => (v >= 0 ? '+' + v : String(v));
+    log(`敌人面板（第 ${level} 关 · 每个敌人已成长 ${level} 次属性${eLv > 0 ? ` · 等级 Lv.${eLv}` : ''}）：`);
+    enemies.forEach(e => {
+      const a = e.abilities;
+      log(`  ${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${e.move} HP${e.maxHp} 近战${e.meleeDmg} 远程${e.rangedDmg}`);
     });
     log(`规则：攻击检定 = d20 + 属性修正 + 熟练加值 ≥ 目标AC；自然20暴击；自然1必失。`);
     if (level === 1) {
-      log(`升级规则：每 ${LEVELUP_EVERY_N_LEVELS} 关提升 1 级（HP 上限 + 体质加值，并回满血），升级时从奖励池 3 选 1 个 buff。`);
+      log(`升级规则：每 ${LEVELUP_EVERY_N_LEVELS} 关提升 1 级（HP 上限 + 体质加值，并回满血），升级时从奖励池 3 选 1 个 buff，并获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点（属性点只在升级时发放）。`);
+      log(`敌人成长：每关每个敌人随机 +1 项属性（只从当时最高的 4 项里选，相邻两次不重复），每 ${LEVELUP_EVERY_N_LEVELS} 关升级一次（HP 上限 + 体质加值）。`);
     }
     log(`你的属性：力${abilityLabel(player.abilities.str)} 智${abilityLabel(player.abilities.int)} 敏${abilityLabel(player.abilities.dex)} 感${abilityLabel(player.abilities.wis)} 体${abilityLabel(player.abilities.con)} 魅${abilityLabel(player.abilities.cha)}`);
     log(`AC ${player.ac}　熟练+${player.prof}（近战${player.meleeProf}／远程${player.rangedProf}）　HP = 体质${player.abilities.con} + 升级加成${levelHpBonus}${buffHpBonus() ? ' + 热水壶' + buffHpBonus() : ''} = ${player.maxHp}`);
@@ -2801,7 +2874,15 @@ function updateStats() {
     badges.push('<span class="badge gold">冲锋中 · 禁攻击/趁乱</span>');
   } else if (selectedChar === 'wheelchair') {
     if (pathHasCharge(playerPath)) {
-      badges.push('<span class="badge gold">冲锋就绪 · 技能节点已变冲锋</span>');
+      /* 额度 = 剩余移动步数（ISSUE-20261028-01）：顺带在规划期就把「冲几格 / 打几次」显示出来 */
+      const pb = previewChargeBudget(playerPath);
+      if (pb === null) {
+        badges.push('<span class="badge gold">冲锋就绪 · 技能节点已变冲锋</span>');
+      } else if (pb <= 0) {
+        badges.push('<span class="badge">冲锋额度 0 · 技能节点放太晚了，本回合发不动</span>');
+      } else {
+        badges.push(`<span class="badge gold">冲锋就绪 · 冲 ${pb} 格 / 打 ${pb} 次</span>`);
+      }
     } else if (wheelchairPreviewSp() >= WHEELCHAIR_SP_MAX) {
       badges.push('<span class="badge gold">技力满 · 双击移动节点发动「高效冲击」</span>');
     }
@@ -3297,7 +3378,16 @@ function prepareWheelchairCharge() {
   const fromPos = playerPath[chargeIdx - 1];
   const toPos = playerPath[chargeIdx];
   const trigger = { endIdx: chargeIdx, dir: { dx: Math.sign(toPos.x - fromPos.x), dy: Math.sign(toPos.y - fromPos.y) } };
-  const { chargePath, stopReason } = computeStraightChargePath(playerPath, trigger);
+  /* ★ 额度 N = 本回合剩余移动步数（ISSUE-20261028-01）。
+   * 不能用 chargeIdx 直接减：路径里同时含「移动步」与「等待步」，等待不消耗移动力，
+   * 用下标减会把额度算少。必须只数移动步。 */
+  const usedMove = countMoveSteps(playerPath.slice(0, chargeIdx + 1));
+  const budget = Math.max(0, (player.move || 1) - usedMove);
+  if (budget <= 0) {
+    log('「高效冲击」无法发动：本回合剩余移动步数为 0，请下回合把技能节点放在前几步（技力保留）。');
+    return null;
+  }
+  const { chargePath, stopReason } = computeStraightChargePath(playerPath, trigger, budget);
   if (chargePath.length === 0) {
     log('「高效冲击」无法发动：技能节点正前方就是墙（技力保留）。');
     return null;
@@ -3306,10 +3396,14 @@ function prepareWheelchairCharge() {
   attackIndices = attackIndices.filter(idx => idx < chargeIdx);
   /* 只保留到达冲锋点之前的技能节点（含冲锋触发节点本身），其余随路径改写丢弃 */
   skillIndices = skillIndices.filter(idx => idx <= chargeIdx);
-  pendingChargeInfo = { startIdx: chargeIdx + 1, triggerIdx: chargeIdx };
+  pendingChargeInfo = { startIdx: chargeIdx + 1, triggerIdx: chargeIdx, dir: trigger.dir, budget };
   playerChargeStopReason = stopReason;
   playerChargeCausedDamage = false;
-  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（停止：${stopReason}）。冲锋期间免疫伤害，禁用攻击节点与趁乱攻击。`);
+  playerChargeBudget = budget;
+  playerChargeHits = 0;
+  playerChargeDir = trigger.dir;
+  const stopText = stopReason === 'budget' ? `走满 ${budget} 步额度` : stopReason === 'wall' ? '撞墙提前停止' : '达到地图边界';
+  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（剩余移动步数 ${budget}，${stopText}），最多 ${budget} 次攻击（每次近战伤害 ×2）。冲锋期间免疫伤害，禁用攻击节点与趁乱攻击。`);
   floatText(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '高效冲击', '#ffd700');
   ringFx(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '#ffd700');
   return chargeIdx;
@@ -4047,8 +4141,12 @@ async function resolveStep(pIdxIn, eIdx) {
     if (pendingChargeInfo && pIdx >= pendingChargeInfo.startIdx && !playerChargingThisTurn && player.alive) {
       playerChargingThisTurn = true;
       playerChargeCausedDamage = false;
+      /* 冲锋额度在规划期就算好了（= 剩余移动步数），这里接手朝向与额度 */
+      playerChargeDir = pendingChargeInfo.dir || playerChargeDir;
+      playerChargeBudget = pendingChargeInfo.budget || 0;
+      playerChargeHits = 0;
       pendingChargeInfo = null;
-      log('「高效冲击」：冲锋开始！');
+      log(`「高效冲击」：冲锋开始！本次额度 ${playerChargeBudget} 次攻击（= 剩余移动步数）。`);
       floatText(player.x, player.y, '高效冲击！', '#ffd700');
       ringFx(player.x, player.y, '#ffd700');
     }
@@ -4099,7 +4197,11 @@ async function resolveStep(pIdxIn, eIdx) {
         let pd = player.meleeDmg * 2;
         if (playerChargingThisTurn) pd *= 2;
         em.unit.hp -= pd;
-        if (playerChargingThisTurn) playerChargeCausedDamage = true;
+        if (playerChargingThisTurn) {
+          playerChargeCausedDamage = true;
+          playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 每次命中消耗 1 次冲锋额度
+          playerChargeHits += 1;
+        }
         if (selectedChar === 'amiya') amiyaMarkReveal(em.unit);
         floatText(ex, ey, '暴击 -' + pd, '#ffd700', true);
         log(`相杀！玩家对敌人${em.unit.id+1}造成暴击${pd}伤害`);
@@ -4171,11 +4273,13 @@ async function resolveStep(pIdxIn, eIdx) {
           let dmg = player.meleeDmg * 2;
           blockingEnemy.hp -= dmg;
           playerChargeCausedDamage = true;
+          playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 撞击消耗 1 次额度
+          playerChargeHits += 1;
           slashFx(blockingEnemy.x, blockingEnemy.y, '#ffd700');
           ringFx(blockingEnemy.x, blockingEnemy.y, '#ff4500');
           hitFlashCell(blockingEnemy.x, blockingEnemy.y);
           floatText(blockingEnemy.x, blockingEnemy.y, '冲锋撞击 -' + dmg, '#ffd700', true);
-          log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmg}点伤害！`);
+          log(`冲锋撞击敌人${blockingEnemy.id+1}，造成${dmg}点伤害！（剩余 ${playerChargeBudget} 次）`);
           if (blockingEnemy.hp <= 0) {
             killEnemy(blockingEnemy, {
               showRing: false,
@@ -4224,6 +4328,14 @@ async function resolveStep(pIdxIn, eIdx) {
       await triggerSkillNode(pathIdx);
       if (await settleTick()) return;
     }
+  }
+
+  /* ★ 冲锋剩余额度（ISSUE-20261028-01）：被挡住 or 走完冲锋段后，把没用掉的攻击次数
+   * 按朝向补给前方 3 格内的敌人。必须放在敌人移动之前结算——否则目标会先跑掉。
+   * 撞墙掉血在更后面（resolveChargeWallDamage），所以「先打、再判撞墙」的时序是对的。 */
+  if (playerChargingThisTurn && pIdx >= playerPath.length) {
+    resolveChargeRemainingHits();
+    if (await settleTick()) return;
   }
 
   // 结算顺序 = 寻路顺序（离玩家近的优先），与规划层保持一致
@@ -4379,12 +4491,13 @@ function onLevelClear() {
   if (selectedChar === 'vampire' && vampireSp > 0) {
     log(`华法琳的技力 ${vampireSp}/${VAMPIRE_SP_MAX} 将继承到下一关。`);
   }
-  log(`第 ${level} 关通过！获得 ${ABILITY_POINTS_PER_LEVEL} 点属性点。`);
-  playerStats.abilityPoints += ABILITY_POINTS_PER_LEVEL;
-
   const clearedLevel = level;
   level += 1;
   const willLevelUp = clearedLevel % LEVELUP_EVERY_N_LEVELS === 0;
+  /* 属性点不再「每通关 1 关给 1 点」，改为绑定升级发放（见 openLevelUp）——ISSUE-20261028-03 */
+  log(willLevelUp
+    ? `第 ${clearedLevel} 关通过！本关触发升级：等级 +1、获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点。`
+    : `第 ${clearedLevel} 关通过！（属性点只在每 ${LEVELUP_EVERY_N_LEVELS} 关升级时发放，下一关不发放）`);
   levelUpPending = willLevelUp;
   phase = PHASE.LEVELCLEAR;
   render();
@@ -4426,8 +4539,10 @@ function openLevelUp() {
     levelHpBonus += conMod;
     recomputePlayerDerivedStats();
     playerStats.currentHp = playerStats.maxHp;        // 升级回满血
+    /* 属性点与等级同时到账（ISSUE-20261028-03）：2 点自由分配，可叠同一项 */
+    playerStats.abilityPoints += ABILITY_POINTS_PER_LEVELUP;
     if (player) { player.maxHp = playerStats.maxHp; player.hp = playerStats.maxHp; }
-    log(`⭐ 升级！Lv.${heroLevel}：HP 上限 +${conMod}（体质加值，累计 +${levelHpBonus}），生命已回满（${playerStats.maxHp}/${playerStats.maxHp}）。`);
+    log(`⭐ 升级！Lv.${heroLevel}：HP 上限 +${conMod}（体质加值，累计 +${levelHpBonus}），生命已回满（${playerStats.maxHp}/${playerStats.maxHp}），获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点。`);
     updateStats();
   }
   showLevelUpOverlay(lastLevelUpConMod);

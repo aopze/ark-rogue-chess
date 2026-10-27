@@ -1,4 +1,4 @@
-/* P0.1-4 机械拆分：从 game.html 第 622-673 行原样搬移（运行时状态：关卡 / 路径 / 技力 / 升级 / UI 缓存）。
+/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 673-728 行原样搬移（运行时状态：关卡 / 路径 / 技力 / 闪避 / 冲锋额度 / 升级 / UI 缓存）。
  * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
 let phase = PHASE.CHAR_SELECT;
 /* 联机模式开关：'solo' 单人 / 'pvp' 对战。
@@ -46,6 +46,10 @@ let fencerCounterActive = false;
 let playerStats = {};
 let playerChargeStopReason = null;
 let playerChargeCausedDamage = false;
+/* 冲锋额度（ISSUE-20261028-01）：剩余攻击次数 / 已命中次数 / 冲锋朝向（停下后按朝向找补充目标） */
+let playerChargeBudget = 0;
+let playerChargeHits = 0;
+let playerChargeDir = { dx: 1, dy: 0 };
 let pendingAttack = false;
 let pendingChargeInfo = null;
 let amiyaBonusTargets = 0;

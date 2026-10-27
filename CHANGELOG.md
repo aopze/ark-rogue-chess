@@ -4,9 +4,9 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
-## [未发布] — 机械拆分第一、二批（`P0.1-4`）
+## [未发布] — 机械拆分第一、二批 + `20261028b` 基线重新对齐（`P0.1-4`）
 
-> 本节**不涉及线上产物**：根目录 `game.html` 未改动（仍 249,421 B / `1a86858d00`）。
+> 本节**不涉及线上产物**：根目录 `game.html` 未改动（现 261,228 B / `4cb46640`，build `20261028b`）。
 > 拆分产物只落在 `build/out/game.html`，**发布需人类授权**（§0.0 / NB-12）。
 
 ### 新增
@@ -27,6 +27,28 @@
 
 六个模块均为**原样搬移，未改一个字符**（各加了 3 行来源说明注释）。
 `build/manifest.json` 的 `modules` 顺序 = 拆分前的出现顺序，这是零行为改变的根本保障。
+
+### `20261028b` 基线重新对齐（2026-10-28 02:35）
+
+人类维护者发版 `20261028b`（`game.html` 249,421 B → **261,228 B**），改动覆盖了已拆的第 1、2 区，
+README 顶部随即挂出「基线变更通告：拆分基线已失效，须重新对齐 `src/`」。
+
+**已按通告重新取区**（不是打补丁，而是以新版为唯一基准整段重取）：
+
+| 区域 | 本次发版改了什么 | 已同步到 |
+|---|---|---|
+| 第 1 区·常量 | `ABILITY_POINTS_PER_LEVEL` → `ABILITY_POINTS_PER_LEVELUP = 2` | `src/data/constants.js` |
+| 第 1 区·敌人 | `ENEMY_STATS` 去 `hpFixed`、注「L1 基础面板」；新增 `enemyGrowthRng` / `computeEnemyGrowth` | `src/data/enemies.js` |
+| 第 2 区·状态 | 新增 `playerChargeBudget` / `playerChargeHits` / `playerChargeDir` | `src/rules/state.js` |
+| 第 2 区·技力 | 新增 `CHARGE_FINISH_RANGE = 3` | `src/rules/sp.js` |
+| 第 3–15 区 | `RUN_SEED`、`finishLevel` / `openLevelUp` 发点、冲锋额度与追击、日志按本关单位打印 | `templates/game.html`（仍在模板内） |
+
+新行号区间（以 261,228 B 版为准）：constants 487-522 / characters 524-594 / enemies 596-671 /
+state 673-728 / buffs 730-777 / sp 779-809。各模块头部注释已改写为新行号。
+
+验证：`node build/bundle.mjs --prev game.html` 归一化后**完全一致**
+（262,900 vs 261,228 B = **+1,672 B / 0.64%**，低于 `AC-01` 的 2%）；
+e2e 六套件 + `bundle_test` 34 项 + `push_guard` 10 项全绿。
 
 ### 等价性三层验证
 

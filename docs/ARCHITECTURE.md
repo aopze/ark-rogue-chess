@@ -101,8 +101,9 @@ node build/verify.mjs <产物> --prev <旧产物>
 
 | 批次 | 内容 | 模块 | 状态 |
 |---|---|---|---|
-| 1 | 第 1 区「数据与常量」（原 487-620 行） | `data/constants.js`、`data/characters.js`、`data/enemies.js` | ✅ 已完成 |
-| 2 | 第 2 区「运行时状态」（原 622-751 行） | `rules/state.js`、`rules/buffs.js`、`rules/sp.js` | ✅ 已完成 |
+| 1 | 第 1 区「数据与常量」（`20261028b` 基线 487-594 行） | `data/constants.js`、`data/characters.js`、`data/enemies.js` | ✅ 已完成 |
+| 2 | 第 2 区「运行时状态」（`20261028b` 基线 673-809 行） | `rules/state.js`、`rules/buffs.js`、`rules/sp.js` | ✅ 已完成 |
+| — | **按 `20261028b` 重新取区对齐**（2026-10-28） | 全部 6 模块 + 模板 | ✅ 已完成 |
 | 3+ | 第 3–15 区（DOM 引用与工具 / 掷骰 / 雷达图 / 规则 / DX / 结算 / 地图 / 关卡 / 渲染 / 输入 / 战斗结算 / 成长 / 启动） | 待定 | ⬜ 待做 |
 
 ### 前两批的等价性证明（重要）

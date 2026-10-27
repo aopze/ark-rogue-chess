@@ -1,11 +1,13 @@
-/* P0.1-4 机械拆分：从 game.html 第 487-520 行原样搬移（常量与方向表）。
+/* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 487-522 行原样搬移（常量与方向表）。
  * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
 const SPAWN_CLEAR_RADIUS = 2;
 const OBSTACLE_MAX_GROUP = 4;
 const OBSTACLE_GROUPS_TRY = 8;
 const UNIT_MOVE_MS = 120;
 const ABILITY_CAP = 20;
-const ABILITY_POINTS_PER_LEVEL = 1;
+/* 属性点改为绑定「升级」发放：每 LEVELUP_EVERY_N_LEVELS 关升 1 级时给 2 点（ISSUE-20261028-03）。
+ * 旧常量 ABILITY_POINTS_PER_LEVEL = 1 已移除（曾每通关 1 关给 1 点）。 */
+const ABILITY_POINTS_PER_LEVELUP = 2;
 const PLAYER_RANGE = 3;   // 远程角色的攻击节点射程（近战角色攻击节点只打相邻 1 格）
 
 const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
