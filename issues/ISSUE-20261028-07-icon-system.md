@@ -100,24 +100,72 @@ else if (e.type === 'alien') { icon = '👾'; }
 2. **复杂立绘** → 转 **WebP**（`cwebp` 或在线转换）
 3. **多张小图标** → 合并为**雪碧图**，省掉重复的文件头与请求开销
 
-### 素材来源与授权（2026-10-28 03:2x 评估）
+### 素材来源：宝可梦 SVG（demo 限定）
 
-用户曾提议使用 PokéAPI Sprites（`github.com/PokeAPI/sprites`，其中 `sprites/pokemon/other/dream-world/` 为 SVG 目录）。**评估结论：不采用。**
+> **★ 用户决定（2026-10-28 03:3x）：demo 使用 PokéAPI Sprites 的宝可梦 SVG。**
+> 依据：当前是 demo，作为正式版的准绳；**正式版为明日方舟主题，届时整体替换美术**。
+> ⚠️ **正式版发版前，必须清除全部宝可梦素材**（迁移清单见本节末尾）。
 
-1. **授权不成立（决定性理由）**：该仓库 LICENSE 明确写着「Pokémon and Pokémon character names are trademarks of Nintendo. All rights reserved.」，图像内容版权归 The Pokémon Company —— **仓库的开源许可只覆盖仓库本身的代码组织，不覆盖其中的图像素材**。第三方整理项目同样注明「Treat these as personal-use party assets unless you separately clear rights for broader use」。本项目已绑定自有域名与服务器并公开发布，不宜引入此风险。
-2. **风格错配**：宝可梦是 Q 版怪物，本项目为明日方舟同人题材（硬派军事科幻），视觉语言冲突；角色侧已使用鹰角 IP，再叠加任天堂 IP 会让授权状况更复杂。
-3. **技术不匹配**：dream-world 的 SVG 是**彩色复杂立绘**而非单色图标 → 无法用 `fill="currentColor"` 随受伤 / 眩晕 / 敌我变色（**与第一层方案直接冲突**）；整套素材约 **58MB**，且**并非每个物种都有 SVG**（存在覆盖缺口）。
+**授权风险（demo 可接受，正式版必须清除）**：仓库 LICENSE 明写「Pokémon and Pokémon character names are trademarks of Nintendo. All rights reserved.」，图像版权归 The Pokémon Company —— **开源许可只覆盖仓库代码组织，不覆盖图像素材**。demo 属个人 / 同人自用；一旦对外正式发布或商业化，必须换成自有或 CC0 素材。
 
-**推荐替代来源（均可合法使用）**
+**实测数据（2026-10-28 实测，`sprites/pokemon/other/dream-world/`）**
 
-| 来源 | 授权 | 格式 | 适配点 |
+| 指标 | 数值 |
+|---|---|
+| SVG 总数 | **1143 个** |
+| 目录总计 | **40.6 MB** |
+| 平均 / 中位 | 36.4 KB / **28.0 KB** |
+| 最小 / 最大 | 3.0 KB / **606.5 KB** |
+
+**已验证为真矢量**：抽查 #104 / #92 / #386 / #337，均无 `<image>` 或内嵌 base64（不是「套壳 PNG」），path 数 29–105 个，viewBox 尺寸如 139×232 / 331×308 —— 可无损缩放、可被 svgo 压缩。
+
+**7 个单位推荐清单（实测体积）**
+
+| 位置 | 推荐宝可梦 | 编号 | 体积 |
 |---|---|---|---|
-| **Kenney.nl** | **CC0**（公有领域，可商用，**无需署名**） | PNG / SVG / spritesheet | `Roguelike` 系列含数百个小角色与地牢图块，最贴合本项目；另有 UI 包、Game Icons |
-| **Game-icons.net** | CC BY 3.0（**需署名**，页面或设置里加一行即可） | **单色 SVG** | 数千图标，含骷髅 / 幽灵 / 外星人；单色线条，`fill:currentColor` 可直接变色，**完美匹配第一层方案** |
-| OpenGameArt.org | 按资产各异（用 CC0 筛选） | PNG / SVG 等 | 需逐个确认授权 |
-| itch.io 免费区 | 多数 CC0，需逐项确认 | 多种 | Pixel Frog、Ansimuz、0x72 DungeonTileset II 等 |
+| 敌人·骷髅 | 卡拉卡拉 | 104 | **26.9 KB** |
+| 敌人·幽灵 | 鬼斯 | 92 | **31.2 KB** |
+| 敌人·外星人 | 代欧奇希斯 | 386 | **37.8 KB**（轻量备选：月石 337，**9.9 KB**） |
+| 角色·风笛（近卫） | 路卡利欧 | 448 | **36.9 KB** |
+| 角色·华法琳（医疗） | 谜拟丘 | 778 | **27.4 KB** |
+| 角色·泥岩（重装） | 庞岩怪 | 526 | **45.4 KB** |
+| 角色·阿米娅（术师） | 仙子伊布 | 700 | **30.5 KB** |
 
-**建议组合**：棋盘单位图标用 **Game-icons.net**（单色、可随状态变色）+ 角色与敌人造型用 **Kenney Roguelike 包**（CC0），UI 图标用 Kenney UI / Icons。
+七件合计 ≈ **236 KB**（原始）。其他可用备选：嘎啦嘎啦 105（25.9）、耿鬼 94（19.5）、夜巡灵 355（12.9）、班基拉斯 248（50.0）、长耳兔 428（33.5）。
+
+**体积账 —— 必须外链，禁止内嵌**
+
+| 方式 | game.html 增量 | 结果 |
+|---|---|---|
+| **外链服务器（推荐）** | **+3 KB** | **264 KB** |
+| 内联 SVG 文本 | +236 KB | 497 KB |
+| base64 内嵌 | +314 KB（再 +33%） | 575 KB |
+
+> 外链是唯一合理选项：内嵌会让单文件从 261 KB 涨到 497–575 KB（×1.9–2.2）。
+
+**优化三步（建议全做）**
+1. **svgo 压缩**：SVG 是文本，去元数据 / 合并路径，通常 **-30%~50%** → 236 KB 降到约 120–165 KB
+2. **服务器开 gzip / brotli**：SVG 文本压缩率极高，传输量再 **-70%** → 实际约 35–50 KB
+3. 优先选体积小的物种（如外星人用月石 9.9 KB 而非代欧奇希斯 37.8 KB）
+
+**技术约束：着色方式要改**
+
+这些是**彩色复杂立绘**（多个 path 各自带 fill），**不是单色图标**：
+- ❌ 不能用 `fill="currentColor"` 统一变色 —— 会毁掉原图配色
+- ✅ 改用 **CSS filter**，且 **外链 `<img>` 也能生效**（filter 作用于元素本身，不需要访问 SVG 内部）：
+  - 眩晕 / 失能 → `filter: grayscale(1) opacity(.7)`
+  - 受伤闪红 → `filter: brightness(1.4) sepia(1) saturate(5) hue-rotate(-30deg)`
+  - 敌方阵营 → `filter: hue-rotate(180deg)` 或 `drop-shadow(0 0 4px #f66)`
+
+> 因此**第一层方案里「fill: currentColor」这条对本套素材不适用**，改为 CSS filter 实现，验收标准相应调整。
+
+**正式版迁移清单（发版前逐项清除）**
+
+- [ ] `assets/char/*` 下 4 个角色 SVG（448 / 778 / 526 / 700）→ 换成明日方舟主题角色
+- [ ] `assets/enemy/*` 下 3 个敌人 SVG（104 / 92 / 386）→ 换成自有设计，并恢复单色 SVG + `currentColor` 方案
+- [ ] 游戏内所有宝可梦相关命名、日志文案、注释清除
+- [ ] 全文搜索「pokemon / PokeAPI / dream-world」确认为 0
+- [ ] 若届时新增过 UI 图标，一并替换为 Kenney（CC0）或自绘
 
 ### 不做的事（明确排除）
 
