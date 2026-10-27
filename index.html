@@ -343,29 +343,49 @@ function syncName(){
   }
 }
 
-// ===== 成绩上报（双通道）=====
+// ===== 成绩上报（多通道）=====
+// 键盘入口：sendData（最顺滑）
+// 菜单/内联入口：优先 fetch POST 到 bot 上报端点（需 bot 有公网地址）；
+//   若没有公网地址（如本机运行）或 POST 失败 → 回退 t.me 深链 ?start=score:层_杀
+//   （/start 消息天然带真实发送者身份，无需把 initData 塞进 64 字符限制的深链）
 function reportScore(level, kills){
   MY_SCORE = {level:level, kills:kills};
   pushMyScore();
   if(CAN_REPORT && W && W.sendData){
-    // 键盘入口：sendData 直接回 bot
     W.sendData(JSON.stringify({type:'rogue_score', level:level, kills:kills, tg_id:0, tg_name:APP.myName||'', initData:''}));
     toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
-  } else if(HAS_INIT && APP.reportUrl){
-    // 菜单/内联入口：fetch POST 到 bot 上报端点（initData 验签认身份，支持中文名）
+    return;
+  }
+  if(HAS_INIT && APP.reportUrl){
     fetch(APP.reportUrl, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({kind:'score', level:level, kills:kills, name:APP.myName||'', initData: W.initData})
     }).then(function(r){ return r.json(); }).then(function(j){
-      if(j && j.ok) toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
-      else toast('⚠️ 成绩同步失败，稍后重试', 5000);
-    }).catch(function(){ toast('⚠️ 成绩同步失败（网络/CORS），稍后重试', 5000); });
-    // 顺手刷新榜单，让主页/排行榜尽快更新
-    setTimeout(function(){ loadConfig(function(){ renderMiniBoard(); renderPlayer(); }); }, 1500);
-  } else if(IN_TG){
+      if(j && j.ok){
+        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点右下角 🏆 看排行榜', 5000);
+        setTimeout(function(){ loadConfig(function(){ renderMiniBoard(); renderPlayer(); }); }, 1500);
+      } else { deepLinkScore(level, kills); }
+    }).catch(function(){ deepLinkScore(level, kills); });
+    return;
+  }
+  if(HAS_INIT && APP.botUser){
+    deepLinkScore(level, kills);
+    return;
+  }
+  if(IN_TG){
     toast('⚠️ 当前入口无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
   } else {
     toast('🌐 浏览器预览模式，成绩不会记录。\n（你的成绩：第 '+level+' 层 / 击杀 '+kills+'）', 7000);
+  }
+}
+function deepLinkScore(level, kills){
+  try {
+    var dl = 'https://t.me/' + APP.botUser + '?start=score:' + level + '_' + kills;
+    if(W && W.openTelegramLink){ W.openTelegramLink(dl); }
+    else { window.location.href = dl; }
+    toast('📊 正在记录成绩…（已切到聊天）\n点机器人回复里的 /rank 看排行榜', 5000);
+  } catch(e){
+    toast('⚠️ 当前入口无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
   }
 }
 
