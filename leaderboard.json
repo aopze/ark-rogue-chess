@@ -1,5 +1,5 @@
 {
- "updated_at": 1793120058,
+ "updated_at": 1793120118,
  "entries": [
   {
    "id": "5648491503",
@@ -7,6 +7,13 @@
    "level": 6,
    "kills": 19,
    "runs": 7
+  },
+  {
+   "id": "dev_deadbeefcafebabe00112233445566",
+   "name": "浏览器自检",
+   "level": 5,
+   "kills": 11,
+   "runs": 1
   },
   {
    "id": "7283974274",
