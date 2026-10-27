@@ -4,7 +4,7 @@
 set -e
 DEMO="/d/HuaweiMoveData/Users/huze/Desktop/游戏demo"
 GH="$DEMO/_ghpages"
-cp "$DEMO/_publish/index.html" "$GH/index.html"
+cp "$DEMO/_publish/index.html" "$GH/game.html"
 cd "$GH"
 git add -A
 if git diff --cached --quiet; then
