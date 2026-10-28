@@ -145,9 +145,10 @@ console.log('\n[7] P0.1-1 版本号（AC-02：页面可读出且与 tag 一致�
         (txt.indexOf(V.version) >= 0 || txt.indexOf(V.build || '\u0000') >= 0 || tip.indexOf(V.version) >= 0),
         verEl ? (txt + (tip ? '  (title: ' + tip.split('\n')[0] + ')' : '')) : '(无 #setVer)');
 
-  // §0.9「双 BUILD 必须同时改」依赖 build 字段；它若丢失，index.html 的 ?v= 将失去对照
+  // §0.9「双 BUILD 必须同时改」依赖 build 字段；它若丢失，index.html 的 ?v= 将失去对照。
+  // 格式两版都认：旧版 YYYYMMDDx（八位数字 + 字母）、2026-10-28 起的 MMDDHHmm（八位数字）。
   check('build 字段存在（§0.9 双 BUILD 依赖）',
-        !!(V && /^\d{8}[a-z]$/.test(V.build || '')), V && V.build);
+        !!(V && (/^\d{8}[a-z]$/.test(V.build || '') || /^\d{8}$/.test(V.build || ''))), V && V.build);
 }
 
 console.log(`\n${bad.length === 0 ? '全部通过（' + ok.length + ' 项）' : '失败 ' + bad.length + ' 项：' + bad.join(', ')}`);

@@ -4,6 +4,75 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
+## [10282343] — 2026-10-28 · UI 重构 + 取消主页（ISSUE-09 + ISSUE-10）
+
+> **已发版**：根目录 `game.html` **330,899 B / sha256 `56898b1b`** / build `10282343`，
+> 远程 `main` @ `63a63fc623`。人类维护者授权「版本更新」，本轮范围 = 09 + 10 合并一版。
+> **玩法规则与数值零改动**（无新增/删除角色、敌人、技能、骰子、经验口径）。
+
+### 新增
+
+- `src/ui/drawer.js` —— 右侧抽屉组件：`settings` / `stats` / `levelup` 三段，互斥、遮罩、
+  Esc（**捕获阶段** `stopPropagation`，否则先被游戏快捷键吃掉）、`aria-expanded` 与 `.on` 同步。
+  浮层再叠第二层「属性说明卡」（`#abilityInfoLayer`）。
+- `src/ui/panels.js` —— 六维说明卡。公式照**代码实际口径**抄写（力量→近战 `1+修正`；敏捷→`移动力=⌊dex/2⌋`、
+  `AC=5+⌊(dex+con)/4⌋`；体质→`maxHp=con+4+等级加成`；智力→远程；感知→敌人意图可见步数与部分角色技力上限；
+  魅力→本版无数值作用，只展示）。有剩余点时原地 `+1`，数值与修正即时刷新、卡片不关闭。
+- `src/ui/mobile-pad.js` —— 手机虚拟圆钮。**只在 `(pointer: coarse) and (not (any-pointer: fine))` 建 DOM**，
+  PC 一律不建。4 方向 + 等待/攻击/技能；攻击键长按 400ms 切攻击范围、短按攻击；技能键按 `spMax` 画等分技力环。
+- `net/battle_ui_test.mjs` —— **20 项实战回归**：4 角色 × 3 回合实操（每回合轮着开抽屉 / 开说明卡 / 右键技能节点）、
+  结算期间抽屉仍开着、通关 → 加点闸门 → 下一关、触屏实例 3 回合全用圆钮操作、结算后棋盘仍是正方形。
+  这条补的是 `layout_chrome_test` 的盲区：那边全在**静止**的 planning 界面上测，测不到「结算中 `updateStats()`
+  每帧调 `syncVirtualPad()` / `renderAbilityDrawer()`」这条最容易抛异常的路。
+- `net/lobby_shell_test.mjs` —— **39 项外壳回归**：无 `#home`/`#btnStart`、`?v=` 必须等于 `var BUILD`、
+  7 种非法账号输入各有**具体原因**、`maxlength=20`、自动生成账号、**可见文本里搜不到口令**、榜单剥数字 + 同名 `·2`。
+
+### 变更（游戏内 UI）
+
+- **正方形棋盘**：`boardAvailSize()` 取「可用短边」，`#boardWrap` 写同一像素宽高；`.cell` 去掉历史的 `×1.12`
+  纵向拉伸；`#game` 改 `justify-content: flex-start` 贴左。
+- **废除竖版拖高度**（与「正方形永远最大化」互斥）：`ark_map_v_ratio` 不再写入，且启动即 `clearMapVHeight()`
+  清掉老用户 localStorage 里的旧比例 —— 否则升级后地图会被一个已不存在的比例锁死。
+- **`#radarWrap` 从角色卡移入属性抽屉**，`#radarCanvas` 尺寸 `min(268px, 74vw)`（竖版也放得下）。
+- **仪表格降级为纯展示**：去掉 `data-kv-action` 与点击，加点只走「点属性名 → 说明卡里的 +1」。
+  手机上是圆形 = 交互、方形 = 信息，混在一起的点击语义会让人误触。
+- **键盘补 `V`** 切攻击范围（原来只有鼠标能看）；**右键规划路径上的节点**设技能节点（走既有 `toggleSkill`，起点不接受）。
+- **`showLevelUpOverlay()` 不再自建 `.lv-mask`**，改为写入 `#drawerLevelUpBody` 并 `drawerOpen('levelup')`。
+
+### 修复
+
+- **进关瞬间手机圆钮显示旧值**：`initLevel()` 第一次 `render()` 是 `setTimeout(…, 50)`（等离开选角大厅、
+  格子尺寸稳定后才量得出布局），这 50ms 里 `phase` 已是 planning 但圆钮还顶着上一关/初始值 ——
+  纯触屏玩家会看到「等待 0 / 攻击 0 / 没有技力环」，半帧后才跳正确。在 `setTimeout` 之前补一次 `syncVirtualPad()`。
+- **`net/dom_load_test.mjs` 的 build 正则只认旧格式** `^\d{8}[a-z]$`：构建号改 `MMDDHHmm` 后该用例必红（既有缺陷，不是本轮回归）。
+  改为两版都认。
+- **`net/lobby_shell_test.mjs` 把 BUILD 写死成 `10282321`**：发版改号必红。改为从 `index.html` 读 `var BUILD` 再比 iframe `?v=`，
+  这正好也是 AC-23 的要害（不一致 → 用户拿到缓存里的旧 `game.html`）。
+- **`net/layout_chrome_test.mjs [2]` 旧断言**跟着正方形改造重写；新增 `[3.5]` 非触屏不建圆钮、`[6]` 触屏实例数值与技力环。
+
+### 变更（外壳 `index.html`）
+
+- **取消主页**：`#home` / `#btnStart` 整块删除，`init()` 直接 `startGame()`，打开即选角大厅。
+- **左把手 + 抽屉**：8px 左边缘把手（战斗中 `body.in-battle` 缩到 2px 让位棋盘），抽屉 = 账号卡 + Top10 + 完整榜；
+  抽屉拉出时 `iframe.style.pointerEvents = 'none'`（否则棋盘会吞掉滚动手势）。
+- **账号 = 显示名 + 数字口令**：`/^([\u4e00-\u9fa5A-Za-z]{1,12})(\d{4,8})$/`。`parseAccount()` **逐条给原因**、
+  绝不静默截断；首次自动生成 `玩家<4位>`；公开位置一律 `publicName()` 剥尾部数字；同名显示 `阿米娅 ·2`。
+  编辑框 `maxlength=20` 回填完整串。
+
+### 构建基线
+
+- `build/manifest.json`：21 → **24 模块**（新增 `drawer` / `panels` / `mobile-pad`；`drawer`、`panels` 早于 `rng`/`pvp-core`，
+  `mobile-pad` 最后）。
+- **`P0.1-4` 拆分基线失效**：`chrome.js` / `layout.js` 重写、`dom-refs.js` 改点击语义、模板多处改动，
+  旧 README 里的「第 N 区 = 第 X 行」不可再用，请以本次产物为准重新核对。
+
+### 门禁
+
+`bundle_test` **58/58** · `dom_load_test` **23/23** · `layout_chrome_test` **53/53** · `lobby_shell_test` **39/39** ·
+`battle_ui_test` **20/20**（新增）= **193 项全绿**，`jsdomError` / `console.error` 全程 0。
+本轮未跑 80 局平衡口径：**没有改动任何规则或数值**，平衡门的触发条件（改数值）不成立。
+
+
 ## [未发布] — 机械拆分第七批（按热度分级）+ 构建「多点注入」（`P0.1-4`，build `20261028c`）
 
 > 本节**不涉及线上产物**：根目录 `game.html` 未改动（272,067 B / `959b59d2`）。

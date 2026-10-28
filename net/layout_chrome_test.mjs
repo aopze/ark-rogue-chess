@@ -7,9 +7,9 @@
  *
  * 覆盖：
  *   [1] 横竖版切换：setLayout / currentLayout / localStorage['ark_layout']
- *   [2] 竖版地图高度比例：applyMapVHeight / syncMapVHeight / clearMapVHeight
- *       + localStorage['ark_map_v_ratio']（拖动与旋屏保留）
- *   [3] 设置面板开合：setSettingsOpen / clampLogPanelPos
+ *   [2] 正方形棋盘：updateCellSize 写同一像素宽高 / 竖版拖动条已废弃
+ *   [3] 抽屉体系：drawerOpen / drawerClose / 互斥 / Esc / 二层属性说明卡
+ *   [3.5] 手机圆钮挂载判据：非纯触屏环境不建 DOM
  *   [4] DLC 外壳接管：单文件独立运行（无父窗口）时必须自动跳过，不得报错
  *
  * 用法：
@@ -100,55 +100,82 @@ check('setLayout 是全局可调用函数', typeof window.eval('typeof setLayout
   check("localStorage['ark_layout'] = 'h'", window.localStorage.getItem('ark_layout') === 'h');
 }
 
-console.log('\n[2] 竖版地图高度比例（applyMapVHeight / syncMapVHeight / clearMapVHeight）');
+console.log('\n[2] 正方形棋盘（updateCellSize / boardAvailSize）');
 {
   window.eval("setLayout('v', true)");
   const boardWrap = doc.getElementById('boardWrap');
   check('boardWrap 存在', !!boardWrap);
 
-  const h = window.eval('applyMapVHeight(120, true)');
-  check('applyMapVHeight 返回数值高度', typeof h === 'number' && h > 0, String(h));
-  check('boardWrap 高度已写成 px', /px$/.test(boardWrap.style.height), boardWrap.style.height);
+  // jsdom 没有真实布局：clientWidth/Height 都是 0，updateCellSize 落到 120px 兜底，
+  // 但「宽高写成同一像素值」这件事是能验的。
+  window.eval('updateCellSize()');
+  const w = parseFloat(boardWrap.style.width), h = parseFloat(boardWrap.style.height);
+  check('boardWrap 宽高都被写成 px', /px$/.test(boardWrap.style.width) && /px$/.test(boardWrap.style.height),
+    boardWrap.style.width + ' × ' + boardWrap.style.height);
+  check('棋盘是正方形（宽 == 高，±2px）', Math.abs(w - h) <= 2, w + ' vs ' + h);
 
-  const raw = window.localStorage.getItem('ark_map_v_ratio');
-  const ratio = parseFloat(raw);
-  check("localStorage['ark_map_v_ratio'] 已写入", raw !== null, String(raw));
-  check('比例落在允许区间 0.2~0.86（超出会被 initLayoutMode 丢弃）', ratio >= 0.2 && ratio <= 0.86, String(ratio));
+  // 竖版高度比例拖动已废除（ISSUE-20261028-09 硬约束 5）
+  window.eval('applyMapVHeight(120, true)');
+  check('竖版高度比例已废弃（不再写 ark_map_v_ratio）',
+    window.localStorage.getItem('ark_map_v_ratio') === null,
+    String(window.localStorage.getItem('ark_map_v_ratio')));
+  check('竖版没有拖动条（#dragHandle 被隐藏）',
+    window.getComputedStyle(doc.getElementById('dragHandle')).display === 'none',
+    window.getComputedStyle(doc.getElementById('dragHandle')).display);
 
-  // 旋屏 / 重算：syncMapVHeight 应沿用同一比例（竖版下不清空）
-  window.eval('clearMapVHeight()');
-  check('clearMapVHeight 清掉内联高度', boardWrap.style.height === '', JSON.stringify(boardWrap.style.height));
-  window.eval('syncMapVHeight()');
-  check('syncMapVHeight 在竖版下恢复高度（旋屏后比例保留）', /px$/.test(boardWrap.style.height), boardWrap.style.height);
-
-  // 切到横版后应清空（横版不用这个高度）
-  window.eval("setLayout('h', true)");
-  await sleep(60);
-  check('切到横版后内联高度被清掉', boardWrap.style.height === '', JSON.stringify(boardWrap.style.height));
-  check("横版不改 localStorage['ark_map_v_ratio']（比例留给下次竖版）",
-    window.localStorage.getItem('ark_map_v_ratio') === raw, window.localStorage.getItem('ark_map_v_ratio'));
+  // 格子必须正方：模板里的 .cell 规则不再乘 1.12
+  const cellRule = (html.match(/\.cell \{[^}]*\}/) || [''])[0];
+  check('格子不再乘 1.12（.cell height == var(--cell)）', !/1\.12/.test(cellRule), cellRule.slice(0, 70));
 }
 
-console.log('\n[3] 设置面板开合（setSettingsOpen / clampLogPanelPos）');
+console.log('\n[3] 抽屉体系（drawerOpen / drawerClose / 互斥 / Esc / 二层）');
 {
-  const panel = doc.getElementById('logPanel');
+  const settings = doc.getElementById('drawerSettings');
+  const stats = doc.getElementById('drawerStats');
+  const levelup = doc.getElementById('drawerLevelUp');
+  const mask = doc.getElementById('drawerMask');
   const btn = doc.getElementById('setOpenBtn');
-  check('设置面板与开关按钮都在', !!panel && !!btn);
+  check('三个抽屉 + 遮罩 + ⚙ 按钮都在', !!settings && !!stats && !!levelup && !!mask && !!btn);
 
-  window.eval('setSettingsOpen(false)');
-  check('收起后面板带 collapsed', panel.classList.contains('collapsed'));
-  check('收起后按钮显示 ⚙', (btn.textContent || '').trim() === '⚙', btn.textContent);
-  check("收起后按钮 aria-expanded = 'false'", btn.getAttribute('aria-expanded') === 'false');
+  check('初始没有抽屉打开', !settings.classList.contains('on') && !mask.classList.contains('on'));
 
-  window.eval('setSettingsOpen(true)');
-  check('展开后面板去掉 collapsed', !panel.classList.contains('collapsed'));
-  check('展开后按钮显示 ✕', (btn.textContent || '').trim() === '✕', btn.textContent);
-  check("展开后按钮 aria-expanded = 'true'", btn.getAttribute('aria-expanded') === 'true');
+  window.eval("drawerOpen('settings')");
+  check('打开设置：抽屉带 .on', settings.classList.contains('on'));
+  check("打开设置：⚙ 变 ✕ 且 aria-expanded = 'true'",
+    (btn.textContent || '').trim() === '✕' && btn.getAttribute('aria-expanded') === 'true', btn.textContent);
+  check('打开设置：遮罩出现', mask.classList.contains('on'));
 
-  const before = doc.getElementById('setOpenBtn').style.left + '|' + doc.getElementById('setOpenBtn').style.top;
-  window.eval('clampLogPanelPos()');
-  const after = doc.getElementById('setOpenBtn').style.left + '|' + doc.getElementById('setOpenBtn').style.top;
-  check('clampLogPanelPos 不抛错且不改按钮像素位置', before === after, `${before} -> ${after}`);
+  window.eval("drawerOpen('stats')");
+  check('互斥：打开属性时设置自动收起', !settings.classList.contains('on') && stats.classList.contains('on'));
+  check('属性抽屉打开时遮罩仍在', mask.classList.contains('on'));
+
+  doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  check('Esc 关闭当前抽屉', !stats.classList.contains('on'));
+  check('Esc 关闭后遮罩收起', !mask.classList.contains('on'));
+
+  window.eval("drawerOpen('stats'); openAbilityInfo('str')");
+  const layer = doc.getElementById('abilityInfoLayer');
+  check('点属性名 → 二层说明卡滑入', layer.classList.contains('on'));
+  const infoName = doc.querySelector('#abilityInfoBody .ab-info-name');
+  check('说明卡标题是属性全称', !!infoName && (infoName.textContent || '').trim() === '力量',
+    infoName ? infoName.textContent : '(无)');
+  check('说明卡带当前值与修正值', !!doc.querySelector('#abilityInfoBody .ab-info-val'));
+
+  const back = doc.getElementById('abilityInfoBack');
+  back.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('点「← 返回」回六维图（二层收起、抽屉仍在）',
+    !layer.classList.contains('on') && stats.classList.contains('on'));
+
+  window.eval('drawerClose()');
+  check('关闭后遮罩与抽屉都收起', !mask.classList.contains('on') && !stats.classList.contains('on'));
+}
+
+console.log('\n[3.5] 手机虚拟圆钮的挂载判据');
+{
+  // 本环境 matchMedia 全部返回 false（等同「没有触屏」），因此一个圆钮 DOM 都不该建
+  check('非纯触屏环境不建任何圆钮 DOM', doc.querySelectorAll('.vbtn').length === 0,
+    String(doc.querySelectorAll('.vbtn').length));
+  check('#vpadHost 没有 .on（不占位）', !doc.getElementById('vpadHost').classList.contains('on'));
 }
 
 console.log('\n[4] DLC 外壳接管（单文件独立运行时必须自动跳过）');
@@ -157,7 +184,7 @@ console.log('\n[4] DLC 外壳接管（单文件独立运行时必须自动跳过
   // 名字不会外泄到全局 —— 这与搬移前完全一致，保持它是为了断点调试时能看出栈帧名。
   check('patchDLCChrome 不外泄全局（命名函数表达式，与原状一致）',
     window.eval('typeof patchDLCChrome') === 'undefined');
-  check('无父窗口时不触碰自身 document（设置面板仍在）', !!doc.getElementById('logPanel'));
+  check('无父窗口时不触碰自身 document（设置抽屉仍在）', !!doc.getElementById('drawerSettings'));
   check('无父窗口时没有凭空创建外壳元素', doc.getElementById('hint') === null && doc.getElementById('ghint') === null);
 }
 
@@ -215,6 +242,80 @@ console.log('\n[5] DLC 外壳（同源 iframe）接管真实行为');
     sdoc.getElementById('hint').style.cursor);
   check('外壳侧无异常', shellErrors.length === 0, shellErrors.slice(0, 3).join(' | '));
   shell.window.close();
+}
+
+console.log('\n[6] 手机圆钮：纯触屏环境才挂载（第二个实例，把 matchMedia 伪装成 coarse）');
+{
+  const vc2 = new VirtualConsole();
+  vc2.on('jsdomError', (e) => errors.push('vpad jsdomError: ' + (e && e.message ? e.message : e)));
+  vc2.on('error', (...a) => errors.push('vpad console.error: ' + a.join(' ')));
+  const mapDom = new JSDOM(html, {
+    runScripts: 'dangerously',
+    pretendToBeVisual: true,
+    url: 'http://localhost/game.html',
+    virtualConsole: vc2,
+    beforeParse(window) {
+      window.HTMLCanvasElement.prototype.getContext = function () {
+        const base = {
+          measureText: () => ({ width: 8 }), canvas: this,
+          createLinearGradient: () => ({ addColorStop() {} }), getImageData: () => ({ data: [] }),
+        };
+        return new Proxy(base, {
+          get: (t, k) => (k in t ? t[k] : function () {}),
+          set: (t, k, v) => { t[k] = v; return true; },
+        });
+      };
+      // 纯触屏设备：pointer:coarse 命中、any-pointer:fine 不命中
+      window.matchMedia = (q) => ({
+        media: q,
+        matches: /\(pointer:\s*coarse\)/.test(q) && !/any-pointer/.test(q),
+        addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {},
+      });
+      window.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16);
+      Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true, writable: true });
+      Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true, writable: true });
+    },
+  });
+  const w2 = mapDom.window;
+  const d2 = w2.document;
+  await sleep(300);
+
+  check('纯触屏：建出 4 方向 + 3 动作 = 7 个圆钮', d2.querySelectorAll('.vbtn').length === 7,
+    String(d2.querySelectorAll('.vbtn').length));
+  check('#vpadHost 带 .on（参与布局，不悬浮）', d2.getElementById('vpadHost').classList.contains('on'));
+  const firstBtn = d2.querySelector('.vbtn');
+  check('圆钮是圆形（border-radius:50%）',
+    /50%/.test(w2.getComputedStyle(firstBtn).borderRadius || ''),
+    w2.getComputedStyle(firstBtn).borderRadius);
+
+  // 数值只在战斗里有意义（选角阶段没有 player）
+  w2.eval("selectCharacter('vampire')");
+  const t0 = Date.now();
+  while (Date.now() - t0 < 4000 && w2.eval('phase') !== 'planning') await sleep(50);
+  check('已进入规划阶段', w2.eval('phase') === 'planning', w2.eval('phase'));
+
+  const waitShown = (d2.querySelector('[data-vact="wait"] [data-k="wait"]') || {}).textContent;
+  const waitExp = w2.eval('player.move - countWaitSteps(playerPath)');
+  check('等待键 = 剩余可等待步数', String(waitExp) === String(waitShown), waitShown + ' vs ' + waitExp);
+
+  const atkShown = (d2.querySelector('[data-vact="attack"] [data-k="atk"]') || {}).textContent;
+  const atkExp = w2.eval('(isRangedChar(selectedChar) ? player.rangedDmg : player.meleeDmg)');
+  check('攻击键 = 该角色对应伤害', String(atkExp) === String(atkShown), atkShown + ' vs ' + atkExp);
+
+  const ring = d2.querySelector('[data-vact="skill"] .vring');
+  check('技能键上有技力环', !!ring);
+  const ringSegs = ring ? ring.querySelectorAll('path').length : 0;
+  const spMax = w2.eval('VAMPIRE_SP_MAX');
+  check('技力环按 spMax 等分段数', ringSegs === spMax, ringSegs + ' 段 vs spMax ' + spMax);
+
+  const up = d2.querySelector('[data-vdir="w"]');
+  check('规划阶段方向键可用（未 disabled）', up && !up.disabled);
+  const before = w2.eval('playerPath.length');
+  up.dispatchEvent(new w2.Event('pointerdown', { bubbles: true, cancelable: true }));
+  const after = w2.eval('playerPath.length');
+  check('点方向键走的是同一条路径逻辑（不报错、长度不为负）', after >= before, before + ' → ' + after);
+
+  mapDom.window.close();
 }
 
 await sleep(200);

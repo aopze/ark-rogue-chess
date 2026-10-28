@@ -1,72 +1,39 @@
 /* @slot:beforeLayoutV */
-/* P0.1-4 拆分 · 20261028c 基线（templates/game.html）1078-1161 行 · 竖版地图高度比例拖动：gameEl / MAP_V_KEY / mapVRatio / vGameBox / vMapBounds / applyMapVHeight / syncMapVHeight / clearMapVHeight / 拖动状态与 endSideDrag */
-// ===== 竖版（layout-v）：地图高度比例，可上下拖动 =====
+/* P0.1-4 拆分 · 20261028c 基线 · 竖版地图高度拖动已于 ISSUE-20261028-09 废除：
+ * 正方形棋盘「总是取最大」，高度不能由用户拖动决定，#dragHandle 在 layout-v 下直接不渲染。
+ * 保留 applyMapVHeight / syncMapVHeight / clearMapVHeight 三个函数名是因为 resize 与 setLayout
+ * 仍有调用；它们不再写 boardWrap.style.height —— 尺寸的唯一来源是 updateCellSize()。 */
 const gameEl = document.getElementById('game');
 const MAP_V_KEY = 'ark_map_v_ratio';
-let mapVRatio = null;      // null = 未拖动过，沿用 CSS 默认（紧贴棋盘）
-try {
-  const s = parseFloat(localStorage.getItem(MAP_V_KEY));
-  if (s >= 0.2 && s <= 0.86) mapVRatio = s;
-} catch (_) {}
-// #game 去掉上下内边距后的可用高度
-function vGameBox() {
-  const cs = getComputedStyle(gameEl);
-  const padT = parseFloat(cs.paddingTop) || 0, padB = parseFloat(cs.paddingBottom) || 0;
-  return Math.max(140, gameEl.clientHeight - padT - padB);
-}
-function vMapBounds(box) {
-  return { min: Math.max(96, box * 0.22), max: Math.max(96 + 80, box * 0.82) };
-}
-function applyMapVHeight(px, save) {
-  const box = vGameBox();
-  const { min, max } = vMapBounds(box);
-  const h = Math.round(Math.max(min, Math.min(max, px)));
-  mapVRatio = h / box;
-  boardWrap.style.maxHeight = 'none';
-  boardWrap.style.height = h + 'px';
-  if (save) { try { localStorage.setItem(MAP_V_KEY, String(mapVRatio)); } catch (_) {} }
-  updateCellSize();
-  return h;
-}
-function syncMapVHeight() {
-  if (!document.body.classList.contains('layout-v')) { clearMapVHeight(); return; }
-  if (mapVRatio == null) { clearMapVHeight(); return; }
-  applyMapVHeight(mapVRatio * vGameBox(), false);
-}
-function clearMapVHeight() {
-  boardWrap.style.height = '';
-  boardWrap.style.maxHeight = '';   // 回到 CSS 默认（竖屏按宽高比紧贴棋盘）
-  updateCellSize();
-}
 
-let sideDragging = false, sideDragVertical = false, sideDragRaf = 0, sideDragPendingW = null;
-let mapVDragStartY = 0, mapVDragStartH = 0, mapVDragPending = null;
+function applyMapVHeight() { clearMapVHeight(); return boardWrap.offsetHeight; }
+function syncMapVHeight() { clearMapVHeight(); }
+function clearMapVHeight() {
+  // 清掉旧版留下的内联高度与比例：老用户的 ark_map_v_ratio 会把正方形锁死成历史高度
+  if (boardWrap.style.height) boardWrap.style.height = '';
+  if (boardWrap.style.maxHeight) boardWrap.style.maxHeight = '';
+  try { localStorage.removeItem(MAP_V_KEY); } catch (_) {}
+  updateCellSize();
+}
+clearMapVHeight();   // 启动即清，避免旧值影响首屏
+
+let sideDragging = false, sideDragRaf = 0, sideDragPendingW = null;
 function sideDragFlush() {
   sideDragRaf = 0;
   if (sideDragPendingW != null) { applySidebarWidth(sideDragPendingW, false); sideDragPendingW = null; }
-  if (mapVDragPending != null) { applyMapVHeight(mapVDragPending, false); mapVDragPending = null; }
 }
 dragHandle.addEventListener('pointerdown', (e) => {
-  sideDragVertical = document.body.classList.contains('layout-v');
-  // 横版：手机端不开放（侧栏宽度由媒体查询固定）；竖版：手机/桌面都可用
-  if (!sideDragVertical && window.innerWidth <= 760) return;
+  // 竖版已无拖动条（CSS display:none），这里只剩横版的侧栏宽度拖动；手机端不开放
+  if (window.innerWidth <= 760) return;
   sideDragging = true;
-  if (sideDragVertical) {
-    mapVDragStartY = e.clientY;
-    mapVDragStartH = boardWrap.offsetHeight;
-  }
   dragHandle.classList.add('dragging');
   try { dragHandle.setPointerCapture(e.pointerId); } catch (_) {}
   e.preventDefault();
 });
 dragHandle.addEventListener('pointermove', (e) => {
   if (!sideDragging) return;
-  if (sideDragVertical) {
-    mapVDragPending = mapVDragStartH + (e.clientY - mapVDragStartY);
-  } else {
-    // 右侧内边距16 + 半个调整块5 + 两个gap 8*2 ≈ 29
-    sideDragPendingW = window.innerWidth - e.clientX - 29;
-  }
+  // 右侧内边距16 + 半个调整块5 + 两个gap 8*2 ≈ 29
+  sideDragPendingW = window.innerWidth - e.clientX - 29;
   if (!sideDragRaf) sideDragRaf = requestAnimationFrame(sideDragFlush);
 });
 function endSideDrag() {
@@ -74,12 +41,8 @@ function endSideDrag() {
   sideDragging = false;
   dragHandle.classList.remove('dragging');
   if (sideDragRaf) { cancelAnimationFrame(sideDragRaf); sideDragRaf = 0; sideDragFlush(); }
-  if (sideDragVertical) {
-    applyMapVHeight(boardWrap.offsetHeight, true);
-  } else {
-    const cur = parseFloat(sidebarEl.style.width) || sidebarEl.offsetWidth;
-    applySidebarWidth(cur, true);
-  }
+  const cur = parseFloat(sidebarEl.style.width) || sidebarEl.offsetWidth;
+  applySidebarWidth(cur, true);
   if (player || phase === PHASE.CHAR_SELECT) render();
 }
 dragHandle.addEventListener('pointerup', endSideDrag);
@@ -98,26 +61,20 @@ function setLayout(mode, save) {
   if (save) { try { localStorage.setItem(LAYOUT_KEY, v ? 'v' : 'h'); } catch (_) {} }
   try {
     if (v) {
-      // 竖版：侧栏铺满宽度，六维图用默认尺寸
+      // 竖版：侧栏铺满宽度（六维图在抽屉里，尺寸固定，不再随侧栏变化）
       sidebarEl.style.width = '';
-      radarCanvas.style.width = '';
-      radarCanvas.style.height = '';
+    } else if (window.innerWidth > 760) {
+      // 横版：恢复上次拖动宽度
+      let saved = NaN;
+      try { saved = parseInt(localStorage.getItem(SIDE_W_KEY), 10); } catch (_) {}
+      if (!isNaN(saved) && saved > 0) applySidebarWidth(saved, false);
+      else fitSidebarToWidth();
     } else {
-      // 横版：恢复上次拖动宽度（手机端由媒体查询接管，不设内联宽度）
-      if (window.innerWidth > 760) {
-        let saved = NaN;
-        try { saved = parseInt(localStorage.getItem(SIDE_W_KEY), 10); } catch (_) {}
-        if (!isNaN(saved) && saved > 0) applySidebarWidth(saved, false);
-        else fitSidebarToWidth();
-      } else {
-        sidebarEl.style.width = '';
-        radarCanvas.style.width = '';
-        radarCanvas.style.height = '';
-      }
+      sidebarEl.style.width = '';
     }
   } catch (_) {}
+  // 布局类切换后必须重算正方形边长（否则会残留上一个方向的尺寸）
   setTimeout(() => {
-    try { syncMapVHeight(); } catch (_) {}
     updateCellSize();
     if (player || phase === PHASE.CHAR_SELECT) render();
   }, 30);
