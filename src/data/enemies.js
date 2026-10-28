@@ -1,6 +1,10 @@
 /* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 596-671 行原样搬移（敌人类型 / L1 基础面板 / 成长推演（computeEnemyGrowth））。
  * 纯移动未改逻辑；顺序由 build/manifest.json 保证与拆分前一致。 */
-const ENEMY_TYPES = ['skeleton', 'ghost', 'alien', 'shield', 'bomber'];
+/* ★ ISSUE-20261028-10-B：'colossus' 追加在**最末尾**。
+ * 它是 Boss，不进 ENEMY_UNLOCK（pickEnemyType 永远不会抽到它），只由 initLevel 按关卡注入。
+ * 追加在末尾的理由同下面 21 行的注释：computeEnemyGrowth 用 indexOf 派生种子，
+ * 只有追加才不会动前五种的成长序列。 */
+const ENEMY_TYPES = ['skeleton', 'ghost', 'alien', 'shield', 'bomber', 'colossus'];
 
 /* =========================================================
  * 敌人基础面板（L1 起点，实际数值由 computeEnemyGrowth 推演，ISSUE-20261028-03）
@@ -61,8 +65,49 @@ const ENEMY_STATS = {
     prof: 1,
     dice: { melee: [1, 1] },
     explode: 4,
+  },
+  /* =========================================================
+   * ★ ISSUE-20261028-10-B：Boss「圆岩巨像」
+   *
+   * 设计定位：**不是「血厚的普通怪」**，而是逼玩家改变站位的机制怪。
+   *   ① 移动时把挡路的玩家沿自己朝向推开 1 格，并让玩家眩晕 1 回合 → 「别站在它正前方」
+   *   ② 每 2 回合在玩家身边落一块「粗圆岩」（= 动态墙）→ 棋盘逐渐被切碎，走位空间变小
+   *   ③ 它推自己的石头会把石头撞碎，自己掉 1 HP → 玩家可以「引导它撞石头」白嫖伤害
+   *
+   * 数值口径：力 18（近战修正 +4）、体 24（HP 起点 24，每 3 关再涨）、敏 4（移动 2、AC 低）。
+   * 刻意做成「慢、硬、一拳很疼」：玩家能跑，但跑不出它的推动范围。
+   * ⚠️ 它只在第 10/20/30… 关登场（`isBossLevel`），且**替换该关最后一只普通敌人**，
+   *   不额外增加单关敌人数 —— 否则第 10 关等于「6 普通 + 1 Boss」，难度会直接崩。
+   * ========================================================= */
+  colossus: {
+    name: '圆岩巨像', icon: '🗿',
+    // 力18 智2 敏4 感4 魅2 体24
+    abilities: { str: 18, int: 2, dex: 4, wis: 4, cha: 2, con: 24 },
+    prof: 2,
+    dice: { melee: [1, 4] },
+    boss: true,
   }
 };
+
+/* =========================================================
+ * Boss 相关常量（ISSUE-20261028-10-B）
+ * ========================================================= */
+const BOSS_EVERY_N_LEVELS = 10;      // 第 10/20/30… 关各登场一次
+const BOSS_TYPE = 'colossus';
+const BOSS_INTENT_EXTRA_STEPS = 2;   // 意图预告额外多显示 2 步（让玩家预判推动方向）
+const COLOSSUS_ROCK_EVERY = 2;       // 每 2 回合落一块粗圆岩
+const COLOSSUS_ROCK_SELF_DAMAGE = 1; // 推动撞碎粗圆岩时 Boss 自己掉的 HP
+/* ★ 眩晕取值 2 而不是 1：
+ * 玩家被推发生在「敌人移动阶段」，紧接着 endRound 就会递减一次；
+ * 若设 1 → 当回合就被减到 0 → 下一回合照常行动 = 完全没眩晕。
+ * 设 2 → 本回合末减到 1（下一回合不能动），再一回合末减到 0（恢复）。
+ * 与敌人的 `stunTurns = 2` 约定一致（见 templates 里 bomber/敌人眩晕注释）。 */
+const COLOSSUS_PUSH_STUN = 2;
+
+/* 本关是不是 Boss 关（第 10/20/30… 关） */
+function isBossLevel(level) {
+  return level > 0 && level % BOSS_EVERY_N_LEVELS === 0;
+}
 
 /* =========================================================
  * 类型解锁与权重（ISSUE-20261028-04）

@@ -157,7 +157,9 @@ function showEnemyFirstStepArrows() {
     if (e.stunTurns > 0) return;
     const path = enemyPaths[i];
     if (!path || path.length < 2) return;
-    const extra = (selectedChar === 'amiya' && e.amiyaRevealActive) ? e.amiyaRevealActive : 0;
+    /* ★ 括号别漏：三元表达式的 else 分支会把后面的 + 吞进去（`x ? a : 0 + b` 是 `x ? a : (0+b)`） */
+    const extra = ((selectedChar === 'amiya' && e.amiyaRevealActive) ? e.amiyaRevealActive : 0)
+      + (e.type === BOSS_TYPE ? BOSS_INTENT_EXTRA_STEPS : 0);
     const stepsToShow = (player ? player.visibleSteps : 1) + extra;
     for (let s = 1; s <= stepsToShow && s < path.length; s++) {
       const prev = path[s-1], curr = path[s];
