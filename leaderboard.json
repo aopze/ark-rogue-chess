@@ -1,5 +1,5 @@
 {
- "updated_at": 1793198064,
+ "updated_at": 1793198121,
  "entries": [
   {
    "id": "5648491503",
@@ -26,8 +26,8 @@
    "id": "dev_a40de3f57ee44fd4b45ab73fbdbac7dd",
    "name": "starry",
    "level": 2,
-   "kills": 3,
-   "runs": 3
+   "kills": 6,
+   "runs": 4
   },
   {
    "id": "dev_0a1b6da2105c4978b97262e61d7f357a",
