@@ -47,11 +47,29 @@ function attackRollDisadvantage(attackerMod, prof, targetAC) {
     disadvantage: true
   };
 }
+/* ISSUE-20261028-15：玩家近战「朝向必中」。
+ * 正对目标出手时，不再由 d20 决定中不中 —— 一律算命中，伤害与暴击判定完全照旧。
+ *   - A2 仍然掷骰：d20 照掷、自然 20 的暴击优先级不变（本函数只写 hit，不碰 nat20）。
+ *   - B1 覆盖自然 1（推荐值）：否则玩家会遇到「我正对着它，还是空了」，规则等于没建立起来。
+ *   - A4 / C1 只给玩家近战用：远程（含不稳定血浆的 forcedHit）、技能爆发、敌人侧一律不调用本函数。
+ * 不复用 atk.forcedHit —— 那个字段已经被「不稳定血浆」占用，混用会让日志串味。 */
+function applyFacingGuaranteedHit(atk, target) {
+  if (!player || !target || !isFacingTarget(player, target)) return atk;
+  if (atk.hit) return atk;                 // 本来就命中：保留 total/AC 的原始展示，不多贴标签
+  atk.hit = true;
+  atk.facingHit = true;                    // 朝向必中（A3 的日志/浮字据此加「· 必定命中」）
+  atk.nat1Overridden = !!atk.nat1;         // 记录「自然 1 被覆盖」，让战报能解释这行数字
+  return atk;
+}
 function fmtRoll(atk, ac) {
+  /* ISSUE-20261028-15：朝向必中的点数会「看起来打不中」，必须就地解释，否则像 bug。
+   * 这种情况下比较符也要按真实总点数显示（`6<AC30（朝向必中…）`），不能因为 hit=true 就写成 ≥。 */
+  const forced = atk.facingHit ? `（朝向必中${atk.nat1Overridden ? '，覆盖自然1' : ''}）` : '';
+  const cmp = atk.facingHit ? (atk.total >= ac ? '≥' : '<') : (atk.hit ? '≥' : '<');
   if (atk.disadvantage) {
-    return `劣势 d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total} / d20=${atk.otherRoll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.otherTotal}，取低${atk.hit ? '≥' : '<'}AC${ac}`;
+    return `劣势 d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total} / d20=${atk.otherRoll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.otherTotal}，取低${cmp}AC${ac}${forced}`;
   }
-  return `d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total}${atk.hit ? '≥' : '<'}AC${ac}`;
+  return `d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total}${cmp}AC${ac}${forced}`;
 }
 function recomputePlayerDerivedStats() {
   const a = playerStats.abilities;

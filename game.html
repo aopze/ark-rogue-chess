@@ -35,8 +35,6 @@
   .cell.in-range.attack, .cell.in-range.skill { box-shadow: inset 0 0 0 999px rgba(58,90,140,.25), inset 0 0 0 1px rgba(201,160,255,.65); }
   .cell.item-cell { background: #4a1e2f; box-shadow: inset 0 0 10px #ff6b6b; }
   .cell.blood-cell { background: #3d1515; }
-  .cell.candidate { outline:2px dashed #aaa; }
-  .cell.candidate.selected { outline:3px solid #f39c12; box-shadow: inset 0 0 15px #f39c12; }
   .cell.exit-cell { background: #27ae60; box-shadow: inset 0 0 15px #2ecc71; }
   .cell.hitflash { animation: hitflash .35s ease-out; }
   @keyframes hitflash { 0%{box-shadow: inset 0 0 0 40px rgba(255,80,80,.9);} 100%{box-shadow: inset 0 0 0 0 rgba(255,80,80,0);} }
@@ -48,6 +46,13 @@
   .unit-abs { position:absolute; left:0; top:0; width:auto; height:auto; transition: transform var(--unit-move-ms) linear; will-change: transform; border-radius:2px; }
   .unit .icon, .unit-abs .icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
   .unit .icon.ghost-icon, .unit-abs .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
+  /* 选角大厅角色（ISSUE-20261028-12）：连续坐标 + 绝对定位。
+     自由移动期间必须 transition:none —— 每帧写 transform 时若还有 transition，
+     会把每帧目标再缓动一次，出现拖尾/松手后还在滑。 */
+  .cand-unit { position:absolute; left:0; top:0; display:flex; align-items:center; justify-content:center;
+    transition:none; will-change:transform; pointer-events:none; border-radius:6px; }
+  .cand-unit .cand-icon { font-size: calc(var(--cell) * 0.55); line-height:1; display:flex; align-items:center; justify-content:center; }
+  .cand-unit.sel { outline:3px solid #f39c12; box-shadow: inset 0 0 15px rgba(243,156,18,0.55); }
   /* 词缀 / 精英标记（ISSUE-20261028-05）：词缀做成右上角小标签，精英用金边 + 星标。
      刻意不用 CSS filter 改图标色 —— 会把 emoji 与后续像素画（ISSUE-07）的色阶一起毁掉。 */
   .affix-tag { position:absolute; top:0; right:0; display:flex; gap:1px; align-items:center;
@@ -63,7 +68,6 @@
   .unit-abs.ua-player.ua-charging { outline:3px solid #ffd700; outline-offset:-3px; box-shadow: inset 0 0 15px #ffd700; }
   .unit-abs.ua-player.ua-attacked { outline:2px dashed #ffb86b; outline-offset:-2px; }
   .unit-abs.ua-enemy { outline:2px solid #e74c3c; outline-offset:-2px; }
-  .unit-abs.ua-enemy.ua-debug { outline:2px dashed #ffcc00; outline-offset:-2px; }
   .unit-abs.ua-stunned { opacity: 0.55; filter: grayscale(0.35); }
   .unit-abs.ua-stunned::after {
     content: '💫';
@@ -235,10 +239,13 @@
   #logPanel.dragging #logBar { cursor: grabbing; }
   #logGrip { color: #5a5a80; font-size: 12px; letter-spacing: -2px; }
   #logTitle { flex: 0 0 auto; white-space: nowrap; }
-  /* P0.1-1：版本号，页内可查。位置在标题栏「设置」右侧（小字，可选中复制） */
+  /* P0.1-1：版本号，页内可查。位置在标题栏「设置」右侧（小字）。
+   * 隐藏调试开关的触发点（连点 5 次）：绝不能有任何"这里可点"的暗示，
+   * 故不保留 cursor:pointer/下划线/高亮；并加 user-select:none + touch-action:manipulation
+   * 避免连点选中文字 / 移动端双击缩放吞掉快速连点（ISSUE-20261028-11 A6）。 */
   #setVer { flex: 1 1 auto; min-width: 0; font-size: 10px; font-weight: 700; letter-spacing: .3px;
     color: #7c80a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    user-select: text; cursor: text; }
+    user-select: none; -webkit-user-select: none; touch-action: manipulation; cursor: default; }
   #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
   #logBar button:hover { background: #3a3a5c; color: #fff; }
   /* ---- 「设置」面板：主页 / 联机 / 重开 / 旋转 四按钮一行 ---- */
@@ -459,9 +466,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10282137',
+  build:   '10282240',
   commit:  'unknown',
-  builtAt: '2026-10-28T13:37:54Z'
+  builtAt: '2026-10-28T14:40:37Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -955,7 +962,13 @@ let enemyPaths = [];
 let enemyPathOrder = [];
 let logLines = [];
 let enemyArrows = [];
+// 调试模式：无敌 + 点击秒杀（ISSUE-20261028-11）。状态仅通过连点设置面板版本号 5 次切换，
+// 且只在控制台暴露 window.__ARK_DEBUG__，游戏内无任何提示/日志/视觉标记（纯隐藏开关）。
 let debugMode = false;
+// 控制台可读隐藏开关状态（非玩家可见提示）。
+Object.defineProperty(window, '__ARK_DEBUG__', { get: () => debugMode, configurable: true });
+// 统一入口：切换/重置调试开关。改这里即可同步 window.__ARK_DEBUG__。
+function setDebugMode(on) { debugMode = !!on; }
 let lastPathSignature = '';
 let playerChargingThisTurn = false;
 let playerAttacksDone = 0;
@@ -1039,7 +1052,7 @@ let buffs = { kettle: 0, blade: 0, sass: 0, kit: 0, pill: 0, scout: 0 };
 
 const BUFF_POOL = [
   { id: 'kettle', name: '热水壶', icon: '☕', desc: 'HP 上限 +2（并回复等量生命）' },
-  { id: 'blade',  name: '锈蚀刀片', icon: '🗡️', desc: '近战伤害 +1，趁乱攻击伤害 +1' },
+  { id: 'blade',  name: '锈蚀刀片', icon: '🗡️', desc: '近战伤害 +1，贴身反击伤害 +1' },
   { id: 'sass',   name: '香草沙士', icon: '🥤', desc: '获得技力时有 30% 概率额外获得 1 点技力' },
   { id: 'kit',    name: '急救药箱', icon: '🧰', desc: '每张地图必定额外出现一个恢复地块 ❤️' },
   { id: 'pill',   name: '药枚', icon: '💊', desc: '每关开始时获得 1 层护盾（抵消一次任意伤害）' },
@@ -1465,11 +1478,29 @@ function attackRollDisadvantage(attackerMod, prof, targetAC) {
     disadvantage: true
   };
 }
+/* ISSUE-20261028-15：玩家近战「朝向必中」。
+ * 正对目标出手时，不再由 d20 决定中不中 —— 一律算命中，伤害与暴击判定完全照旧。
+ *   - A2 仍然掷骰：d20 照掷、自然 20 的暴击优先级不变（本函数只写 hit，不碰 nat20）。
+ *   - B1 覆盖自然 1（推荐值）：否则玩家会遇到「我正对着它，还是空了」，规则等于没建立起来。
+ *   - A4 / C1 只给玩家近战用：远程（含不稳定血浆的 forcedHit）、技能爆发、敌人侧一律不调用本函数。
+ * 不复用 atk.forcedHit —— 那个字段已经被「不稳定血浆」占用，混用会让日志串味。 */
+function applyFacingGuaranteedHit(atk, target) {
+  if (!player || !target || !isFacingTarget(player, target)) return atk;
+  if (atk.hit) return atk;                 // 本来就命中：保留 total/AC 的原始展示，不多贴标签
+  atk.hit = true;
+  atk.facingHit = true;                    // 朝向必中（A3 的日志/浮字据此加「· 必定命中」）
+  atk.nat1Overridden = !!atk.nat1;         // 记录「自然 1 被覆盖」，让战报能解释这行数字
+  return atk;
+}
 function fmtRoll(atk, ac) {
+  /* ISSUE-20261028-15：朝向必中的点数会「看起来打不中」，必须就地解释，否则像 bug。
+   * 这种情况下比较符也要按真实总点数显示（`6<AC30（朝向必中…）`），不能因为 hit=true 就写成 ≥。 */
+  const forced = atk.facingHit ? `（朝向必中${atk.nat1Overridden ? '，覆盖自然1' : ''}）` : '';
+  const cmp = atk.facingHit ? (atk.total >= ac ? '≥' : '<') : (atk.hit ? '≥' : '<');
   if (atk.disadvantage) {
-    return `劣势 d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total} / d20=${atk.otherRoll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.otherTotal}，取低${atk.hit ? '≥' : '<'}AC${ac}`;
+    return `劣势 d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total} / d20=${atk.otherRoll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.otherTotal}，取低${cmp}AC${ac}${forced}`;
   }
-  return `d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total}${atk.hit ? '≥' : '<'}AC${ac}`;
+  return `d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total}${cmp}AC${ac}${forced}`;
 }
 function recomputePlayerDerivedStats() {
   const a = playerStats.abilities;
@@ -1893,7 +1924,8 @@ function countWaitSteps(path) {
  *   - 攻击：单击路径节点设攻击节点，到达该步时攻击。
  *   - 技能：双击路径节点设技能节点，到达该步时发动角色技能。
  *   - 闪避：路径里第一个「等待」自动成为闪避节点，AC +3。
- * 被动行动：趁乱攻击，本 tick 有主动行动时自动结算，不占动作。
+ * 被动行动：贴身反击（原名「趁乱攻击」，2026-10-28 ISSUE-20261028-15 改名，该词让位给
+ * ISSUE-20261028-10 的「剩步数→等待→额外攻击」），本 tick 有主动行动时自动结算，不占动作。
  *
  * 默认每回合 1 次动作（scout 的 extraAttacks 可 +1）。按路径先后先到先得，
  * 超出预算的动作在结算时报失败并写日志。
@@ -1977,6 +2009,9 @@ function isPlayerPreviewCharging() {
 
 function renderUnits() {
   if (phase === PHASE.CHAR_SELECT || !player) { clearUnitLayer(); return; }
+  /* 离开非战斗相位后，选角大厅的绝对定位角色层必须清掉（ISSUE-20261028-12），
+   * 否则会留在战斗棋盘上飘着 */
+  if (typeof freeMoveClearEls === 'function') freeMoveClearEls();
   const lr = unitLayer.getBoundingClientRect();
   const toRender = [];
   if (player.alive) {
@@ -2085,16 +2120,15 @@ function renderUnits() {
     }
     if (u.isPlayer) {
       rec.el.classList.add('ua-player');
-      rec.el.classList.remove('ua-enemy', 'ua-debug', 'ua-stunned');
+      rec.el.classList.remove('ua-enemy', 'ua-stunned');
       rec.el.classList.toggle('ua-charging', playerCharging);
       rec.el.classList.toggle('ua-attacked', playerAttacked && !playerCharging);
     } else if (u.isPeer) {
       rec.el.classList.add('ua-peer');
-      rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-charging', 'ua-attacked', 'ua-debug', 'ua-stunned');
+      rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-charging', 'ua-attacked', 'ua-stunned');
     } else {
       rec.el.classList.add('ua-enemy');
       rec.el.classList.remove('ua-player', 'ua-charging', 'ua-attacked');
-      rec.el.classList.toggle('ua-debug', debugMode);
       rec.el.classList.toggle('ua-stunned', u.stunTurns > 0);
       rec.el.classList.toggle('ua-elite', !!u.isElite);
     }
@@ -2208,10 +2242,11 @@ function syncPlayerFromStats() {
 }
 
 /* src: src/ui/char-select.js */
-/* P0.1-4 拆分 · 20261028c 基线 2005-2050 行 · 角色选择流程：initCharSelect / selectCharacter */
+/* P0.1-4 拆分 · 20261028c 基线 2005-2050 行 · 角色选择流程：initCharSelect / selectCharacter
+ * 2026-10-28 追加「非战斗相位平滑自由移动」（ISSUE-20261028-12）与「大厅无障碍」（ISSUE-20261028-13）。 */
 function initCharSelect() {
   phase = PHASE.CHAR_SELECT;
-  debugMode = false;
+  setDebugMode(false);
   lastPathSignature = '';
   /* 新的一局 = 新的种子（ISSUE-20261028-03）：敌人成长按 RUN_SEED 推演，
    * 不重掷的话「重开」会得到和上一局完全相同的敌人面板序列。联机进入房间后由服务器再覆盖。 */
@@ -2228,26 +2263,32 @@ function initCharSelect() {
   selMap = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
   for (let i = 0; i < ROWS; i++) { selMap[i][0] = 1; selMap[i][COLS-1] = 1; }
   for (let i = 0; i < COLS; i++) { selMap[0][i] = 1; selMap[ROWS-1][i] = 1; }
-  selMap[2][3] = 1; selMap[2][5] = 1; selMap[6][3] = 1; selMap[6][5] = 1;
-  selMap[3][4] = 1; selMap[5][4] = 1;
+  /* 内部不再摆任何阻挡物（ISSUE-20261028-13 方案 A）：大厅是选角厅，不是战场。
+   * 联机 9×9 竞技场不再复用这张图，改用 buildPvpArena() 的独立快照，联机地形一格不变。 */
   selExit = { x: 7, y: 4 };
   selMap[selExit.y][selExit.x] = 0;
   charCandidates = [
-    { id: 'wheelchair', x: 2, y: 2, alive: true },
-    { id: 'vampire', x: 2, y: 4, alive: true },
-    { id: 'fencer', x: 2, y: 6, alive: true },
-    { id: 'amiya', x: 4, y: 2, alive: true }
+    { id: 'wheelchair', x: 2, y: 2, fx: 2, fy: 2, alive: true },
+    { id: 'vampire', x: 2, y: 4, fx: 2, fy: 4, alive: true },
+    { id: 'fencer', x: 2, y: 6, fx: 2, fy: 6, alive: true },
+    { id: 'amiya', x: 4, y: 2, fx: 4, fy: 2, alive: true }
   ];
   selectedCandidate = null;
   clearLog();
   log('请点击选择一个角色，然后通过点击或 WASD 移动至 🚪 出口。');
-  log('💡 提示：F12 切换调试模式 · X 一键重置路径');
-  setTimeout(() => { updateCellSize(); render(); }, 50);
+  setTimeout(() => {
+    updateCellSize();
+    render();
+    /* 自由移动层要等格子布局稳定后才能量出格子间距，所以跟着这次重绘一起初始化 */
+    initFreeMoveLobby();
+  }, 50);
 }
 
 function selectCharacter(charId) {
+  stopFreeMove();          /* 进关前务必停掉 rAF，否则战斗里还在写大厅元素的 transform */
+  freeMoveClearEls();      /* 大厅角色层是独立的绝对定位节点，进关前必须清干净 */
   selectedChar = charId;
-  debugMode = false;
+  setDebugMode(false);
   playerStats = createPlayerStats(charId);
   level = 1;
   resetRunProgress();
@@ -2255,6 +2296,271 @@ function selectCharacter(charId) {
   playerStats.currentHp = playerStats.maxHp;
   initLevel();
 }
+
+/* =========================================================
+ * 非战斗相位的「平滑自由移动」（ISSUE-20261028-12）
+ *
+ * 位置模型：charCandidates[n].fx / fy = 连续坐标，单位是「格」，
+ *           整数即该格中心（fx=2 就是 selMap[·][2] 的正中间）。
+ *           整数 x / y 仍然同步维护（取整），供旧逻辑/测试读取。
+ * 渲染：每帧只写「当前角色」那一个元素的 transform，绝不整盘重绘
+ *       （paintBoard() 会 innerHTML 重建 81 格，60fps 调它必卡）。
+ * 输入：点击（设目标点，可随时改向）与 WASD（按住连续走），
+ *       两者共用同一套向量/位移代码；虚拟摇杆本轮不做（见 issue §待确认 1）。
+ * ========================================================= */
+const FREE_MOVE_SPEED = 4.5;    /* 格/秒，与 ISSUE-12 §待确认 2 的建议值一致 */
+const FREE_MOVE_ARRIVE = 0.05;  /* 到达判定：距目标 < 0.05 格即停，避免抖动 */
+const FREE_MOVE_EXIT_EPS = 0.5; /* 与出口格矩形相交（中心距 <= 0.5 格）即算踩到 */
+const FREE_MOVE_KEYS = ['w', 'a', 's', 'd'];
+
+let freeMoveActive = false;     /* 大厅里是否启用自由移动 */
+let freeMoveRaf = 0;
+let freeMoveLast = 0;           /* 上一帧时间戳，dt 用它算（不能按固定步长） */
+let freeMoveTarget = null;      /* 点击目标 {fx, fy} */
+let freeMoveExiting = false;    /* 已触发进关，防重复 */
+let freeMoveGeom = null;        /* { ox, oy, sx, sy, cw, ch } 像素几何 */
+const freeMoveKeys = { w: false, a: false, s: false, d: false };
+const candEls = new Map();      /* 角色 id → 绝对定位元素 */
+
+/* 将来 ISSUE-06 的「关卡间事件」也是非战斗相位，一并放进这里即可 */
+function isFreeMovePhase() {
+  return phase === PHASE.CHAR_SELECT;
+}
+
+function freeMoveClearKeys() {
+  for (const k of FREE_MOVE_KEYS) freeMoveKeys[k] = false;
+}
+
+/* 量一次格子几何：用两个对角格子的中心点反推「格间距」，
+ * 比 rect.width/COLS 精确（后者会把 grid gap 摊进格宽，右端误差最大可到十几像素）。 */
+function freeMoveMeasure() {
+  if (!(COLS >= 4 && ROWS >= 4)) return false;
+  const a = getCellEl(1, 1);
+  const b = getCellEl(COLS - 2, ROWS - 2);
+  if (!a || !b) return false;
+  const lr = unitLayer.getBoundingClientRect();
+  const ar = a.getBoundingClientRect();
+  const br = b.getBoundingClientRect();
+  if (!(ar.width > 0) || !(br.width > 0)) return false;
+  const ax = ar.left - lr.left + ar.width / 2;
+  const ay = ar.top - lr.top + ar.height / 2;
+  const bx = br.left - lr.left + br.width / 2;
+  const by = br.top - lr.top + br.height / 2;
+  freeMoveGeom = {
+    ox: ax, oy: ay,
+    sx: (bx - ax) / (COLS - 3),
+    sy: (by - ay) / (ROWS - 3),
+    cw: ar.width, ch: ar.height,
+  };
+  return Math.abs(freeMoveGeom.sx) > 0.5 && Math.abs(freeMoveGeom.sy) > 0.5;
+}
+
+function freeMoveToPixels(fx, fy) {
+  const g = freeMoveGeom;
+  return { x: g.ox + (fx - 1) * g.sx - g.cw / 2, y: g.oy + (fy - 1) * g.sy - g.ch / 2 };
+}
+
+function freeMoveClientToCell(clientX, clientY) {
+  const g = freeMoveGeom;
+  const lr = unitLayer.getBoundingClientRect();
+  return {
+    fx: 1 + (clientX - lr.left - g.ox) / g.sx,
+    fy: 1 + (clientY - lr.top - g.oy) / g.sy,
+  };
+}
+
+function freeMoveEnsureEls() {
+  for (const c of charCandidates) {
+    const old = candEls.get(c.id);
+    if (old && old.isConnected) continue;
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.className = 'cand-unit';
+    const iconEl = document.createElement('div');
+    iconEl.className = 'cand-icon';
+    iconEl.textContent = (CHARACTERS[c.id] && CHARACTERS[c.id].icon) || '❓';
+    el.appendChild(iconEl);
+    unitLayer.appendChild(el);
+    candEls.set(c.id, el);
+  }
+}
+
+function freeMoveClearEls() {
+  for (const [, el] of candEls) el.remove();
+  candEls.clear();
+}
+
+function freeMovePlace(c) {
+  const el = candEls.get(c.id);
+  if (!el || !freeMoveGeom) return;
+  const w = freeMoveGeom.cw + 'px';
+  const h = freeMoveGeom.ch + 'px';
+  if (el.style.width !== w) el.style.width = w;
+  if (el.style.height !== h) el.style.height = h;
+  const p = freeMoveToPixels(c.fx, c.fy);
+  el.style.transform = `translate(${p.x}px, ${p.y}px)`;
+}
+
+/* 选中态 / 初始摆位：只在「选择变化、初始化、尺寸变化」时调，不进每帧循环 */
+function freeMoveRenderAll() {
+  for (const c of charCandidates) {
+    const el = candEls.get(c.id);
+    if (!el) continue;
+    el.classList.toggle('sel', selectedCandidate === c);
+    freeMovePlace(c);
+  }
+}
+
+function initFreeMoveLobby() {
+  stopFreeMove();
+  freeMoveExiting = false;
+  freeMoveEnsureEls();
+  if (!freeMoveMeasure()) {
+    /* 布局还没稳定（例如刚切横竖屏）：下一帧再试一次，量不到就保持静止 */
+    requestAnimationFrame(() => {
+      if (!isFreeMovePhase() || !freeMoveMeasure()) return;
+      freeMoveRenderAll();
+    });
+  }
+  freeMoveActive = true;
+  freeMoveRenderAll();
+}
+
+function freeMoveKick() {
+  if (!freeMoveActive || freeMoveRaf) return;
+  freeMoveLast = 0;
+  freeMoveRaf = requestAnimationFrame(freeMoveTick);
+}
+
+function stopFreeMove() {
+  freeMoveActive = false;
+  if (freeMoveRaf) cancelAnimationFrame(freeMoveRaf);
+  freeMoveRaf = 0;
+  freeMoveLast = 0;
+  freeMoveTarget = null;
+  freeMoveClearKeys();
+}
+
+function freeMoveSetTarget(fx, fy) {
+  if (!freeMoveActive) return;
+  if (!freeMoveGeom && !freeMoveMeasure()) return;
+  freeMoveTarget = {
+    fx: Math.max(1, Math.min(COLS - 2, fx)),
+    fy: Math.max(1, Math.min(ROWS - 2, fy)),
+  };
+  freeMoveKick();
+}
+
+function freeMoveKeyDown(k) {
+  if (!freeMoveActive || !selectedCandidate) return false;
+  if (!FREE_MOVE_KEYS.includes(k)) return false;
+  freeMoveKeys[k] = true;
+  freeMoveKick();
+  return true;
+}
+
+function freeMoveKeyUp(k) {
+  if (FREE_MOVE_KEYS.includes(k)) freeMoveKeys[k] = false;
+}
+
+/* 点击命中角色：按「中心距 <= 0.75 格」判定，角色不在格中心也能点中 */
+function freeMoveCandidateAt(x, y, radius) {
+  let best = null;
+  let bestD = radius || 0.75;
+  for (const c of charCandidates) {
+    const d = Math.hypot(c.fx - x, c.fy - y);
+    if (d <= bestD) { bestD = d; best = c; }
+  }
+  return best;
+}
+
+function freeMoveTouchesExit(c) {
+  if (freeMoveExiting || !c) return false;
+  if (Math.abs(c.fx - selExit.x) > FREE_MOVE_EXIT_EPS) return false;
+  if (Math.abs(c.fy - selExit.y) > FREE_MOVE_EXIT_EPS) return false;
+  freeMoveExiting = true;
+  const id = c.id;
+  stopFreeMove();          /* E2：先停表，否则进关后 rAF 还在跑 */
+  log(`你选择了 ${CHARACTERS[id].name}！进入关卡。`);
+  /* 保留原有 400ms 过渡延迟（与旧的逐格动画收尾一致） */
+  setTimeout(() => {
+    if (isFreeMovePhase()) selectCharacter(id);
+  }, 400);
+  return true;
+}
+
+function freeMoveTick(ts) {
+  freeMoveRaf = 0;
+  if (!freeMoveActive || !isFreeMovePhase()) return;
+  const c = selectedCandidate;
+  /* dt 必须用 rAF 时间戳：120Hz 屏按固定步长会让速度翻倍 */
+  const dt = freeMoveLast ? Math.min(0.05, Math.max(0, (ts - freeMoveLast) / 1000)) : 0;
+  freeMoveLast = ts;
+  let moving = false;
+
+  if (c) {
+    let dx = (freeMoveKeys.d ? 1 : 0) - (freeMoveKeys.a ? 1 : 0);
+    let dy = (freeMoveKeys.s ? 1 : 0) - (freeMoveKeys.w ? 1 : 0);
+    if (dx || dy) {
+      freeMoveTarget = null;                        /* C4：键盘优先，按下即取消点击目标 */
+      const len = Math.hypot(dx, dy);               /* C2：斜向归一化，速度与直向相同 */
+      c.fx += (dx / len) * FREE_MOVE_SPEED * dt;
+      c.fy += (dy / len) * FREE_MOVE_SPEED * dt;
+      moving = true;
+    } else if (freeMoveTarget) {
+      const tx = freeMoveTarget.fx - c.fx;
+      const ty = freeMoveTarget.fy - c.fy;
+      const d = Math.hypot(tx, ty);
+      if (d <= FREE_MOVE_ARRIVE) {
+        freeMoveTarget = null;                      /* B3：到点就停，不抖 */
+      } else {
+        const step = Math.min(d, FREE_MOVE_SPEED * dt);
+        c.fx += (tx / d) * step;
+        c.fy += (ty / d) * step;
+        moving = true;
+      }
+    }
+    /* F1：中心点夹在可行走区域内，外圈仍是墙 */
+    const minX = 1, maxX = COLS - 2, minY = 1, maxY = ROWS - 2;
+    if (c.fx < minX) { c.fx = minX; freeMoveTarget = null; }
+    if (c.fx > maxX) { c.fx = maxX; freeMoveTarget = null; }
+    if (c.fy < minY) { c.fy = minY; freeMoveTarget = null; }
+    if (c.fy > maxY) { c.fy = maxY; freeMoveTarget = null; }
+    /* 兼容：整数格坐标跟着小数坐标走（其他逻辑/测试仍读 x / y） */
+    c.x = Math.round(c.fx);
+    c.y = Math.round(c.fy);
+    freeMovePlace(c);
+    /* 出口判定每帧都做：可能「刚好停进出口格」而没有位移（E1） */
+    if (freeMoveTouchesExit(c)) return;
+    if (moving || freeMoveTarget) {
+      freeMoveRaf = requestAnimationFrame(freeMoveTick);
+    } else {
+      freeMoveLast = 0;   /* 静止：停表，等下一次输入再 kick，不空转烧 CPU */
+    }
+    return;
+  }
+  freeMoveLast = 0;
+}
+
+/* 按键松开 / 失焦都要清空按键表，否则切窗口回来角色会一直朝一个方向跑（C3） */
+document.addEventListener('keyup', (e) => {
+  if (!isFreeMovePhase()) return;
+  freeMoveKeyUp(String(e.key || '').toLowerCase());
+});
+window.addEventListener('blur', () => { if (isFreeMovePhase()) freeMoveClearKeys(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && isFreeMovePhase()) freeMoveClearKeys();
+});
+
+/* 尺寸变化（含横竖屏切换）后格间距会变，重量一次几何再整体摆位 */
+window.addEventListener('resize', () => {
+  if (!isFreeMovePhase()) return;
+  setTimeout(() => {
+    if (!isFreeMovePhase()) return;
+    if (!freeMoveMeasure()) return;
+    freeMoveRenderAll();
+  }, 140);
+});
 
 /* src: src/ui/board-fx.js */
 /* P0.1-4 拆分 · 20261028c 基线 2052-2340 行 · 棋盘几何与特效：findPath / getBoundingBox / getCellEl / cellCenter / unitCenter / facingIndicatorHtml / unitHtml / hasLineOfSight / canRangedAttack / playerAttackRangeCells / 敌人首步箭头 / floatText / ringFx / slashFx / animateBullet / hitFx / missFx / refreshUnits */
@@ -2597,14 +2903,12 @@ async function finishLevel() {
   onLevelClear();
 }
 
-/* 玩家承伤的浮动文字：调试无敌 / 护盾抵消 / 正常伤害 三态统一在这里判定。 */
+/* 玩家承伤的浮动文字：护盾抵消 / 正常伤害 两态统一在这里判定。
+ * 调试无敌分支已移除（ISSUE-20261028-11 B4）：隐藏开关下不弹任何浮字，玩家侧零感知。 */
 function showPlayerDamage(res, normalText, opts = {}) {
   const { color = '#ff6b6b', crit = false, x = player.x, y = player.y } = opts;
-  const immune = debugMode;
-  floatText(x, y,
-    immune ? '无敌' : (res.shielded ? '护盾抵消' : normalText),
-    immune ? '#ffcc00' : (res.shielded ? '#ffffff' : color),
-    !immune && !res.shielded && crit);
+  if (res.immune) return;
+  floatText(x, y, res.shielded ? '护盾抵消' : normalText, res.shielded ? '#ffffff' : color, !res.shielded && crit);
 }
 
 /* 近战暴击判定：自然20 → 朝向 → 角色暴击率（泥岩额外 +42%）。
@@ -3005,6 +3309,17 @@ function generateMap(numEnemies, targetWalkable) {
   return { map: m, playerStart, enemyStarts, rewards: [] };
 }
 
+/* 联机 9×9 竞技场（ISSUE-20261028-13 方案 A）。
+ * 选角大厅内部不再有障碍物后，联机战场改用它自己的快照 —— 保证联机地形与
+ * 改动前「逐格相同」（含 4 根角柱 + 中间 2 块），不会因为一次 UI 清理动到平衡。 */
+function buildPvpArena() {
+  const m = Array.from({ length: 9 }, () => Array(9).fill(0));
+  for (let i = 0; i < 9; i++) { m[i][0] = 1; m[i][8] = 1; m[0][i] = 1; m[8][i] = 1; }
+  m[2][3] = 1; m[2][5] = 1; m[6][3] = 1; m[6][5] = 1;
+  m[3][4] = 1; m[5][4] = 1;
+  return m;
+}
+
 function initLevel() {
   try {
     battleRound = 1;
@@ -3111,6 +3426,7 @@ function initLevel() {
       log(`  ${e.isElite ? '★精英 ' : ''}${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${enemyMoveOf(e)} HP${e.maxHp} 近战${e.meleeDice ? diceLabel(e.meleeDice) + '(' + e.meleeDmg + ')' : e.meleeDmg} 远程${e.rangedDice ? diceLabel(e.rangedDice) + '(' + e.rangedDmg + ')' : e.rangedDmg}${e.explodeDmg ? ' 自爆' + e.explodeDmg : ''}${e.affixes.length ? '　词缀：' + enemyAffixLabel(e) : ''}`);
     });
     log(`规则：攻击检定 = d20 + 属性修正 + 熟练加值 ≥ 目标AC；自然20暴击；自然1必失。`);
+    log(`朝向（ISSUE-15）：近战正对目标出手**必定命中**（连自然1也算中），且伤害 ×2（朝向暴击）；侧身、背后仍按上面掷骰。远程不受朝向影响。`);
     if (level === 1) {
       log(`升级规则：通关得经验，本关掉血越少经验越多（满血开局时以「本关开始血量 × 40%」为失血基准，少掉 1 血 +${XP_PER_STEP} 经验，保底 ${XP_CLEAR_BASE}）。经验满即升级：HP 上限 + 体质加值并回满血，同时从奖励池 3 选 1 个 buff、获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点。`);
       log(`敌人成长：每关每个敌人随机 +1 项属性（只从当时最高的 4 项里选，相邻两次不重复），每 ${LEVELUP_EVERY_N_LEVELS} 关升级一次（HP 上限 + 体质加值）。`);
@@ -3327,10 +3643,8 @@ function buildBoardHtml() {
       if (rangeSet && rangeSet.has(key(x, y))) cls += ' in-range';
       if (phase === PHASE.CHAR_SELECT) {
         if (selExit.x === x && selExit.y === y) { cls += ' exit-cell'; content = '🚪'; }
-        else {
-          const cand = charCandidates.find(c => c.x === x && c.y === y);
-          if (cand) { cls += ' candidate'; if (selectedCandidate === cand) cls += ' selected'; content = unitHtml(CHARACTERS[cand.id].icon, 1, { maxHp: 1, isPlayer: true }); }
-        }
+        /* 角色不再画进格子里（ISSUE-20261028-12）：位置是连续的，
+         * 由 unitLayer 里的 .cand-unit 绝对定位渲染，这里只画地形。 */
       } else {
         const stepsAtCell = [];
         playerPath.forEach((p, idx) => { if (p.x === x && p.y === y) stepsAtCell.push(idx); });
@@ -3699,7 +4013,7 @@ function renderControls() {
     const isMobile = window.innerWidth <= 760;
     tip.textContent = isMobile
       ? '点击移动 · 单击路径节点=攻击 · 双击=技能 · 长按地块=等待\n点卡面「攻击」「技能」切末尾节点 · 空格确认 · X 重置路径\n主动行动三选一：攻击 / 技能 / 闪避（第一个等待）'
-      : 'WASD/点击移动 · 单击路径节点=攻击 · 双击=技能 · 长按地块=等待\nE=攻击 · R=技能 · Q=等待 · 空格确认 · X 重置路径 · F12 调试模式\n主动行动三选一：攻击 / 技能 / 闪避（第一个等待）· 被动：趁乱攻击';
+      : 'WASD/点击移动 · 单击路径节点=攻击 · 双击=技能 · 长按地块=等待\nE=攻击 · R=技能 · Q=等待 · 空格确认 · X 重置路径\n主动行动三选一：攻击 / 技能 / 闪避（第一个等待）· 被动：贴身反击';
     controlsEl.appendChild(tip);
   } else if (phase === PHASE.GAMEOVER) {
     const btn = document.createElement('button');
@@ -3777,41 +4091,18 @@ function refreshBoardOnly() {
   syncControlsIfNeeded();
 }
 
-async function moveCandidate(path) {
-  isMoving = true;
-  for (const p of path) {
-    selectedCandidate.x = p.x;
-    selectedCandidate.y = p.y;
-    refreshBoardOnly();
-    await sleep(120);
-  }
-  isMoving = false;
-  if (selectedCandidate.x === selExit.x && selectedCandidate.y === selExit.y) {
-    log(`你选择了 ${CHARACTERS[selectedCandidate.id].name}！进入关卡。`);
-    await sleep(400);
-    selectCharacter(selectedCandidate.id);
-  }
-}
+/* 选角大厅的逐格移动（moveCandidate）已被「平滑自由移动」取代：
+ * 位置模型与 rAF 循环见 src/ui/char-select.js（ISSUE-20261028-12）。
+ * findPath 保留 —— 战斗关卡的路径规划仍在用。 */
 
 function handleKeyDown(e) {
   const k = e.key.toLowerCase();
   const isSpace = e.code === 'Space' || k === ' ';
-  // 调试模式：只认 F12（没有按钮入口），任何阶段都能切
-  if (e.key === 'F12' || e.code === 'F12') {
-    e.preventDefault();
-    debugMode = !debugMode;
-    log(debugMode ? '[调试] 已开启：点击敌人直接击杀，玩家不掉血。' : '[调试] 已关闭。');
-    render();
-    return;
-  }
   if (['w','a','s','d','e','q','x','r'].includes(k) || isSpace) e.preventDefault();
   if (isMoving) return;
-  if (phase === PHASE.CHAR_SELECT) {
-    if (selectedCandidate && ['w','a','s','d'].includes(k)) {
-      const dir = KEY_DIRS[k];
-      const nx = selectedCandidate.x + dir.dx, ny = selectedCandidate.y + dir.dy;
-      if (isWalkable(nx, ny) && !charCandidates.some(c => c !== selectedCandidate && c.x === nx && c.y === ny)) moveCandidate([{x: nx, y: ny}]);
-    }
+  if (isFreeMovePhase()) {
+    /* 非战斗相位：按住连续走，keyup / blur 在 char-select 模块里统一清键表 */
+    if (selectedCandidate) freeMoveKeyDown(k);
     return;
   }
   if (phase !== PHASE.PLANNING) return;
@@ -3950,14 +4241,13 @@ function handleCellDrag(x, y) {
   }
   if (tryExtendPath(x, y)) refreshBoardOnly();
 }
+/* 调试秒杀：复用普通击杀反馈（ISSUE-20261028-11 B3）—— 无专属浮字/日志，
+ * 与正常击杀走同一入口（阿米娅技力、精英掉落等逻辑均一致）。 */
 function killEnemyByDebug(enemy) {
-  enemy.hp = 0; enemy.alive = false;
-  ringFx(enemy.x, enemy.y, '#ffcc00');
-  floatText(enemy.x, enemy.y, 'DEBUG KILL', '#ffcc00');
-  log(`[调试] 击杀敌人${enemy.id + 1}`);
-  if (selectedChar === 'amiya') amiyaGainKillBonus();
-  render();
-  if (enemies.filter(e => e.alive).length === 0) onLevelClear();
+  if (killEnemy(enemy, { showRing: true, showFloat: true })) {
+    render();
+    if (enemies.filter(e => e.alive).length === 0) onLevelClear();
+  }
 }
 
 document.addEventListener('pointerdown', (e) => {
@@ -3978,12 +4268,14 @@ boardEl.addEventListener('pointerdown', (e) => {
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) return;
   if (phase === PHASE.CHAR_SELECT) {
-    const cand = charCandidates.find(c => c.x === cell.x && c.y === cell.y);
-    if (cand) { selectedCandidate = cand; render(); e.preventDefault(); return; }
+    /* 选中角色：按「与角色中心的距离」判定，角色停在格与格之间也能点中 */
+    const cand = freeMoveCandidateAt(cell.x, cell.y);
+    if (cand) { selectedCandidate = cand; render(); freeMoveRenderAll(); e.preventDefault(); return; }
+    /* 点地图 = 设一个「走到这里」的目标点（可连续改向，不等走完） */
     if (selectedCandidate) {
-      if (cell.x === selectedCandidate.x && cell.y === selectedCandidate.y) return;
-      const path = findPath(selectedCandidate.x, selectedCandidate.y, cell.x, cell.y);
-      if (path && path.length > 0) moveCandidate(path);
+      if (!freeMoveGeom && !freeMoveMeasure()) return;
+      const p = freeMoveClientToCell(e.clientX, e.clientY);
+      freeMoveSetTarget(p.fx, p.fy);
     }
     e.preventDefault();
     return;
@@ -4120,7 +4412,7 @@ function prepareWheelchairCharge() {
   playerChargeHits = 0;
   playerChargeDir = trigger.dir;
   const stopText = stopReason === 'budget' ? `走满 ${budget} 步额度` : stopReason === 'wall' ? '撞墙提前停止' : '达到地图边界';
-  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（剩余移动步数 ${budget}，${stopText}），最多 ${budget} 次攻击（每次近战伤害 ×2）。冲锋期间免疫伤害，禁用攻击节点与趁乱攻击。`);
+  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（剩余移动步数 ${budget}，${stopText}），最多 ${budget} 次攻击（每次近战伤害 ×2）。冲锋期间免疫伤害，禁用攻击节点与贴身反击。`);
   floatText(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '高效冲击', '#ffd700');
   ringFx(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '#ffd700');
   return chargeIdx;
@@ -4513,6 +4805,8 @@ async function resolvePlayerAttack() {
     for (const target of targets) {
       if (target.hp <= 0) continue;
       const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
+      /* ISSUE-20261028-15 A1：正对目标 → 必中（覆盖自然1，B1）。仍是掷过骰的。 */
+      applyFacingGuaranteedHit(atk, target);
       if (!atk.hit) {
         missFx(target.x, target.y);
         log(`近战范围攻击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
@@ -4524,6 +4818,8 @@ async function resolvePlayerAttack() {
       if (selectedChar === 'wheelchair' && playerChargingThisTurn) dmg *= 2;
       const critTag = meleeCritTag(target, atk, 'cone');
       const isCrit = !!critTag;
+      /* A3：朝向必中在暴击来源之后追加，自然20 的优先级不被覆盖 → 「自然20暴击 · 必定命中」 */
+      const hitTag = atk.facingHit ? ' · 必定命中' : '';
       if (isCrit) dmg *= 2;
       const dealt = enemyTakeDamage(target, dmg);
       if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
@@ -4534,12 +4830,12 @@ async function resolvePlayerAttack() {
       hitFlashCell(target.x, target.y);
       if (isCrit) {
         ringFx(target.x, target.y, '#ff4500');
-        floatText(target.x, target.y, critTag + ' -' + dmg, '#ffd700', true);
-        log(`近战范围${critTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+        floatText(target.x, target.y, critTag + hitTag + ' -' + dmg, '#ffd700', true);
+        log(`近战范围${critTag}${hitTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
       } else {
         ringFx(target.x, target.y, '#ffb86b');
-        floatText(target.x, target.y, '-' + dmg, '#ff6b6b');
-        log(`近战范围命中敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
+        floatText(target.x, target.y, hitTag ? '必定命中 -' + dmg : '-' + dmg, hitTag ? '#ffd700' : '#ff6b6b');
+        log(`近战范围命中${hitTag}敌人${target.id+1}，造成${dmg}伤害 (${fmtRoll(atk, target.ac)})`);
       }
       if (target.hp <= 0) killEnemy(target, { showRing: false });
       refreshUnits();
@@ -4623,7 +4919,7 @@ async function resolvePlayerAttack() {
   if (selectedChar === 'vampire' && vampireSkillActive) {
     const selfRes = damagePlayer(1, '不稳定血浆');
     showPlayerDamage(selfRes, '-1 HP');
-    log(`不稳定血浆：攻击后失去 1 HP${debugMode ? '（调试：玩家无敌）' : (selfRes.shielded ? '（护盾抵消）' : `（剩 ${player.hp}）`)}。`);
+    log(`不稳定血浆：攻击后失去 1 HP${selfRes.shielded ? '（护盾抵消）' : `（剩 ${player.hp}）`}。`);
     updateStats();
     if (player.hp <= 0) { endGame('不稳定血浆耗尽了生命。游戏结束。'); return true; }
   }
@@ -4634,25 +4930,32 @@ async function resolvePlayerAttack() {
   return false;
 }
 
-/* 趁乱攻击：本 tick 有动作时，对相邻敌人自动补刀（不消耗攻击次数）。 */
+/* 贴身反击：本 tick 有动作时，对相邻敌人自动补刀（不消耗攻击次数）。
+ * 【改名 · 2026-10-28 / ISSUE-20261028-15】玩家可见名原为「趁乱攻击」，现改为「贴身反击」。
+ *   原因：「趁乱攻击」这个词已被 `ISSUE-20261028-10-opportunity-attack-colossus-boss` 征用，
+ *   指「剩余步数 → 等待 → 额外一次主动攻击」。同词两义会让战报无法区分，故此处让位。
+ *   函数名 `resolveScuffleAttacks` 保留（10 号的锚点要按这个名字找），只改玩家可见文案。 */
 async function resolveScuffleAttacks(playerActionThisTick) {
   if (!playerActionThisTick || playerChargingThisTurn || !player.alive || player.hp <= 0) return;
   const autoTargets = enemies.filter(e => e.alive && dist(e, player) === 1);
-  /* 远程角色没有近战输出手段：被贴身时的趁乱打击固定 1 点保底伤害，
+  /* 远程角色没有近战输出手段：被贴身时的贴身反击固定 1 点保底伤害，
      不吃暴击 / 冲锋倍率，也不读取近战伤害面板。 */
   const scuffleFlatDmg = isRangedChar(selectedChar);
   if (autoTargets.length > 0) {
-    log(`⚡ 趁乱攻击：对 ${autoTargets.length} 个相邻敌人发起攻击！${scuffleFlatDmg ? '（远程角色，1 点保底伤害）' : ''}`);
+    log(`⚡ 贴身反击：对 ${autoTargets.length} 个相邻敌人发起攻击！${scuffleFlatDmg ? '（远程角色，1 点保底伤害）' : ''}`);
   }
   for (const target of autoTargets) {
     if (!target.alive) continue;
     const strMod = abilityMod(player.abilities.str);
     const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
+    /* ISSUE-20261028-15 A1 / A4：近战角色的贴身反击同样吃「朝向必中」；
+       远程角色的 1 点保底伤害不是近战出手，**不**套用（验收：远程完全不受影响）。 */
+    if (!scuffleFlatDmg) applyFacingGuaranteedHit(atk, target);
     /* 只要出手（即使 MISS）就能看到目标意图 */
     if (selectedChar === 'amiya') amiyaMarkReveal(target);
     if (!atk.hit) {
       missFx(target.x, target.y);
-      log(`趁乱攻击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
+      log(`贴身反击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
       refreshUnits();
       await sleep(180);
       continue;
@@ -4661,6 +4964,7 @@ async function resolveScuffleAttacks(playerActionThisTick) {
     if (selectedChar === 'wheelchair' && playerChargingThisTurn) { dmg *= 2; log('玩家冲锋撞击，伤害翻倍！'); }
     const critTag = scuffleFlatDmg ? '' : meleeCritTag(target, atk);
     const isCrit = !!critTag;
+    const hitTag = atk.facingHit ? ' · 必定命中' : '';
     if (isCrit) dmg *= 2;
     const dealt = enemyTakeDamage(target, dmg);
     if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
@@ -4670,18 +4974,18 @@ async function resolveScuffleAttacks(playerActionThisTick) {
     hitFlashCell(target.x, target.y);
     if (isCrit) {
       ringFx(target.x, target.y, '#ff4500');
-      floatText(target.x, target.y, critTag + ' -' + dealt, '#ffd700', true);
-      log(`趁乱攻击${critTag}敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
+      floatText(target.x, target.y, critTag + hitTag + ' -' + dealt, '#ffd700', true);
+      log(`贴身反击${critTag}${hitTag}敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
     } else {
       ringFx(target.x, target.y, '#ffb86b');
-      floatText(target.x, target.y, '-' + dealt, '#ff6b6b');
-      log(`趁乱攻击命中敌人${target.id+1}，造成${dealt}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
+      floatText(target.x, target.y, hitTag ? '必定命中 -' + dealt : '-' + dealt, hitTag ? '#ffd700' : '#ff6b6b');
+      log(`贴身反击命中${hitTag}敌人${target.id+1}，造成${dealt}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
     }
     if (target.hp <= 0) killEnemy(target, { showRing: false });
     refreshUnits();
     await sleep(240);
   }
-  /* 注：趁乱打击不属于「正常攻击」，不触发不稳定血浆的任何效果（不暴击、不留血迹、不扣血） */
+  /* 注：贴身打击不属于「正常攻击」，不触发不稳定血浆的任何效果（不暴击、不留血迹、不扣血） */
 }
 
 /* 冲锋结束时的撞墙伤害（只在没撞到敌人时结算）。返回 true = 玩家阵亡。 */
@@ -4707,7 +5011,7 @@ function resolveChargeWallDamage(chargeWillEnd, playerBlocked) {
   showPlayerDamage(wallRes, '撞墙 -' + wallDmg);
   ringFx(player.x, player.y, '#ff6b6b');
   hitFlashCell(player.x, player.y);
-  log(`冲锋撞墙，失去一半 HP${debugMode ? '（调试：玩家无敌）' : (wallRes.shielded ? '（护盾抵消）' : '（-' + wallDmg + '，剩 ' + player.hp + '）')}`);
+  log(`冲锋撞墙，失去一半 HP${wallRes.shielded ? '（护盾抵消）' : '（-' + wallDmg + '，剩 ' + player.hp + '）'}`);
   if (player.hp <= 0) { player.alive = false; refreshUnits(); endGame(); return true; }
   return false;
 }
@@ -4748,7 +5052,7 @@ async function resolveEnemyMeleeAttacks() {
       hitFlashCell(player.x, player.y);
       const boomRes = damagePlayer(boom, '自爆虫');
       showPlayerDamage(boomRes, '-' + boom, { color: '#ff9f43' });
-      log(`自爆虫${i+1}贴身自爆！${debugMode ? '（调试：玩家无敌）' : (boomRes.shielded ? '（护盾抵消）' : '造成' + boom + '伤害')}`);
+      log(`自爆虫${i+1}贴身自爆！${boomRes.shielded ? '（护盾抵消）' : '造成' + boom + '伤害'}`);
       e.hp = 0;
       killEnemy(e, { floatMsg: '自爆!', logText: `自爆虫${i+1}自爆后消散` });
       if (player.hp > 0) triggerFencerCounter();
@@ -4775,7 +5079,7 @@ async function resolveEnemyMeleeAttacks() {
       showPlayerDamage(meleeRes, (critTag ? critTag + ' -' : '-') + ed, {
         color: critTag ? '#ffd700' : '#ff6b6b', crit: !!critTag,
       });
-      log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}${debugMode ? '（调试：玩家无敌）' : (meleeRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
+      log(`敌人${i+1}近战命中${critTag ? '（' + critTag + '）' : ''}${meleeRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害'} (${fmtRoll(atk, pAC)})`);
       if (player.hp > 0) triggerFencerCounter();
     } else {
       missFx(player.x, player.y);
@@ -4984,7 +5288,7 @@ async function resolveStep(pIdxIn, eIdx) {
         }
         const dmgRes = damagePlayer(ed, '相杀');
         showPlayerDamage(dmgRes, '暴击 -' + ed, { color: '#ffd700', crit: true, x: playerFrom.x, y: playerFrom.y });
-        log(`相杀！敌人${em.unit.id+1}对玩家造成暴击${debugMode ? '（调试：无敌）' : (dmgRes.shielded ? '（护盾抵消）' : ' ' + ed + '伤害')}`);
+        log(`相杀！敌人${em.unit.id+1}对玩家造成暴击${dmgRes.shielded ? '（护盾抵消）' : ' ' + ed + '伤害'}`);
       }
       if (shootouts.length > 0 && player.hp > 0) triggerFencerCounter();
       if (player.hp <= 0) { endGame('你在相杀中阵亡。游戏结束。'); return; }
@@ -5172,7 +5476,7 @@ async function resolveAlienShots(eIdx) {
       showPlayerDamage(shotRes, (atk.nat20 ? '自然20暴击 -' : '-') + ed, {
         color: atk.nat20 ? '#ffd700' : '#a55eea', crit: atk.nat20,
       });
-      log(`外星人${i+1}远程命中${debugMode ? '（调试：玩家无敌）' : (shotRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害')} (${fmtRoll(atk, pAC)})`);
+      log(`外星人${i+1}远程命中${shotRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害'} (${fmtRoll(atk, pAC)})`);
       if (player.hp > 0) triggerFencerCounter();
     } else {
       missFx(player.x, player.y);
@@ -5444,6 +5748,8 @@ setSettingsOpen(false);
   let dragging = false, dx = 0, dy = 0;
   const start = (e) => {
     if (e.target.closest('button')) return;
+    // 版本号本身是隐藏调试开关的触发点，不能当作拖动手柄（ISSUE-20261028-11）
+    if (e.target.closest('#setVer')) return;
     dragging = true;
     const r = logPanelEl.getBoundingClientRect();
     dx = e.clientX - r.left; dy = e.clientY - r.top;
@@ -5486,6 +5792,37 @@ setSettingsOpen(false);
       logPanelEl.style.bottom = 'auto';
     }
   } catch (_) {}
+})();
+
+/* =========================================================================
+ * 隐藏调试开关（ISSUE-20261028-11）
+ * 在设置面板标题栏的版本号 #setVer 上「连点 5 次，相邻间隔 ≤500ms」切换调试模式。
+ * 设计要点：
+ *  - 触发时不弹 toast / 不写日志 / 不闪浮字，玩家侧零感知；状态只在
+ *    window.__ARK_DEBUG__ 暴露（控制台可读，不算提示）。
+ *  - 用 pointerdown 而非 click：标题栏有拖动监听，在子元素上 stopPropagation +
+ *    preventDefault 既能触发计数又不至于误启动拖动 / 选中文字。
+ *  - touch-action:manipulation 已在 CSS 侧加上，避免移动端双击缩放吞掉快速连点。
+ *  - 已开启状态下再连满 5 次 → 关闭（A3）；任一次超 500ms → 计数立即清零（A2）。
+ *  - 三种重置点（回选角 / 开新局 / 重置 / 联机）在各自入口调用 setDebugMode(false)。
+ * ========================================================================= */
+(function bindHiddenDebugSwitch() {
+  const el = document.getElementById('setVer');
+  if (!el) return;
+  const NEED = 5, GAP_MS = 500;
+  let count = 0, lastAt = 0;
+  const evt = ('onpointerdown' in window) ? 'pointerdown' : 'click';
+  el.addEventListener(evt, (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const now = Date.now();
+    count = (now - lastAt <= GAP_MS) ? count + 1 : 1;
+    lastAt = now;
+    if (count >= NEED) {
+      count = 0; lastAt = 0;
+      setDebugMode(!debugMode);
+    }
+  }, { passive: false });
 })();
 
 // 「重开」：随时回到选角界面
@@ -5666,14 +6003,17 @@ function pvpStartMatch() {
   pvpOver = false;
   pvpTurn = 0;
   pvpWaiting = false;
-  debugMode = false;
+  setDebugMode(false);
   isMoving = false; dragging = false; dragDownCell = null; hasDragged = false;
   level = 1; levelHpBonus = 0; heroLevel = 1; playerShield = 0;
   buffs = freshBuffs();
   bloodDrops = []; rewardItems = [];
   enemies = []; enemyPaths = []; enemyArrows = [];
   ROWS = 9; COLS = 9;
-  map = selMap.map(function (r) { return r.slice(); });
+  /* ISSUE-20261028-13 方案 A：联机竞技场用独立快照，不再复用选角地图
+   * （大厅已删内部障碍；这样做联机地形逐格不变，不会顺手改到平衡） */
+  map = buildPvpArena();
+  stopFreeMove();
   selectedChar = pvpChars[pvpSlot] || 'fencer';
 
   playerStats = createPlayerStats(selectedChar);

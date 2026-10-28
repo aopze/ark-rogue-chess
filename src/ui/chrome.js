@@ -51,6 +51,8 @@ setSettingsOpen(false);
   let dragging = false, dx = 0, dy = 0;
   const start = (e) => {
     if (e.target.closest('button')) return;
+    // 版本号本身是隐藏调试开关的触发点，不能当作拖动手柄（ISSUE-20261028-11）
+    if (e.target.closest('#setVer')) return;
     dragging = true;
     const r = logPanelEl.getBoundingClientRect();
     dx = e.clientX - r.left; dy = e.clientY - r.top;
@@ -93,6 +95,37 @@ setSettingsOpen(false);
       logPanelEl.style.bottom = 'auto';
     }
   } catch (_) {}
+})();
+
+/* =========================================================================
+ * 隐藏调试开关（ISSUE-20261028-11）
+ * 在设置面板标题栏的版本号 #setVer 上「连点 5 次，相邻间隔 ≤500ms」切换调试模式。
+ * 设计要点：
+ *  - 触发时不弹 toast / 不写日志 / 不闪浮字，玩家侧零感知；状态只在
+ *    window.__ARK_DEBUG__ 暴露（控制台可读，不算提示）。
+ *  - 用 pointerdown 而非 click：标题栏有拖动监听，在子元素上 stopPropagation +
+ *    preventDefault 既能触发计数又不至于误启动拖动 / 选中文字。
+ *  - touch-action:manipulation 已在 CSS 侧加上，避免移动端双击缩放吞掉快速连点。
+ *  - 已开启状态下再连满 5 次 → 关闭（A3）；任一次超 500ms → 计数立即清零（A2）。
+ *  - 三种重置点（回选角 / 开新局 / 重置 / 联机）在各自入口调用 setDebugMode(false)。
+ * ========================================================================= */
+(function bindHiddenDebugSwitch() {
+  const el = document.getElementById('setVer');
+  if (!el) return;
+  const NEED = 5, GAP_MS = 500;
+  let count = 0, lastAt = 0;
+  const evt = ('onpointerdown' in window) ? 'pointerdown' : 'click';
+  el.addEventListener(evt, (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const now = Date.now();
+    count = (now - lastAt <= GAP_MS) ? count + 1 : 1;
+    lastAt = now;
+    if (count >= NEED) {
+      count = 0; lastAt = 0;
+      setDebugMode(!debugMode);
+    }
+  }, { passive: false });
 })();
 
 // 「重开」：随时回到选角界面

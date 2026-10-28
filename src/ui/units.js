@@ -31,6 +31,9 @@ function isPlayerPreviewCharging() {
 
 function renderUnits() {
   if (phase === PHASE.CHAR_SELECT || !player) { clearUnitLayer(); return; }
+  /* 离开非战斗相位后，选角大厅的绝对定位角色层必须清掉（ISSUE-20261028-12），
+   * 否则会留在战斗棋盘上飘着 */
+  if (typeof freeMoveClearEls === 'function') freeMoveClearEls();
   const lr = unitLayer.getBoundingClientRect();
   const toRender = [];
   if (player.alive) {
@@ -139,16 +142,15 @@ function renderUnits() {
     }
     if (u.isPlayer) {
       rec.el.classList.add('ua-player');
-      rec.el.classList.remove('ua-enemy', 'ua-debug', 'ua-stunned');
+      rec.el.classList.remove('ua-enemy', 'ua-stunned');
       rec.el.classList.toggle('ua-charging', playerCharging);
       rec.el.classList.toggle('ua-attacked', playerAttacked && !playerCharging);
     } else if (u.isPeer) {
       rec.el.classList.add('ua-peer');
-      rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-charging', 'ua-attacked', 'ua-debug', 'ua-stunned');
+      rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-charging', 'ua-attacked', 'ua-stunned');
     } else {
       rec.el.classList.add('ua-enemy');
       rec.el.classList.remove('ua-player', 'ua-charging', 'ua-attacked');
-      rec.el.classList.toggle('ua-debug', debugMode);
       rec.el.classList.toggle('ua-stunned', u.stunTurns > 0);
       rec.el.classList.toggle('ua-elite', !!u.isElite);
     }

@@ -227,3 +227,14 @@ function generateMap(numEnemies, targetWalkable) {
   for (const e of enemyStarts) m[e.y][e.x] = 0;
   return { map: m, playerStart, enemyStarts, rewards: [] };
 }
+
+/* 联机 9×9 竞技场（ISSUE-20261028-13 方案 A）。
+ * 选角大厅内部不再有障碍物后，联机战场改用它自己的快照 —— 保证联机地形与
+ * 改动前「逐格相同」（含 4 根角柱 + 中间 2 块），不会因为一次 UI 清理动到平衡。 */
+function buildPvpArena() {
+  const m = Array.from({ length: 9 }, () => Array(9).fill(0));
+  for (let i = 0; i < 9; i++) { m[i][0] = 1; m[i][8] = 1; m[0][i] = 1; m[8][i] = 1; }
+  m[2][3] = 1; m[2][5] = 1; m[6][3] = 1; m[6][5] = 1;
+  m[3][4] = 1; m[5][4] = 1;
+  return m;
+}

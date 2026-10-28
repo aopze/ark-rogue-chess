@@ -55,7 +55,7 @@ let buffs = { kettle: 0, blade: 0, sass: 0, kit: 0, pill: 0, scout: 0 };
 
 const BUFF_POOL = [
   { id: 'kettle', name: '热水壶', icon: '☕', desc: 'HP 上限 +2（并回复等量生命）' },
-  { id: 'blade',  name: '锈蚀刀片', icon: '🗡️', desc: '近战伤害 +1，趁乱攻击伤害 +1' },
+  { id: 'blade',  name: '锈蚀刀片', icon: '🗡️', desc: '近战伤害 +1，贴身反击伤害 +1' },
   { id: 'sass',   name: '香草沙士', icon: '🥤', desc: '获得技力时有 30% 概率额外获得 1 点技力' },
   { id: 'kit',    name: '急救药箱', icon: '🧰', desc: '每张地图必定额外出现一个恢复地块 ❤️' },
   { id: 'pill',   name: '药枚', icon: '💊', desc: '每关开始时获得 1 层护盾（抵消一次任意伤害）' },

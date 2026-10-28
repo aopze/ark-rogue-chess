@@ -30,7 +30,13 @@ let enemyPaths = [];
 let enemyPathOrder = [];
 let logLines = [];
 let enemyArrows = [];
+// 调试模式：无敌 + 点击秒杀（ISSUE-20261028-11）。状态仅通过连点设置面板版本号 5 次切换，
+// 且只在控制台暴露 window.__ARK_DEBUG__，游戏内无任何提示/日志/视觉标记（纯隐藏开关）。
 let debugMode = false;
+// 控制台可读隐藏开关状态（非玩家可见提示）。
+Object.defineProperty(window, '__ARK_DEBUG__', { get: () => debugMode, configurable: true });
+// 统一入口：切换/重置调试开关。改这里即可同步 window.__ARK_DEBUG__。
+function setDebugMode(on) { debugMode = !!on; }
 let lastPathSignature = '';
 let playerChargingThisTurn = false;
 let playerAttacksDone = 0;
