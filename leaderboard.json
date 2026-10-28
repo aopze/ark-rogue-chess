@@ -1,5 +1,5 @@
 {
- "updated_at": 1793216954,
+ "updated_at": 1793217266,
  "entries": [
   {
    "id": "5648491503",
@@ -7,6 +7,13 @@
    "level": 6,
    "kills": 19,
    "runs": 9
+  },
+  {
+   "id": "dev_d808eef015604867a0022eef2b7c248e",
+   "name": "小雨",
+   "level": 5,
+   "kills": 16,
+   "runs": 1
   },
   {
    "id": "dev_795886eefd284d10919125f63b913f0f",
@@ -67,13 +74,6 @@
   {
    "id": "dev_d47fe9d430ec419a9d273eb2d997a78f",
    "name": "何人",
-   "level": 0,
-   "kills": 0,
-   "runs": 0
-  },
-  {
-   "id": "dev_d808eef015604867a0022eef2b7c248e",
-   "name": "小雨",
    "level": 0,
    "kills": 0,
    "runs": 0
