@@ -1,5 +1,5 @@
 {
- "updated_at": 1793173220,
+ "updated_at": 1793180342,
  "entries": [
   {
    "id": "5648491503",
@@ -35,6 +35,13 @@
    "level": 1,
    "kills": 1,
    "runs": 2
+  },
+  {
+   "id": "dev_7b0ae7a489a04426aef6242307aff831",
+   "name": "玩家f831",
+   "level": 1,
+   "kills": 1,
+   "runs": 1
   }
  ],
  "bot_username": "yu7_bot",
