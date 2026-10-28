@@ -1,5 +1,5 @@
 {
- "updated_at": 1793200190,
+ "updated_at": 1793200266,
  "entries": [
   {
    "id": "5648491503",
@@ -37,6 +37,13 @@
    "runs": 1
   },
   {
+   "id": "dev_a837ab03c97a4ad8ae4393c200a06aa5",
+   "name": "可乐",
+   "level": 1,
+   "kills": 2,
+   "runs": 2
+  },
+  {
    "id": "dev_a347c1a352f44b9ead745479fcfa0ac0",
    "name": "玩家0ac0",
    "level": 1,
@@ -48,13 +55,6 @@
    "name": "玩家f831",
    "level": 1,
    "kills": 1,
-   "runs": 1
-  },
-  {
-   "id": "dev_a837ab03c97a4ad8ae4393c200a06aa5",
-   "name": "可乐",
-   "level": 1,
-   "kills": 0,
    "runs": 1
   },
   {
