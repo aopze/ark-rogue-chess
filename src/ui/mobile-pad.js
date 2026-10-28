@@ -142,6 +142,13 @@ function mountVirtualPad() {
     }
   });
 
+  /* ★ ISSUE-20261029-31：CSS 的 user-select/callout 挡不住的部分
+   * （Android WebView、部分国产浏览器长按会先弹 contextmenu；还有老 WebKit 的 selectstart）。
+   * 在面板根节点上再拦一次，捕获阶段拦住，避免事件继续往下穿透到棋盘。 */
+  const swallow = function (e) { e.preventDefault(); };
+  vpadHostEl.addEventListener('contextmenu', swallow);
+  vpadHostEl.addEventListener('selectstart', swallow);
+
   syncVirtualPad();
   syncVpadInset();
 }
@@ -191,7 +198,10 @@ function syncVirtualPad() {
   if (waitBtn) waitBtn.disabled = !planning;
   if (atkBtn) atkBtn.disabled = !planning;
   if (spBtn) spBtn.disabled = !planning;
-  if (!player) {
+  /* ★ ISSUE-20261029-35：大厅里没有对局数据，三键数字清成「—」。
+   * 注意不能只看 `!player` —— 回大厅时 player 还留着上一局的残留对象，
+   * 直接读它会显示上一局的伤害骰 / 技力环（看起来像「还能用」，其实是脏数据）。 */
+  if (!player || lobby) {
     /* 大厅：把三键上的数字清成「—」，免得留着上一局的残留 */
     const wn = waitBtn && waitBtn.querySelector('[data-k="wait"]');
     if (wn && wn.textContent !== '—') wn.textContent = '—';

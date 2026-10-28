@@ -7,8 +7,17 @@
  * 三条硬约束（改之前先读）：
  *  1) 伤害必须走 enemyTakeDamage()，否则护盾词缀不生效；
  *  2) 击杀必须走 killEnemy()，否则精英掉落 ❤️ / 连杀记账会漏；
- *  3) 成员不是敌人、也不是玩家：不进 enemies 数组（否则被 AI 当目标、被相杀结算），
+ *  3) 成员不是敌人、也不是玩家：不进 enemies 数组（否则被相杀结算），
  *     只放在 squadUnits 里，由 renderUnits 单独渲染一层。
+ *
+ * ★ ISSUE-20261029-32（人类 05:48 拍板）：上面第 3 条**放宽** ——
+ *   「成员无敌」原本是我在 28 号自己拍的口径，人类现在指出「敌人似乎不会攻击召唤单位」，
+ *   并要求敌人改用「距离最近的路径格」索敌。人类逐项确认：
+ *     · 成员**能被敌人打死**（HP 归 0 → 消失，玩家彻底失去该成员）；
+ *     · 敌人同时能打到玩家和成员时 → **谁近打谁，平手打玩家**；
+ *     · 伤害来源全部打通：近战贴身 / 外星人远程 / 自爆虫自爆 / 敌人踩进成员格 / Boss 推动。
+ *   所以成员从「无敌炮台」变成「有代价的召唤」：会吸引火力，也会真的死。
+ *   本文件因此新增：squadTakeDamage / squadUnitAt / squadAliveUnits / squadPredictedNextCell。
  */
 function rookieSpMax() { return ROOKIE_SP_MAX; }
 
@@ -63,7 +72,7 @@ function squadFreeCellsAround(x, y) {
       if (!inBounds(nx, ny)) continue;
       if (map[ny][nx] === 1) continue;
       if (enemies.some(e => e.alive && e.x === nx && e.y === ny)) continue;
-      if (squadUnits.some(s => s.x === nx && s.y === ny)) continue;
+      if (squadUnits.some(s => s.alive && s.x === nx && s.y === ny)) continue;
       out.push({ x: nx, y: ny });
     }
   }
@@ -108,10 +117,58 @@ function summonSquadMember() {
 
 /* 这一格被谁占着（小队成员自己那格除外） */
 function squadCellTaken(x, y, selfUid) {
-  for (const s of squadUnits) if (s.uid !== selfUid && s.x === x && s.y === y) return true;
+  for (const s of squadUnits) if (s.uid !== selfUid && s.alive && s.x === x && s.y === y) return true;
   if (player && player.alive && player.x === x && player.y === y) return true;
   for (const e of enemies) if (e.alive && e.x === x && e.y === y) return true;
   return false;
+}
+
+/* =========================================================
+ * ★ ISSUE-20261029-32：成员进入敌人索敌候选池 + 可被敌人打死
+ * ========================================================= */
+
+/* 存活的成员（敌人索敌、伤害结算都只看这些） */
+function squadAliveUnits() {
+  return (typeof squadUnits !== 'undefined' ? squadUnits : []).filter(u => u.alive);
+}
+
+/* 某个格子上有没有活着的成员 */
+function squadUnitAt(x, y) {
+  for (const s of squadUnits) if (s.alive && s.x === x && s.y === y) return s;
+  return null;
+}
+
+/* ★ 成员「下一格」的预测：成员每回合朝**离它最近的敌人**走（见 squadAct），
+ *   所以敌人索敌时用「成员下一步会站的那格」来算距离，
+ *   而不是用成员此刻的格子 —— 这正是人类要的「正在朝我走的那个会被优先锁定」。
+ *   注意：敌人先结算、成员后结算（endRound 顺序：玩家 → 敌人 → 小队），
+ *   所以这里预测的是「本回合稍后成员真的会走到的位置」，不是空想。 */
+function squadPredictedNextCell(u) {
+  if (!u || !u.alive) return null;
+  const target = squadNearestEnemy(u);
+  if (!target) return { x: u.x, y: u.y };
+  const path = bfsPathTo(u.x, u.y, target.x, target.y, 1, null, false, 0);
+  /* bfsPathTo 在「目标不可达」时返回的是未截断的完整路径，但第 2 格仍然是它打算走的方向 */
+  if (path && path.length > 1) return { x: path[1].x, y: path[1].y };
+  return { x: u.x, y: u.y };
+}
+
+/* ★ 成员的统一受伤入口（与玩家侧的 damagePlayer 对等，但成员没有护盾 / 免疫 / 反击那套）。
+ *   HP 归 0 → alive=false（渲染层与 resolveSquadTurn 都会跳过它）→ 玩家彻底失去该成员。 */
+function squadTakeDamage(u, amount, source) {
+  if (!u || !u.alive || !(amount > 0)) return { dealt: 0, dead: false };
+  const before = u.hp;
+  u.hp = Math.max(0, u.hp - amount);
+  const dealt = before - u.hp;
+  floatText(u.x, u.y, '-' + dealt, '#ff6b6b');
+  if (u.hp <= 0) {
+    u.alive = false;
+    log(`💀 ${u.icon} ${u.name}被${source}击杀了（${u.maxHp} HP 归零）。`);
+    ringFx(u.x, u.y, '#ff6b6b');
+    return { dealt, dead: true };
+  }
+  log(`🩸 ${u.icon} ${u.name}被${source}命中，造成 ${dealt} 伤害（${u.hp}/${u.maxHp}）。`);
+  return { dealt, dead: false };
 }
 
 function squadNearestEnemy(u) {

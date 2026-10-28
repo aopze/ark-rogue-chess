@@ -47,14 +47,20 @@ function attackRollDisadvantage(attackerMod, prof, targetAC) {
     disadvantage: true
   };
 }
-/* ISSUE-20261028-15：玩家近战「朝向必中」。
+/* ISSUE-20261028-15：玩家「朝向必中」。
  * 正对目标出手时，不再由 d20 决定中不中 —— 一律算命中，伤害与暴击判定完全照旧。
  *   - A2 仍然掷骰：d20 照掷、自然 20 的暴击优先级不变（本函数只写 hit，不碰 nat20）。
  *   - B1 覆盖自然 1（推荐值）：否则玩家会遇到「我正对着它，还是空了」，规则等于没建立起来。
- *   - A4 / C1 只给玩家近战用：远程（含不稳定血浆的 forcedHit）、技能爆发、敌人侧一律不调用本函数。
+ *   - A4 / C1：玩家侧**近战与远程**都可调用（远程自 ISSUE-20261029-33 起）；
+ *     技能爆发、敌人侧一律不调用本函数。
  * 不复用 atk.forcedHit —— 那个字段已经被「不稳定血浆」占用，混用会让日志串味。 */
-function applyFacingGuaranteedHit(atk, target) {
-  if (!player || !target || !isFacingTarget(player, target)) return atk;
+function applyFacingGuaranteedHit(atk, target, shooter) {
+  /* shooter 缺省 = 玩家本体（近战沿用既有语义）。
+   * ★ ISSUE-20261029-33：远程分支传入「渲染朝向」版本 ——
+   *   远程射程远，玩家更容易察觉「屏幕上朝哪」与「判定按哪」不一致，
+   *   所以远程用 getPlayerRenderFacing()（规划阶段 = 计划路径的朝向），近战保持原样不动。 */
+  const u = shooter || player;
+  if (!u || !target || !isFacingTarget(u, target)) return atk;
   if (atk.hit) return atk;                 // 本来就命中：保留 total/AC 的原始展示，不多贴标签
   atk.hit = true;
   atk.facingHit = true;                    // 朝向必中（A3 的日志/浮字据此加「· 必定命中」）

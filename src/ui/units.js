@@ -31,6 +31,19 @@ function getPlayerRenderFacing() {
   }
   return player.facing;
 }
+/* ★ ISSUE-20261029-33：远程「朝向攻击」判定用的朝向。
+ *   原则上用**渲染朝向**（屏幕上朝哪就按哪判定），但 previewFacing 假定
+ *   playerPath[0] 就是玩家当前格 —— 万一两者不同步（异常态 / 脚本改过坐标），
+ *   它会拿「路径末格 vs 玩家位置」算出一个无意义的斜向 → 判定看起来随机。
+ *   所以这里加一道保险：路径起点与玩家位置不一致时，一律回退到实际朝向 player.facing。 */
+function playerFacingForRanged() {
+  if (!player) return null;
+  const pf = player.facing;
+  if (typeof getPlayerRenderFacing !== 'function') return pf;
+  const p0 = playerPath && playerPath[0];
+  if (!p0 || p0.x !== player.x || p0.y !== player.y) return pf;
+  return getPlayerRenderFacing() || pf;
+}
 function isPlayerPreviewCharging() {
   if (phase !== PHASE.PLANNING) return playerChargingThisTurn || fencerCounterActive;
   return skillReadyInfo(playerPath).ready || vampireSkillActive;

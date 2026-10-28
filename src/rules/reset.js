@@ -49,6 +49,7 @@ function resetTurnState({ clearCounter = false } = {}) {
   playerDodgeACBonus = 0;
   dodgeTriggerIndex = -1;
   pendingAttack = false;
+  pendingStartSkill = false;
   pendingChargeInfo = null;
   playerChargeStopReason = null;
   playerChargeCausedDamage = false;

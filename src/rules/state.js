@@ -63,6 +63,9 @@ let playerChargeBudget = 0;
 let playerChargeHits = 0;
 let playerChargeDir = { dx: 1, dy: 0 };
 let pendingAttack = false;
+/* ★ ISSUE-20261029-34：原地技能（技能节点落在起点 idx 0）——本回合第一个 tick 就发动，不移动。
+ * 与 pendingAttack 同类：都是一个「先于路径步结算」的一次性标记。 */
+let pendingStartSkill = false;
 let pendingChargeInfo = null;
 let amiyaBonusTargets = 0;
 /* ★ ISSUE-20261029-28 预备干员「增援召唤」

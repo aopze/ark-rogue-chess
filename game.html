@@ -553,6 +553,15 @@
    *   形状规则不变：圆形 = 交互，胶囊 = 特殊动作（开始行动）。
    * ========================================================================= */
   #vpadHost { display: none; }
+  /* ★ ISSUE-20261029-31：长按虚拟按键会选中文字、弹出「拷贝 / 全选」菜单。
+   * touch-action:none 只管「手势」（滚动 / 缩放），**管不住文本选择** ——
+   * 必须再补 user-select:none（禁拖蓝）与 -webkit-touch-callout:none（禁 iOS 长按菜单）。
+   * 作用域取「面板整体 + 所有子元素」：注入进 .vpad-top 的「开始行动」不在 .vbtn 里，
+   * 只写 .vbtn 会漏掉它，只写面板又漏不掉缝隙里的残留选区。 */
+  #vpadHost, #vpadHost * {
+    -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+  }
   #vpadHost.on {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-vpad);
     display: flex; flex-direction: column; gap: 6px;
@@ -721,9 +730,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290529',
-  commit:  '0feed54481dadadd07b150f8cddec40755e5b873',
-  builtAt: '2026-10-28T21:29:51Z'
+  build:   '10290649',
+  commit:  '0123dc4003d6eaa8e4e29c814395c253aac585ee',
+  builtAt: '2026-10-28T22:49:23Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -1426,6 +1435,9 @@ let playerChargeBudget = 0;
 let playerChargeHits = 0;
 let playerChargeDir = { dx: 1, dy: 0 };
 let pendingAttack = false;
+/* ★ ISSUE-20261029-34：原地技能（技能节点落在起点 idx 0）——本回合第一个 tick 就发动，不移动。
+ * 与 pendingAttack 同类：都是一个「先于路径步结算」的一次性标记。 */
+let pendingStartSkill = false;
 let pendingChargeInfo = null;
 let amiyaBonusTargets = 0;
 /* ★ ISSUE-20261029-28 预备干员「增援召唤」
@@ -1577,8 +1589,17 @@ const ENEMY_AGGRESSION_SCALE = 0.6;
  * 三条硬约束（改之前先读）：
  *  1) 伤害必须走 enemyTakeDamage()，否则护盾词缀不生效；
  *  2) 击杀必须走 killEnemy()，否则精英掉落 ❤️ / 连杀记账会漏；
- *  3) 成员不是敌人、也不是玩家：不进 enemies 数组（否则被 AI 当目标、被相杀结算），
+ *  3) 成员不是敌人、也不是玩家：不进 enemies 数组（否则被相杀结算），
  *     只放在 squadUnits 里，由 renderUnits 单独渲染一层。
+ *
+ * ★ ISSUE-20261029-32（人类 05:48 拍板）：上面第 3 条**放宽** ——
+ *   「成员无敌」原本是我在 28 号自己拍的口径，人类现在指出「敌人似乎不会攻击召唤单位」，
+ *   并要求敌人改用「距离最近的路径格」索敌。人类逐项确认：
+ *     · 成员**能被敌人打死**（HP 归 0 → 消失，玩家彻底失去该成员）；
+ *     · 敌人同时能打到玩家和成员时 → **谁近打谁，平手打玩家**；
+ *     · 伤害来源全部打通：近战贴身 / 外星人远程 / 自爆虫自爆 / 敌人踩进成员格 / Boss 推动。
+ *   所以成员从「无敌炮台」变成「有代价的召唤」：会吸引火力，也会真的死。
+ *   本文件因此新增：squadTakeDamage / squadUnitAt / squadAliveUnits / squadPredictedNextCell。
  */
 function rookieSpMax() { return ROOKIE_SP_MAX; }
 
@@ -1633,7 +1654,7 @@ function squadFreeCellsAround(x, y) {
       if (!inBounds(nx, ny)) continue;
       if (map[ny][nx] === 1) continue;
       if (enemies.some(e => e.alive && e.x === nx && e.y === ny)) continue;
-      if (squadUnits.some(s => s.x === nx && s.y === ny)) continue;
+      if (squadUnits.some(s => s.alive && s.x === nx && s.y === ny)) continue;
       out.push({ x: nx, y: ny });
     }
   }
@@ -1678,10 +1699,58 @@ function summonSquadMember() {
 
 /* 这一格被谁占着（小队成员自己那格除外） */
 function squadCellTaken(x, y, selfUid) {
-  for (const s of squadUnits) if (s.uid !== selfUid && s.x === x && s.y === y) return true;
+  for (const s of squadUnits) if (s.uid !== selfUid && s.alive && s.x === x && s.y === y) return true;
   if (player && player.alive && player.x === x && player.y === y) return true;
   for (const e of enemies) if (e.alive && e.x === x && e.y === y) return true;
   return false;
+}
+
+/* =========================================================
+ * ★ ISSUE-20261029-32：成员进入敌人索敌候选池 + 可被敌人打死
+ * ========================================================= */
+
+/* 存活的成员（敌人索敌、伤害结算都只看这些） */
+function squadAliveUnits() {
+  return (typeof squadUnits !== 'undefined' ? squadUnits : []).filter(u => u.alive);
+}
+
+/* 某个格子上有没有活着的成员 */
+function squadUnitAt(x, y) {
+  for (const s of squadUnits) if (s.alive && s.x === x && s.y === y) return s;
+  return null;
+}
+
+/* ★ 成员「下一格」的预测：成员每回合朝**离它最近的敌人**走（见 squadAct），
+ *   所以敌人索敌时用「成员下一步会站的那格」来算距离，
+ *   而不是用成员此刻的格子 —— 这正是人类要的「正在朝我走的那个会被优先锁定」。
+ *   注意：敌人先结算、成员后结算（endRound 顺序：玩家 → 敌人 → 小队），
+ *   所以这里预测的是「本回合稍后成员真的会走到的位置」，不是空想。 */
+function squadPredictedNextCell(u) {
+  if (!u || !u.alive) return null;
+  const target = squadNearestEnemy(u);
+  if (!target) return { x: u.x, y: u.y };
+  const path = bfsPathTo(u.x, u.y, target.x, target.y, 1, null, false, 0);
+  /* bfsPathTo 在「目标不可达」时返回的是未截断的完整路径，但第 2 格仍然是它打算走的方向 */
+  if (path && path.length > 1) return { x: path[1].x, y: path[1].y };
+  return { x: u.x, y: u.y };
+}
+
+/* ★ 成员的统一受伤入口（与玩家侧的 damagePlayer 对等，但成员没有护盾 / 免疫 / 反击那套）。
+ *   HP 归 0 → alive=false（渲染层与 resolveSquadTurn 都会跳过它）→ 玩家彻底失去该成员。 */
+function squadTakeDamage(u, amount, source) {
+  if (!u || !u.alive || !(amount > 0)) return { dealt: 0, dead: false };
+  const before = u.hp;
+  u.hp = Math.max(0, u.hp - amount);
+  const dealt = before - u.hp;
+  floatText(u.x, u.y, '-' + dealt, '#ff6b6b');
+  if (u.hp <= 0) {
+    u.alive = false;
+    log(`💀 ${u.icon} ${u.name}被${source}击杀了（${u.maxHp} HP 归零）。`);
+    ringFx(u.x, u.y, '#ff6b6b');
+    return { dealt, dead: true };
+  }
+  log(`🩸 ${u.icon} ${u.name}被${source}命中，造成 ${dealt} 伤害（${u.hp}/${u.maxHp}）。`);
+  return { dealt, dead: false };
 }
 
 function squadNearestEnemy(u) {
@@ -2451,14 +2520,20 @@ function attackRollDisadvantage(attackerMod, prof, targetAC) {
     disadvantage: true
   };
 }
-/* ISSUE-20261028-15：玩家近战「朝向必中」。
+/* ISSUE-20261028-15：玩家「朝向必中」。
  * 正对目标出手时，不再由 d20 决定中不中 —— 一律算命中，伤害与暴击判定完全照旧。
  *   - A2 仍然掷骰：d20 照掷、自然 20 的暴击优先级不变（本函数只写 hit，不碰 nat20）。
  *   - B1 覆盖自然 1（推荐值）：否则玩家会遇到「我正对着它，还是空了」，规则等于没建立起来。
- *   - A4 / C1 只给玩家近战用：远程（含不稳定血浆的 forcedHit）、技能爆发、敌人侧一律不调用本函数。
+ *   - A4 / C1：玩家侧**近战与远程**都可调用（远程自 ISSUE-20261029-33 起）；
+ *     技能爆发、敌人侧一律不调用本函数。
  * 不复用 atk.forcedHit —— 那个字段已经被「不稳定血浆」占用，混用会让日志串味。 */
-function applyFacingGuaranteedHit(atk, target) {
-  if (!player || !target || !isFacingTarget(player, target)) return atk;
+function applyFacingGuaranteedHit(atk, target, shooter) {
+  /* shooter 缺省 = 玩家本体（近战沿用既有语义）。
+   * ★ ISSUE-20261029-33：远程分支传入「渲染朝向」版本 ——
+   *   远程射程远，玩家更容易察觉「屏幕上朝哪」与「判定按哪」不一致，
+   *   所以远程用 getPlayerRenderFacing()（规划阶段 = 计划路径的朝向），近战保持原样不动。 */
+  const u = shooter || player;
+  if (!u || !target || !isFacingTarget(u, target)) return atk;
   if (atk.hit) return atk;                 // 本来就命中：保留 total/AC 的原始展示，不多贴标签
   atk.hit = true;
   atk.facingHit = true;                    // 朝向必中（A3 的日志/浮字据此加「· 必定命中」）
@@ -2994,13 +3069,17 @@ function firstWaitIndex(path) {
   return -1;
 }
 
-// 本回合规划出来的「动作」占用情况：{ dodge, dodgeIndex, actions, skillIdxs, attackCount, skillCount }
+/* 本回合规划出来的「动作」占用情况：{ dodge, dodgeIndex, actions, skillIdxs, attackCount, skillCount, order } */
 function plannedActionInfo(path, atkIdxs, skillIdxs) {
   const p = path || playerPath;
   const atk = atkIdxs || attackIndices;
   const sk = skillIdxs || skillIndices;
   const wIdx = firstWaitIndex(p);
-  const skOnPath = [...new Set(sk.filter(i => i > 0 && i < p.length))].sort((a, b) => a - b);
+  /* ★ ISSUE-20261029-34：技能节点的过滤口径必须与攻击节点一致（都含起点 idx 0）。
+   * 旧版写 `i > 0`，于是「在原地点技能」既不占动作预算、也永远不会被结算到
+   * （resolveStep 只在 pathIdx >= 1 的移动步上检查技能节点）。现在统一成 `i >= 0`：
+   * 起点技能 = 本回合第一个 tick 原地发动（见 templates/game.html#resolveStep）。 */
+  const skOnPath = [...new Set(sk.filter(i => i >= 0 && i < p.length))].sort((a, b) => a - b);
   const skSet = new Set(skOnPath);
   /* 技能节点占了第一个等待步：技能就绪时技能优先（这一步不闪避）；技能没就绪时仍可闪避 */
   const dodge = wIdx >= 0 && !(skSet.has(wIdx) && skillReadyInfo(p).ready);
@@ -3009,13 +3088,44 @@ function plannedActionInfo(path, atkIdxs, skillIdxs) {
    * 旧版用 `i > 0` 把它漏掉，导致「起点攻击 + 另一个攻击节点」规划期不报超限、
    * 结算时才莫名其妙打空（ISSUE-20261028-17 / BUG-STARTCELL-ATTACK）。 */
   const atkOnPath = [...new Set(atk.filter(i => i >= 0 && i < p.length))];
+  const actions = (dodge ? 1 : 0) + atkOnPath.length + skOnPath.length;
+
+  /* ★ ISSUE-20261029-34：动作显示顺序 = 实际结算顺序。
+   * 旧版 UI 固定按「闪避 → 攻击 → 技能」拼类型序，与真实结算（按路径步序）相反 ——
+   * 于是「原地先点攻击再点等待（闪避）」在界面上显示成「闪避+攻击」。
+   * 真实顺序：
+   *   ① 起点格（idx 0）的攻击 / 技能最先结算（不移动，先出手 / 先施法）；
+   *   ② 其余按路径下标升序，同一下标上先闪避（步首判定）再攻击（步末出手）；
+   *      技能与攻击互斥，不会落在同一格。
+   * order 里按 kind 分组计数（组序 = 首次出现顺序），UI 直接照着渲染。 */
+  const seq = [];
+  if (atkOnPath.includes(0)) seq.push({ kind: 'attack', idx: 0 });
+  if (skOnPath.includes(0)) seq.push({ kind: 'skill', idx: 0 });
+  const stepIdxs = [...new Set([
+    ...atkOnPath.filter(i => i > 0),
+    ...skOnPath.filter(i => i > 0),
+    ...(dodge ? [wIdx] : []),
+  ])].sort((a, b) => a - b);
+  for (const i of stepIdxs) {
+    if (dodge && i === wIdx) seq.push({ kind: 'dodge', idx: i });
+    if (skOnPath.includes(i)) seq.push({ kind: 'skill', idx: i });
+    if (atkOnPath.includes(i)) seq.push({ kind: 'attack', idx: i });
+  }
+  const order = [];
+  for (const s of seq) {
+    const g = order.find(o => o.kind === s.kind);
+    if (g) g.count += 1;
+    else order.push({ kind: s.kind, count: 1, firstIdx: s.idx });
+  }
+
   return {
     dodge,
     dodgeIndex: (dodge ? wIdx : -1),
     skillIdxs: skOnPath,
     attackCount: atkOnPath.length,
     skillCount: skOnPath.length,
-    actions: (dodge ? 1 : 0) + atkOnPath.length + skOnPath.length,
+    actions,
+    order,
   };
 }
 
@@ -3033,6 +3143,22 @@ function budgetRejectReason(path, atkIdxs, skillIdxs) {
     return `攻击次数上限 ${maxAttacksThisTurn()}：本回合只能出手 ${maxAttacksThisTurn()} 次（动作预算 ${maxActionsThisTurn()} 件里最多 1 件是攻击，其余留给技能/闪避）。`;
   }
   return `动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过 ${maxActionsThisTurn()} 件。`;
+}
+
+/* ★ ISSUE-20261029-34：追加一个「等待」步（= 闪避动作）前先查预算。
+ * 等待步本身不消耗移动力以外的东西，但**第一个**等待步会自动变成闪避动作（占 1 件）。
+ * 旧版三处入口（等待按钮 / Q 键 / 长按 400ms）都只看「等待次数 < 移动力」，
+ * 完全不查动作预算 —— 于是「攻击 + 技能 + 闪避」三件能被规划出来（预算只有 2），
+ * 界面上出现红色的「3/2」，这就是「连续点会出现 3 个行动」的根因。
+ * 注意：第二个及以后的等待步不会新增闪避动作，所以永远不会超预算。 */
+function canAddWaitStep(path, atkIdxs, skillIdxs) {
+  const p = path || playerPath;
+  const last = p.length ? p[p.length - 1] : (player ? { x: player.x, y: player.y } : { x: 0, y: 0 });
+  const next = [...p, { x: last.x, y: last.y }];
+  if (!nodeFitsBudget(next, atkIdxs, skillIdxs)) {
+    return { ok: false, reason: budgetRejectReason(next, atkIdxs, skillIdxs) };
+  }
+  return { ok: true, path: next };
 }
 
 /* 玩家当前有效 AC：闪避状态下额外 +N（闪避持续到本回合结束） */
@@ -3075,6 +3201,19 @@ function getPlayerRenderFacing() {
     return previewFacing(playerPath, player.x, player.y) || player.facing;
   }
   return player.facing;
+}
+/* ★ ISSUE-20261029-33：远程「朝向攻击」判定用的朝向。
+ *   原则上用**渲染朝向**（屏幕上朝哪就按哪判定），但 previewFacing 假定
+ *   playerPath[0] 就是玩家当前格 —— 万一两者不同步（异常态 / 脚本改过坐标），
+ *   它会拿「路径末格 vs 玩家位置」算出一个无意义的斜向 → 判定看起来随机。
+ *   所以这里加一道保险：路径起点与玩家位置不一致时，一律回退到实际朝向 player.facing。 */
+function playerFacingForRanged() {
+  if (!player) return null;
+  const pf = player.facing;
+  if (typeof getPlayerRenderFacing !== 'function') return pf;
+  const p0 = playerPath && playerPath[0];
+  if (!p0 || p0.x !== player.x || p0.y !== player.y) return pf;
+  return getPlayerRenderFacing() || pf;
 }
 function isPlayerPreviewCharging() {
   if (phase !== PHASE.PLANNING) return playerChargingThisTurn || fencerCounterActive;
@@ -3281,6 +3420,7 @@ function resetTurnState({ clearCounter = false } = {}) {
   playerDodgeACBonus = 0;
   dodgeTriggerIndex = -1;
   pendingAttack = false;
+  pendingStartSkill = false;
   pendingChargeInfo = null;
   playerChargeStopReason = null;
   playerChargeCausedDamage = false;
@@ -4302,6 +4442,13 @@ function mountVirtualPad() {
     }
   });
 
+  /* ★ ISSUE-20261029-31：CSS 的 user-select/callout 挡不住的部分
+   * （Android WebView、部分国产浏览器长按会先弹 contextmenu；还有老 WebKit 的 selectstart）。
+   * 在面板根节点上再拦一次，捕获阶段拦住，避免事件继续往下穿透到棋盘。 */
+  const swallow = function (e) { e.preventDefault(); };
+  vpadHostEl.addEventListener('contextmenu', swallow);
+  vpadHostEl.addEventListener('selectstart', swallow);
+
   syncVirtualPad();
   syncVpadInset();
 }
@@ -4351,7 +4498,10 @@ function syncVirtualPad() {
   if (waitBtn) waitBtn.disabled = !planning;
   if (atkBtn) atkBtn.disabled = !planning;
   if (spBtn) spBtn.disabled = !planning;
-  if (!player) {
+  /* ★ ISSUE-20261029-35：大厅里没有对局数据，三键数字清成「—」。
+   * 注意不能只看 `!player` —— 回大厅时 player 还留着上一局的残留对象，
+   * 直接读它会显示上一局的伤害骰 / 技力环（看起来像「还能用」，其实是脏数据）。 */
+  if (!player || lobby) {
     /* 大厅：把三键上的数字清成「—」，免得留着上一局的残留 */
     const wn = waitBtn && waitBtn.querySelector('[data-k="wait"]');
     if (wn && wn.textContent !== '—') wn.textContent = '—';
@@ -5006,7 +5156,7 @@ function initLevel() {
       log(`  ${e.isElite ? '★精英 ' : ''}${ENEMY_STATS[e.type].name}#${e.id + 1}：STR${a.str}(${fmtMod(abilityMod(a.str))}) DEX${a.dex}(${fmtMod(abilityMod(a.dex))}) CON${a.con}(${fmtMod(abilityMod(a.con))}) INT${a.int}(${fmtMod(abilityMod(a.int))}) AC${e.ac} 熟练+${e.prof} 移动${enemyMoveOf(e)} HP${e.maxHp} 近战${e.meleeDice ? diceLabel(e.meleeDice) + '(' + e.meleeDmg + ')' : e.meleeDmg} 远程${e.rangedDice ? diceLabel(e.rangedDice) + '(' + e.rangedDmg + ')' : e.rangedDmg}${e.explodeDmg ? ' 自爆' + e.explodeDmg : ''}${e.affixes.length ? '　词缀：' + enemyAffixLabel(e) : ''}`);
     });
     log(`规则：攻击检定 = d20 + 属性修正 + 熟练加值 ≥ 目标AC；自然20暴击；自然1必失。`);
-    log(`朝向（ISSUE-15）：近战正对目标出手**必定命中**（连自然1也算中），且伤害 ×2（朝向暴击）；侧身、背后仍按上面掷骰。远程不受朝向影响。`);
+    log(`朝向（ISSUE-15）：**近战与远程**正对目标出手**必定命中**（连自然1也算中）；近战朝向还额外 ×2（朝向暴击），远程朝向只必中不翻倍。侧身、背后仍按上面掷骰。`);
     log(`动作预算（ISSUE-25）：每回合可以做 ${BASE_ACTIONS_PER_TURN} 件事 —— 攻击 / 技能 / 闪避各占 1 件，所以「打一拳 + 闪一次」是允许的；但**攻击次数上限仍是每回合 1 次**（遗物可加）。`);
     if (level === 1) {
       log(`升级规则：通关得经验，本关掉血越少经验越多（满血开局时以「本关开始血量 × 40%」为失血基准，少掉 1 血 +${XP_PER_STEP} 经验，保底 ${XP_CLEAR_BASE}）。经验满即升级：HP 上限 + 体质加值并回满血，同时从奖励池 3 选 1 个 buff、获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点。`);
@@ -5368,6 +5518,10 @@ function handleKvAction(action) {
   if (phase !== PHASE.PLANNING || isMoving || !player) return;
   if (action === 'wait') {
     if (countWaitSteps(playerPath) >= player.move) { log('等待次数已用完（等待上限 = 移动力）。'); return; }
+    /* ★ ISSUE-20261029-34：等待步 = 闪避动作，第一个等待步要占 1 件动作预算。
+     * 旧版这里直接 push，完全不查预算 → 「攻击 + 技能 + 闪避」三件能被规划出来。 */
+    const gate = canAddWaitStep(playerPath, attackIndices, skillIndices);
+    if (!gate.ok) { log(`⚠️ ${gate.reason}`); return; }
     const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
     playerPath.push({ x: last.x, y: last.y });
     refreshBoardOnly();
@@ -5376,7 +5530,8 @@ function handleKvAction(action) {
     toggleAttack(playerPath.length - 1);
     refreshBoardOnly();
   } else if (action === 'skill') {
-    if (playerPath.length < 2) { log('先规划至少一步移动，再在路径节点上设置技能节点。'); return; }
+    /* ★ ISSUE-20261029-34：起点（原地）也能放技能节点了 —— 只剩起点时按 R 就是「原地施法」。 */
+    if (playerPath.length < 1) { log('先在棋盘上规划路径，再在路径节点上设置技能节点。'); return; }
     toggleSkill(playerPath.length - 1);
     refreshBoardOnly();
   } else if (action === 'range') {
@@ -5480,7 +5635,18 @@ function renderCharSelectStats() {
 
 function updateStats() {
   drawRadar();
-  if (phase === PHASE.CHAR_SELECT) { renderCharSelectStats(); return; }
+  if (phase === PHASE.CHAR_SELECT) {
+    renderCharSelectStats();
+    /* ★ ISSUE-20261029-35：大厅分支必须同步虚拟面板。
+     * 原来 syncVirtualPad() 只写在「对局中」那段代码里，大厅走 early return 就跳过了它 ——
+     * 于是面板一直停在上一个界面的状态：
+     *   「打完一局 → 重新开始 → 回大厅」时，停的是结算界面的状态（四个方向键全部 disabled），
+     *   而 .vbtn:disabled 带 pointer-events:none，事件根本进不来 →
+     *   手机上回大厅后虚拟按钮全废，走不到 🚪 出口、开不了下一局。
+     * （新开大厅之所以正常，只是因为 mountVirtualPad() 挂载时恰好同步过一次 —— 那条路是唯一的。） */
+    if (typeof syncVirtualPad === 'function') syncVirtualPad();
+    return;
+  }
 
   /* ---------- 对局中 ---------- */
   if (!player) return;
@@ -5502,10 +5668,11 @@ function updateStats() {
   const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
   const actionUsed = planInfo.actions;
   const actionMax = maxActionsThisTurn();
-  const actionKinds = [];
-  if (planInfo.dodge) actionKinds.push('闪避');
-  if (planInfo.attackCount) actionKinds.push(`攻击×${planInfo.attackCount}`);
-  if (planInfo.skillCount) actionKinds.push(`技能×${planInfo.skillCount}`);
+  /* ★ ISSUE-20261029-34：动作标签按**实际结算顺序**渲染（plannedActionInfo.order）。
+   * 旧版固定按「闪避 → 攻击 → 技能」拼类型序，与真实结算（按路径步序）相反 ——
+   * 于是「原地先点攻击、再点等待（闪避）」在界面上显示成「闪避+攻击」。 */
+  const actionKinds = (planInfo.order || []).map(o =>
+    o.kind === 'dodge' ? '闪避' : (o.kind === 'attack' ? `攻击×${o.count}` : `技能×${o.count}`));
   const actionLabel = actionKinds.length
     ? `${actionKinds.join('+')}${actionMax > 1 ? ` ${actionUsed}/${actionMax}` : ''}`
     : '—';
@@ -5683,8 +5850,8 @@ function renderControls() {
     tip.style.cssText = 'font-size:12px; color:#888; text-align:center; padding:2px; line-height:1.35; white-space:pre-wrap;';
     // 手机端不显示键盘快捷键（ISSUE-20261028-09 D），换成一行触摸说明
     tip.textContent = (typeof vpadMounted !== 'undefined' && vpadMounted)
-      ? '点棋盘移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能\n左下方向键移动 · 右下三键 = 等待 / 攻击 / 技能\n长按攻击键 = 看攻击范围'
-      : 'WASD/点击移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能 · 长按地块=等待\nE=攻击 · R=技能 · Q=等待 · V=攻击范围 · 空格确认 · X 重置路径\n右键路径格=技能节点 · 主动行动三选一：攻击 / 技能 / 闪避（第一个等待）';
+      ? '点棋盘移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能（双击脚下那格=原地施法）\n左下方向键移动 · 右下三键 = 等待 / 攻击 / 技能\n长按攻击键 = 看攻击范围'
+      : 'WASD/点击移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能（双击脚下那格=原地施法）\nE=攻击 · R=技能 · Q=等待 · V=攻击范围 · 空格确认 · X 重置路径\n右键路径格=技能节点 · 主动行动三选一：攻击 / 技能 / 闪避（第一个等待）';
     controlsEl.appendChild(tip);
   } else if (phase === PHASE.GAMEOVER) {
     const btn = document.createElement('button');
@@ -5792,6 +5959,9 @@ function handleKeyDown(e) {
   if (['w','a','s','d'].includes(k)) stepPathByDir(k);
   if (k === 'q') {
     if (countWaitSteps(playerPath) < player.move) {
+      /* ★ ISSUE-20261029-34：等待步 = 闪避动作，必须过动作预算闸门 */
+      const gate = canAddWaitStep(playerPath, attackIndices, skillIndices);
+      if (!gate.ok) { log(`⚠️ ${gate.reason}`); return; }
       const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
       playerPath.push({ x: last.x, y: last.y });
       refreshBoardOnly();
@@ -5802,7 +5972,8 @@ function handleKeyDown(e) {
   }
   // R：切换末尾路径节点的技能节点（等价双击）
   if (k === 'r') {
-    if (playerPath.length > 1) { toggleSkill(playerPath.length - 1); refreshBoardOnly(); }
+    /* ★ ISSUE-20261029-34：只剩起点时按 R = 设「原地施法」 */
+    if (playerPath.length >= 1) { toggleSkill(playerPath.length - 1); refreshBoardOnly(); }
   }
   // X：重置路径（回到起点，清空攻击 / 技能节点）
   if (k === 'x') {
@@ -5840,8 +6011,9 @@ function getCellFromEvent(clientX, clientY) {
 }
 
 /* PC 右键在路径格上设 / 取消技能节点（ISSUE-20261028-09 B）。
- * 只有「该格在当前规划路径上且不是起点」才生效；校验全部走现有 toggleSkill（动作上限、
+ * 只有「该格在当前规划路径上」才生效；校验全部走现有 toggleSkill（动作上限、
  * 与攻击节点互斥等规则只此一份，不另写）。
+ * ★ ISSUE-20261029-34：起点格也算路径节点 —— 右键自己的脚下 = 设「原地施法」。
  * 右键非路径格：不弹浏览器菜单、不产生节点，给一条日志说明。 */
 boardEl.addEventListener('contextmenu', (e) => {
   e.preventDefault();
@@ -5849,7 +6021,7 @@ boardEl.addEventListener('contextmenu', (e) => {
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) return;
   const idx = findLastIndex(playerPath, p => p.x === cell.x && p.y === cell.y);
-  if (idx < 1) { log('右键只在规划路径的节点上设置技能节点（起点不行）。'); return; }
+  if (idx < 0) { log('右键只在规划路径的节点上设置技能节点（不在当前路径上）。'); return; }
   toggleSkill(idx);
   refreshBoardOnly();
 });
@@ -5888,13 +6060,21 @@ function toggleAttack(idx) {
     : `🎯 攻击节点：第 ${idx} 步（占一次动作）。`);
 }
 
-/* ★ 技能节点：双击路径节点设置 / 取消（与攻击节点互斥，同一格只能有一种） */
+/* ★ 技能节点：双击路径节点设置 / 取消（与攻击节点互斥，同一格只能有一种）
+ * ★ ISSUE-20261029-34：起点格（idx 0）现在也允许放技能节点 = 「原地施法」——
+ * 本回合第一个 tick 就发动，不移动。旧版这里写的是 `idx < 1`，把起点和非法下标一起挡掉了，
+ * 于是「在原地点技能」完全没反应（用户 2026-10-29 报的 bug）。 */
 function toggleSkill(idx) {
-  if (idx < 1 || idx >= playerPath.length) return;
+  if (idx < 0 || idx >= playerPath.length) return;
+  /* 风笛的「高效冲击」必须有冲锋方向，起点没有方向 → 起点不放技能节点 */
+  if (idx === 0 && selectedChar === 'wheelchair') {
+    log('✦ 起点不能放技能节点：风笛的「高效冲击」需要沿移动方向冲锋，请放在移动节点上。');
+    return;
+  }
   const si = skillIndices.indexOf(idx);
   if (si >= 0) {
     skillIndices.splice(si, 1);
-    log(`✧ 已取消第 ${idx} 步的技能节点。`);
+    log(`✧ 已取消${idx === 0 ? '原地' : `第 ${idx} 步`}的技能节点。`);
     return;
   }
   const nextAtk = attackIndices.filter(i => i !== idx);
@@ -5905,7 +6085,8 @@ function toggleSkill(idx) {
   attackIndices = nextAtk;
   skillIndices.push(idx);
   const info = skillReadyInfo(playerPath);
-  log(`✦ 技能节点：第 ${idx} 步（占一次动作，到达该步才发动）${info.ready ? ` ·「${info.name}」就绪` : ` ·「${info.name}」未就绪`}。`);
+  const where = idx === 0 ? '原地（起点，本回合先施法）' : `第 ${idx} 步`;
+  log(`✦ 技能节点：${where}（占一次动作，到达该步才发动）${info.ready ? ` ·「${info.name}」就绪` : ` ·「${info.name}」未就绪`}。`);
 }
 function tryExtendPath(x, y) {
   if (countMoveSteps(playerPath) >= player.move) return false;
@@ -5995,6 +6176,9 @@ boardEl.addEventListener('pointerdown', (e) => {
   pressTimer = setTimeout(() => {
     if (dragging && !hasDragged && phase === PHASE.PLANNING) {
       if (countWaitSteps(playerPath) < player.move) {
+        /* ★ ISSUE-20261029-34：长按 = 等待步 = 闪避动作，同样必须过动作预算闸门 */
+        const gate = canAddWaitStep(playerPath, attackIndices, skillIndices);
+        if (!gate.ok) { log(`⚠️ ${gate.reason}`); return; }
         const last = playerPath.length ? playerPath[playerPath.length - 1] : { x: player.x, y: player.y };
         playerPath.push({ x: last.x, y: last.y });
         refreshBoardOnly();
@@ -6054,10 +6238,10 @@ boardEl.addEventListener('pointerup', (e) => {
     if (idx >= 0) {
       /* ★ 单击 = 攻击节点；双击（340ms 内点同一格）= 技能节点。
        * 双击时第一次点击可能已经把攻击节点切换掉，所以先还原快照再设技能。
-       * 起点格（idx 0）没有技能节点可设（技能必须落在移动步上），双击按「再点一次」处理，
-       * 否则会还原快照把刚设上的原地攻击悄悄抹掉。 */
+       * ★ ISSUE-20261029-34：起点格（idx 0）现在也能设技能节点（原地施法），
+       * 所以双击起点 = 在「原地攻击」与「原地施法」之间切换。 */
       const now = Date.now();
-      if (idx > 0 && lastClick && lastClick.idx === idx && now - lastClick.time <= 340) {
+      if (lastClick && lastClick.idx === idx && now - lastClick.time <= 340) {
         attackIndices = [...lastClick.atk];
         skillIndices = [...lastClick.sk];
         lastClick = null;
@@ -6186,6 +6370,9 @@ function confirmAction() {
   dodgeTriggerIndex = plan.dodgeIndex;
 
   if (attackIndices.includes(0)) pendingAttack = true;
+  /* ★ ISSUE-20261029-34：原地技能（技能节点在起点）——本回合第一个 tick 发动，不移动。
+   * 结算侧在 resolveStep 开头消费这个标记。 */
+  if (skillIndices.includes(0)) pendingStartSkill = true;
 
   /* 唯一需要提前改写路径的技能（冲锋）。冲锋会把「冲锋节点」之后的所有路径节点丢弃（设计如此） */
   const chargeApplied = prepareWheelchairCharge();
@@ -6255,6 +6442,56 @@ function pickEnemyTarget(positions, aggression, move) {
   let idx = sampleAggressionTargetIndex(positions.length, aggression);
   while (idx > 0 && positions[idx].tick > move) idx--;
   return positions[idx];
+}
+
+/* =========================================================
+ * ★ ISSUE-20261029-32：敌人索敌（候选 = 玩家 + 存活的小队成员）
+ *
+ * 人类 05:48 原话：
+ *   「敌人现在似乎不会攻击召唤单位，优化：敌人选择距离最近的路径格进行索敌，
+ *     意思是两个距离一样的单位，一个要远离敌人，一个要接近敌人，
+ *     敌人会选择要接近自己的单位，因为路径格更近。」
+ *
+ * 于是距离度量不是「单位当前格到我的距离」，而是
+ *   「**该单位的路径格**里离我最近的那一格」到我的距离：
+ *   · 玩家 → playerPositions（玩家画出来的那条路径上的每一格）；
+ *   · 成员 → 它本回合要走到的**下一格**（成员每回合朝最近的敌人走，见 squadAct）。
+ * 于是「正在朝我走」的那个单位路径格更近 → 被优先锁定；「正在远离」的那个路径格更远 → 被放弃。
+ *
+ * ★ 为什么不用「当前格距离」：当前距离相同时两者无法区分，必须靠路径方向才能判别「谁在靠近」。
+ * ★ 玩家侧仍然走 pickEnemyTarget 的 WIS 预判（高感知敌人去堵玩家路径末端），这条不变；
+ *   成员不会预判（它每回合只朝最近的敌人走），所以直接追它的当前格。
+ * ★ 平手时优先玩家（人类口径：谁近打谁，平手打玩家）。
+ * ========================================================= */
+function pickEnemyTargetFor(e, playerPositions, aggression, move) {
+  const cands = [];
+  if (playerPositions.length > 0) {
+    let d = Infinity;
+    for (const p of playerPositions) {
+      const dd = Math.abs(p.x - e.x) + Math.abs(p.y - e.y);
+      if (dd < d) d = dd;
+    }
+    cands.push({ kind: 'player', dist: d });
+  }
+  if (typeof squadAliveUnits === 'function') {
+    for (const s of squadAliveUnits()) {
+      const next = squadPredictedNextCell(s) || { x: s.x, y: s.y };
+      const dd = Math.abs(next.x - e.x) + Math.abs(next.y - e.y);
+      cands.push({ kind: 'squad', unit: s, dist: dd });
+    }
+  }
+  if (!cands.length) return null;
+  let best = cands[0];
+  for (let i = 1; i < cands.length; i++) {
+    const c = cands[i];
+    if (c.dist < best.dist) { best = c; continue; }
+    if (c.dist === best.dist && c.kind === 'player' && best.kind !== 'player') best = c;
+  }
+  if (best.kind === 'player') {
+    const t = pickEnemyTarget(playerPositions, aggression, move);
+    return { x: t.x, y: t.y, tick: t.tick, kind: 'player' };
+  }
+  return { x: best.unit.x, y: best.unit.y, tick: 0, kind: 'squad', unit: best.unit };
 }
 
 function buildPathFromPrev(prev, endX, endY) {
@@ -6338,8 +6575,11 @@ function generateEnemyPaths() {
     for (let t = 0; t <= maxT; t++) occ[t].add(key(e.x, e.y));
   }
   /* ISSUE-20261029-28：小队成员也算占位（敌人不会穿过自己人/友军，否则两个图标叠在一格）。
-   * 只占位、不当目标 —— 敌人 AI 依然只追玩家，成员在本轮里是无敌的。 */
+   * ★ ISSUE-20261029-32：成员**同时**进了敌人的索敌候选池（人类 05:48 拍板：成员能被敌人打死）。
+   *   于是占位规则变成「除本敌人的目标成员那一格外，其余成员格仍是障碍」——
+   *   敌人要能走到目标成员面前打它，但不顺路撞到的其他成员不误伤。 */
   for (const s of squadUnits) {
+    if (!s.alive) continue;
     for (let t = 0; t <= maxT; t++) occ[t].add(key(s.x, s.y));
   }
   const isOccupiedAt = (t, x, y) => !!occ[t] && occ[t].has(key(x, y));
@@ -6365,18 +6605,33 @@ function generateEnemyPaths() {
     // 拖回合会让敌人越来越激进，20 回合后 10 感知的敌人就到顶。
     const aggression = enemyAggression(wis);
     // ★ 预判：目标取玩家路径上更靠后的位置（WIS 越高越靠后）
-    let target = pickEnemyTarget(playerPositions, aggression, enemyMoveOf(e));
+    // ★ ISSUE-20261029-32：候选池扩到「玩家 + 存活的小队成员」，
+    //   距离度量 = 「该目标的路径格里离本敌人最近的那一格」。
+    //   人类原话：「敌人选择距离最近的路径格进行索敌 —— 两个距离一样的单位，
+    //   一个要远离敌人、一个要接近敌人，敌人会选择要接近自己的那个，因为路径格更近。」
+    let target = pickEnemyTargetFor(e, playerPositions, aggression, enemyMoveOf(e));
     // ★ 补丁：角色周围 8 格（切比雪夫距离 ≤1）内的敌人，寻路目标固定为角色所在格，
     // 不会再预判到玩家路径末端、也不会随重绘改变。
-    if (Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1) {
-      target = { x: player.x, y: player.y, tick: 0 };
+    // ★ ISSUE-20261029-32：只在「玩家仍是选中目标」时套用；
+    //   成员被选中时目标本来就是它的当前格，不需要这个补丁。
+    if (target && target.kind === 'player' &&
+        Math.abs(e.x - player.x) <= 1 && Math.abs(e.y - player.y) <= 1) {
+      target = { x: player.x, y: player.y, tick: 0, kind: 'player' };
     }
+
+    /* 目标成员那一格允许进入（敌人要能走到它面前打它）；其余占位照旧 */
+    const targetSquad = (target && target.kind === 'squad') ? target.unit : null;
+    const isOccupiedAtFor = function (t, x, y) {
+      if (!occ[t] || !occ[t].has(key(x, y))) return false;
+      if (targetSquad && x === targetSquad.x && y === targetSquad.y) return false;
+      return true;
+    };
 
     // BFS 得到的是简单路径（每格只访问一次），所以不会再出现「冲过去又退回来」。
     // 旧版这里还有一段「到达目标后追玩家实际位置」，那段会从目标点折返，
     // 实测 500 局面里 24 次出现 A→B→A 的来回抖动，已移除：
     // 敌人提前到达预判点后原地待命，玩家自己会走进来（这本身就是最好的拦截）。
-    let path = bfsPathTo(e.x, e.y, target.x, target.y, enemyMoveOf(e), isOccupiedAt, ghost, 0);
+    let path = bfsPathTo(e.x, e.y, target.x, target.y, enemyMoveOf(e), isOccupiedAtFor, ghost, 0);
 
     // ★ 反罚站补丁：同伴占位可能把窄口/凹槽里的敌人完全堵死（BFS 一步都扩展不出去、返回原地），
     // 且每回合重算结果相同 → 敌人永久罚站（实测外星人距离玩家 5 格、几何可达，连站 11 回合不动）。
@@ -6461,7 +6716,7 @@ function tryPickup() {
       if (spGain > 0) floatText(player.x, player.y, `+${spGain} SP`, '#5cc9f5', false, -22);
       log(`拾取血迹 🩸：技力 +${spGain}（${vampireSp}/${VAMPIRE_SP_MAX}）${sass ? '　🥤 香草沙士 +1' : ''}，${heal > 0 ? `恢复 ${heal} HP` : '血量已满无回血'}。`);
       if (spBefore < VAMPIRE_SP_MAX && vampireSp >= VAMPIRE_SP_MAX) {
-        log('华法琳技力已满：在起始点（第 0 步）放攻击节点即可发动「不稳定血浆」。');
+        log('华法琳技力已满：双击路径节点（脚下那格也可以 = 原地施法）即可发动「不稳定血浆」。');
       }
     } else {
       const heal = Math.min(player.maxHp - player.hp, 1);
@@ -6568,6 +6823,31 @@ function crushRoughRock(boss, x, y) {
   }
 }
 
+/* ★ ISSUE-20261029-32：Boss 推开小队成员（Boss 走到成员格时）。
+ *   与 bossPushPlayer 同构，但成员没有「眩晕」状态（眩晕是玩家专属）→ 只推开。
+ *   推不动时成员留在原地（伤害在近战结算里给，不在这里）。 */
+function bossPushSquad(boss, em, member) {
+  const dx = Math.sign(em.to.x - em.from.x);
+  const dy = Math.sign(em.to.y - em.from.y);
+  const tx = member.x + dx, ty = member.y + dy;
+  const blocked = !inBounds(tx, ty)
+    || map[ty][tx] === 1
+    || roughRocks.has(key(tx, ty))
+    || (typeof squadUnitAt === 'function' && squadUnitAt(tx, ty))
+    || (player && player.alive && player.x === tx && player.y === ty)
+    || enemies.some(e => e.alive && e.x === tx && e.y === ty);
+  if (!blocked) {
+    member.x = tx; member.y = ty;
+    if (dx || dy) member.facing = { dx: -dx, dy: -dy };
+    floatText(tx, ty, '推开!', '#ff9f43');
+    ringFx(tx, ty, '#ff9f43');
+    log(`🗿 圆岩巨像${boss.id + 1} 把${member.icon} ${member.name}推开 1 格。`);
+  } else {
+    floatText(member.x, member.y, '推不动', '#bbb');
+    log(`🗿 圆岩巨像${boss.id + 1} 想推开${member.name}，但后面被挡住了。`);
+  }
+}
+
 /* 返回 true = 玩家真的被推走了；false = 推不动（但玩家照样眩晕） */
 function bossPushPlayer(boss, em, taken, eIdx) {
   const dx = Math.sign(em.to.x - em.from.x);
@@ -6645,9 +6925,33 @@ function applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds) {
       continue;
     }
 
+    /* ★ ISSUE-20261029-32：Boss 走到小队成员格 → 推开它 1 格。
+     *   成员没有「眩晕」状态（眩晕是玩家专属），所以只推开、不压制；
+     *   推不动时成员留在原地（也不会死在这里，伤害在近战结算里给）。 */
+    if (u.type === BOSS_TYPE) {
+      const sqB = (typeof squadUnitAt === 'function') ? squadUnitAt(em.to.x, em.to.y) : null;
+      if (sqB) {
+        bossPushSquad(u, em, sqB);
+        if (enemyPaths[em.enemyIdx]) enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
+        continue;
+      }
+    }
+
     // 走到玩家身上 → 相杀（交给相杀逻辑处理，这里不落位，仍占自己的格）
     if (em.to.x === player.x && em.to.y === player.y) {
       u.facing = faceToward(u, player);
+      if (enemyPaths[em.enemyIdx]) {
+        enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
+      }
+      continue;
+    }
+    /* ★ ISSUE-20261029-32：走到小队成员身上 → 停下打它（成员不再是无敌的）。
+     *   与「撞到玩家」同构：不落位（停在原地，成员那一格不被占据），
+     *   具体伤害由 resolveEnemyMeleeAttacks 统一结算（近战贴身那一段）。
+     *   顺序放在玩家分支之后：平手时打玩家（人类 05:48 口径）。 */
+    const sqAt = (typeof squadUnitAt === 'function') ? squadUnitAt(em.to.x, em.to.y) : null;
+    if (sqAt) {
+      u.facing = faceToward(u, sqAt);
       if (enemyPaths[em.enemyIdx]) {
         enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
       }
@@ -6798,9 +7102,20 @@ async function resolvePlayerAttack() {
 
   const hits = [];
   const bulletPromises = [];
+  /* ★ ISSUE-20261029-33：远程用「渲染朝向」判定 —— 屏幕上角色朝哪，判定就按哪。
+   *   （近战仍用 player.facing，不动既有语义，免得破坏已通过的朝向门禁。） */
+  const shooterFacing = (typeof playerFacingForRanged === 'function') ? playerFacingForRanged() : player.facing;
+  const shooter = { x: player.x, y: player.y, facing: shooterFacing };
   for (const target of targets) {
     if (target.hp <= 0) continue;
     const atk = attackRoll(intMod, player.rangedProf || 0, target.ac);
+    /* ★ ISSUE-20261029-33（人类 05:46）：远程角色的「朝向攻击」。
+     *   目标在玩家**正前方的那一条直线**上（同向同行 / 同列，不限距离）→ 必定命中（覆盖自然 1）。
+     *   判定用 isFacingTarget（严格一条线），**不是** isInFacingCone（那是 ±1 格宽的扇形）——
+     *   人类原话：「射击前方直线上的目标就是朝向攻击，只有前方一条线的」。
+     *   伤害与暴击照旧（**不额外 ×2**：人类只说「是朝向攻击」，没说伤害翻倍；近战侧
+     *   「朝向必中」与「朝向暴击」本就是两套判定，这里只把「必中」这套搬过来）。 */
+    applyFacingGuaranteedHit(atk, target, shooter);
     if (vampPlasma && !atk.hit) { atk.hit = true; atk.forcedHit = true; }
     const isCrit = atk.hit && (atk.nat20 || actionCrit);
     hits.push({ target, hit: atk.hit, isCrit, atk });
@@ -6818,7 +7133,7 @@ async function resolvePlayerAttack() {
       }
       if (hit) {
         const dmg = rollPlayerRangedDamage() * (isCrit ? 2 : 1);
-        const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
+        const forcedTag = (atk.forcedHit || atk.facingHit) ? ' · 必定命中' : '';
         const dealt = enemyTakeDamage(target, dmg);
         if (target.hp <= 0) {
           killEnemy(target, { showRing: true, showFloat: true, logText: `敌人${target.id+1}被击败（远程击杀）` });
@@ -6896,7 +7211,9 @@ function finishChargeState(chargeWillEnd) {
   playerChargeCausedDamage = false;
 }
 
-/* 相邻敌人的近战反击（每回合每个敌人一次）。 */
+/* 相邻敌人的近战反击（每回合每个敌人一次）。
+ * ★ ISSUE-20261029-32：贴身目标可以是玩家，也可以是小队成员（成员不再是无敌的）。
+ *   口径（人类 05:48 拍板）：**谁近打谁，平手打玩家** —— 两者都贴身时距离都是 1 → 玩家优先。 */
 async function resolveEnemyMeleeAttacks() {
   if (!(player.hp > 0)) return;
   for (let i = 0; i < enemies.length; i++) {
@@ -6904,7 +7221,13 @@ async function resolveEnemyMeleeAttacks() {
     const e = enemies[i];
     if (!e.alive || e.type === 'alien') continue;
     if (e.stunTurns > 0) continue;
-    if (dist(e, player) !== 1 || e.attackedThisRound) continue;
+    if (e.attackedThisRound) continue;
+    /* ★ ISSUE-20261029-32：贴身目标 = 玩家 或 存活的小队成员（谁近打谁，平手打玩家） */
+    const playerAdj = dist(e, player) === 1;
+    const sqAdj = (typeof squadAliveUnits === 'function')
+      ? (squadAliveUnits().find(s => dist(e, s) === 1) || null)
+      : null;
+    if (!playerAdj && !sqAdj) continue;
     e.attackedThisRound = true;
     gainFencerSp(1);
     /* 自爆虫（ISSUE-20261028-04）：贴到相邻格立即自爆。
@@ -6912,6 +7235,15 @@ async function resolveEnemyMeleeAttacks() {
      * 眩晕中不炸（上面的 stunTurns 分支已挡住）。免疫状态（风笛冲锋 / 泥岩满技力）照样免疫。 */
     if (e.type === 'bomber') {
       const boom = e.explodeDmg || 3;
+      /* ★ ISSUE-20261029-32：爆炸同样波及**相邻的小队成员**（自爆不看目标是谁）。 */
+      if (typeof squadAliveUnits === 'function') {
+        for (const s of squadAliveUnits()) {
+          if (dist(e, s) !== 1) continue;
+          slashFx(s.x, s.y, '#ff9f43');
+          hitFlashCell(s.x, s.y);
+          squadTakeDamage(s, boom, `自爆虫${i + 1}自爆`);
+        }
+      }
       if (tryPlayerImmuneHit(playerImmuneState(), `自爆虫${i+1}自爆`, `自爆虫${i+1}自爆`, '')) {
         e.hp = 0;
         killEnemy(e, { floatMsg: '自爆!', logText: `自爆虫${i+1}自爆，但玩家免疫了本次伤害` });
@@ -6927,6 +7259,29 @@ async function resolveEnemyMeleeAttacks() {
       e.hp = 0;
       killEnemy(e, { floatMsg: '自爆!', logText: `自爆虫${i+1}自爆后消散` });
       if (player.hp > 0) triggerFencerCounter();
+      refreshUnits();
+      await sleep(240);
+      continue;
+    }
+    /* ★ ISSUE-20261029-32：玩家不在贴身范围、但成员在 → 打成员。
+     *   成员走玩家同一套掷骰（rollEnemyDamage(e,'melee')）与 AC 检定，
+     *   但**没有**护盾 / 免疫 / 反击那套（那是玩家专属机制）。 */
+    if (!playerAdj && sqAdj) {
+      const sqStrMod = abilityMod(e.abilities.str);
+      const sqAtk = rollEnemyAttack(sqStrMod, e.prof, sqAdj.ac);
+      slashFx(sqAdj.x, sqAdj.y, '#ff6b6b');
+      hitFlashCell(sqAdj.x, sqAdj.y);
+      if (sqAtk.hit) {
+        let sqEd = rollEnemyDamage(e, 'melee');
+        let sqCrit = '';
+        if (sqAtk.nat20) { sqEd *= 2; sqCrit = '自然20暴击'; }
+        else if (isFacingTarget(e, sqAdj)) { sqEd *= 2; sqCrit = '朝向暴击'; }
+        squadTakeDamage(sqAdj, sqEd, `敌人${i + 1}近战`);
+        log(`敌人${i + 1}近战命中${sqAdj.icon} ${sqAdj.name}${sqCrit ? '（' + sqCrit + '）' : ''}，造成 ${sqEd} 伤害 (${fmtRoll(sqAtk, sqAdj.ac)})`);
+      } else {
+        missFx(sqAdj.x, sqAdj.y);
+        log(`敌人${i + 1}近战未命中 ${sqAdj.icon} ${sqAdj.name} (${fmtRoll(sqAtk, sqAdj.ac)})`);
+      }
       refreshUnits();
       await sleep(240);
       continue;
@@ -6979,6 +7334,13 @@ async function triggerSkillNode(pathIdx) {
   const here = playerPath[pathIdx];
   const prev = playerPath[pathIdx - 1];
   const isWaitStep = !!prev && here.x === prev.x && here.y === prev.y;
+  /* ★ ISSUE-20261029-34：起点没有冲锋方向，风笛的「高效冲击」不能原地发动。
+   * （toggleSkill 已经在设置时拦过一次，这里是兜底 —— 防止别处塞进来的技能节点。） */
+  if (pathIdx === 0 && selectedChar === 'wheelchair') {
+    log('✦ 技能节点（原地）：风笛的「高效冲击」需要沿移动方向冲锋，起点不能发动。');
+    floatText(player.x, player.y, '需移动节点', '#bbb');
+    return false;
+  }
   /* 风笛的冲锋只能沿移动方向前进，放在等待步上无效 */
   if (selectedChar === 'wheelchair' && isWaitStep) {
     log(`✦ 技能节点（第 ${pathIdx} 步）：风笛的「高效冲击」需要放在移动节点上，等待步不发动。`);
@@ -7068,6 +7430,15 @@ async function resolveStep(pIdxIn, eIdx) {
   const killedEnemyIds = new Set();
   let playerBlocked = false;
   let didAttackThisTick = false;
+
+  /* ★ ISSUE-20261029-34：原地技能（技能节点在起点 idx 0）——本回合第一个 tick 就发动，不移动。
+   * 必须早于任何路径步消费；与 pendingAttack 互斥（同一格只能有一种）。
+   * 放在 pendingAttack 分支之前：两者不可能同时为真，顺序不影响结果。 */
+  if (pendingStartSkill) {
+    pendingStartSkill = false;
+    await triggerSkillNode(0);
+    if (await settleTick()) return;
+  }
 
   if (pendingAttack) {
     pendingAttack = false;
@@ -7336,17 +7707,47 @@ async function resolveAlienShots(eIdx) {
     // ★ 还在移动途中 → 不开火（必须已经停在落点上）
     const ep = enemyPaths[i];
     if (ep && eIdx + 1 < ep.length) continue;
-    if (e.x !== player.x && e.y !== player.y) continue;
-    if (!hasLineOfSight(e, player)) continue;
+    /* ★ ISSUE-20261029-32：目标可以是玩家，也可以是小队成员（同行 / 同列 + 有视线）。
+     *   口径（人类 05:48）：谁近打谁，平手打玩家。 */
+    const shotTargets = [];
+    if (e.x === player.x || e.y === player.y) {
+      if (hasLineOfSight(e, player)) shotTargets.push({ kind: 'player', obj: player });
+    }
+    if (typeof squadAliveUnits === 'function') {
+      for (const s of squadAliveUnits()) {
+        if (e.x !== s.x && e.y !== s.y) continue;
+        if (!hasLineOfSight(e, s)) continue;
+        shotTargets.push({ kind: 'squad', obj: s });
+      }
+    }
+    if (!shotTargets.length) continue;
+    shotTargets.sort((a, b) => {
+      const da = Math.abs(a.obj.x - e.x) + Math.abs(a.obj.y - e.y);
+      const db = Math.abs(b.obj.x - e.x) + Math.abs(b.obj.y - e.y);
+      if (da !== db) return da - db;
+      return (a.kind === 'player' ? 0 : 1) - (b.kind === 'player' ? 0 : 1);
+    });
+    const shotTgt = shotTargets[0];
+    const isPlayerTgt = shotTgt.kind === 'player';
     e.attackedThisRound = true;
     gainFencerSp(1);
     const intMod = abilityMod(e.abilities.int);
-    const pAC = playerEffectiveAC();
+    const pAC = isPlayerTgt ? playerEffectiveAC() : shotTgt.obj.ac;
     const atk = rollEnemyAttack(intMod, e.prof, pAC);
-    await animateBullet({ x: e.x, y: e.y }, 'player', player, atk.nat20, true, 'enemy-' + e.id);
+    await animateBullet({ x: e.x, y: e.y },
+      isPlayerTgt ? 'player' : 'squad-' + shotTgt.obj.uid,
+      shotTgt.obj, atk.nat20, true, 'enemy-' + e.id);
     if (atk.hit) {
       let ed = rollEnemyDamage(e, 'ranged');
       if (atk.nat20) ed *= 2;
+      /* ★ ISSUE-20261029-32：打成员 —— 成员没有护盾 / 免疫那套 */
+      if (!isPlayerTgt) {
+        squadTakeDamage(shotTgt.obj, ed, `外星人${i + 1}射击`);
+        log(`外星人${i + 1}远程命中${shotTgt.obj.icon} ${shotTgt.obj.name}，造成 ${ed} 伤害 (${fmtRoll(atk, pAC)})`);
+        refreshUnits();
+        await sleep(240);
+        continue;
+      }
       // 免疫不等于跳过反击，否则满技力会永久锁死、眩晕永远不触发（见 tryPlayerImmuneHit）
       if (tryPlayerImmuneHit(playerImmuneState(), `外星人${i+1}远程命中`, `外星人${i+1}远程命中`, atk.nat20 ? '自然20暴击' : '')) {
         refreshUnits();
@@ -7360,8 +7761,9 @@ async function resolveAlienShots(eIdx) {
       log(`外星人${i+1}远程命中${shotRes.shielded ? '（护盾抵消）' : '，造成' + ed + '伤害'} (${fmtRoll(atk, pAC)})`);
       if (player.hp > 0) triggerFencerCounter();
     } else {
-      missFx(player.x, player.y);
-      log(`外星人${i+1}远程未命中 (${fmtRoll(atk, pAC)})`);
+      /* ★ ISSUE-20261029-32：未命中也要落在**实际目标**那一格（可能是成员） */
+      missFx(shotTgt.obj.x, shotTgt.obj.y);
+      log(`外星人${i+1}远程未命中${isPlayerTgt ? '' : shotTgt.obj.name} (${fmtRoll(atk, pAC)})`);
     }
     refreshUnits();
     await sleep(240);
