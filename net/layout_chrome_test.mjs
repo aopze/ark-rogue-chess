@@ -299,8 +299,11 @@ console.log('\n[6] 手机圆钮：纯触屏环境才挂载（第二个实例，�
   check('等待键 = 剩余可等待步数', String(waitExp) === String(waitShown), waitShown + ' vs ' + waitExp);
 
   const atkShown = (d2.querySelector('[data-vact="attack"] [data-k="atk"]') || {}).textContent;
-  const atkExp = w2.eval('(isRangedChar(selectedChar) ? player.rangedDmg : player.meleeDmg)');
-  check('攻击键 = 该角色对应伤害', String(atkExp) === String(atkShown), atkShown + ' vs ' + atkExp);
+  /* 2026-10-29 起伤害是骰子（近战 2d4+修正 / 远程 1d8+修正），虚拟键显示的是骰子文案而不是定值 */
+  const atkExp = w2.eval('(isRangedChar(selectedChar) ? playerRangedDmgLabel() : playerMeleeDmgLabel())');
+  check('攻击键 = 该角色对应伤害骰文案（2d4+修正 / 1d8+修正）',
+    String(atkExp) === String(atkShown) && /^[12]d[48]/.test(String(atkShown)),
+    atkShown + ' vs ' + atkExp);
 
   const ring = d2.querySelector('[data-vact="skill"] .vring');
   check('技能键上有技力环', !!ring);

@@ -71,12 +71,51 @@ function fmtRoll(atk, ac) {
   }
   return `d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total}${cmp}AC${ac}${forced}`;
 }
+/* =========================================================
+ * ★ 玩家伤害骰（2026-10-29，人类指令：近战 2d4 / 远程 1d8）
+ *
+ * 唯一伤害公式（每次出手各掷一次，技能倍率乘在**掷完之后的总伤害**上）：
+ *   近战 = 2d4 + ⌊(STR−10)/2⌋ + 锈蚀刀片层数      远程 = 1d8 + ⌊(INT−10)/2⌋
+ *   暴击 ×2（朝向暴击 / 自然20 / 8% 随机暴击 / 技能必暴）
+ *
+ * 为什么保留属性修正：加点系统（每级 2 点、上限 20）是升级唯一手感来源，
+ * 剥掉属性加成会让「加力量/智力」对伤害完全无效，六维只剩 HP/AC/移动/可见步。
+ * 为什么用 randInt 而不是别的随机源：randInt → 全局 rng()，与命中检定同一条随机流，
+ * 保证「同一回合内可复现」（测试用 __setD20 之类只替换 d20 时，伤害骰仍然真实随机）。
+ * ★ 面板用的 meleeDmg / rangedDmg 从此只是**期望值**（diceAvg + 修正），不要再拿它们当伤害用。
+ * ========================================================= */
+function rollDamageDice(dd) {
+  let total = 0;
+  for (let i = 0; i < dd.n; i++) total += 1 + randInt(dd.s);
+  return total;
+}
+function playerMeleeFlatBonus() { return abilityMod(playerStats.abilities.str) + buffMeleeBonus(); }
+function playerRangedFlatBonus() { return abilityMod(playerStats.abilities.int); }
+/* 真正用于扣血的入口 —— 战斗内所有近战/远程伤害都必须走这两个（含技能、冲锋、相杀、反击）。 */
+function rollPlayerMeleeDamage() {
+  return Math.max(1, rollDamageDice(PLAYER_MELEE_DICE) + playerMeleeFlatBonus());
+}
+function rollPlayerRangedDamage() {
+  return Math.max(1, rollDamageDice(PLAYER_RANGED_DICE) + playerRangedFlatBonus());
+}
+/* 面板文案：`2d4+1` / `1d8-1` / `2d4`（修正为 0 时不显示符号） */
+function fmtDmgDice(dd, flat) {
+  const base = diceLabel(dd);
+  if (flat > 0) return base + '+' + flat;
+  if (flat < 0) return base + '−' + Math.abs(flat);
+  return base;
+}
+function playerMeleeDmgLabel() { return fmtDmgDice(PLAYER_MELEE_DICE, playerMeleeFlatBonus()); }
+function playerRangedDmgLabel() { return fmtDmgDice(PLAYER_RANGED_DICE, playerRangedFlatBonus()); }
+
 function recomputePlayerDerivedStats() {
   const a = playerStats.abilities;
   playerStats.maxHp = a.con + BASE_HP_BONUS + levelHpBonus + buffHpBonus();
   playerStats.move = Math.max(1, Math.floor(a.dex / 2));
-  playerStats.meleeDmg = Math.max(1, 1 + abilityMod(a.str)) + buffMeleeBonus();
-  playerStats.rangedDmg = Math.max(1, 1 + abilityMod(a.int));
+  /* ★ 这两个字段**只是期望值**（AI 估值 / 面板兜底 / 日志），实际扣血一律用 rollPlayer*Damage()。
+   * diceAvg 与 rollDamageDice 的期望对齐：2d4→5、1d8→5。 */
+  playerStats.meleeDmg = Math.max(1, diceAvg(PLAYER_MELEE_DICE) + playerMeleeFlatBonus());
+  playerStats.rangedDmg = Math.max(1, diceAvg(PLAYER_RANGED_DICE) + playerRangedFlatBonus());
   playerStats.visibleSteps = 1 + Math.max(0, abilityMod(a.wis));
   playerStats.ac = computeAC(a);
   /* ISSUE-20261028-07：熟练加值改为绑定**角色等级**，每级 +1。

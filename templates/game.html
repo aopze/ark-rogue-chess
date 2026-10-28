@@ -262,6 +262,27 @@
     font-size: 14px; line-height: 1; cursor: pointer; font-family: inherit;
   }
   .drawer-x:active { transform: scale(.94); }
+  /* ★ 设置面板专用关闭按钮（2026-10-29 人类 01:42 指令）：
+     「删掉面板里那个小 ✕，改成和 ⚙ 入口按钮同位置、同尺寸的关闭按钮，再按一下关闭，标题挪到顶部右侧」。
+     尺寸/圆角/配色/边框全部照抄 #setOpenBtn（var(--cell)），位置也用同一套 --corner-x / --corner-y，
+     所以抽屉滑进来时，视觉上就是「棋盘右上格那个 ⚙ 原地变成了 ✕」，点它即收起（.drawer 是 fixed，
+     内部绝对定位的 top/right 与屏幕坐标同源）。
+     属性/升级两个抽屉**不动**：它们的入口不在棋盘角上，没有「同一个位置」可对齐。 */
+  #drawerSettings .drawer-corner-x {
+    position: absolute; top: var(--corner-y); right: var(--corner-x); z-index: 2;
+    display: flex; width: var(--cell); height: var(--cell);
+    align-items: center; justify-content: center; padding: 0;
+    background: rgba(24,24,42,.9); color: #cfe6ff;
+    border: 1px solid #3a3a55; border-radius: 3px;
+    font-size: calc(var(--cell) * 0.5); line-height: 1;
+    cursor: pointer; touch-action: manipulation; font-family: inherit;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  #drawerSettings .drawer-corner-x:hover { background: rgba(48,48,72,.95); color: #fff; }
+  #drawerSettings .drawer-corner-x:active { transform: scale(.92); }
+  /* 标题靠右：右侧要给那个格子大小的关闭按钮让出位置（不然会压在标题上） */
+  .drawer-head.head-end { justify-content: flex-end; padding-right: calc(var(--corner-x) + var(--cell) + 8px); }
   .drawer-body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 10px;
@@ -556,11 +577,12 @@
 
 <!-- ① 设置抽屉（原 #logPanel 悬浮窗：⚔️联机 / ⟲重开 / ⟳旋转 + 战斗日志） -->
 <section class="drawer" id="drawerSettings" data-drawer="settings" aria-hidden="true">
-  <header class="drawer-head">
-    <span class="drawer-title">设置</span>
+  <header class="drawer-head head-end">
     <span id="setVer" title="当前版本"></span>
-    <button class="drawer-x" data-drawer-close title="关闭">✕</button>
+    <span class="drawer-title">设置</span>
   </header>
+  <!-- 关闭 = 棋盘右上格那个位置/那个尺寸（原 ⚙ 的形状），点一下收起，见 CSS .drawer-corner-x -->
+  <button class="drawer-corner-x" data-drawer-close title="关闭设置">✕</button>
   <div class="drawer-body">
     <div id="setBtns">
       <button id="setPvpBtn" title="联机对战">⚔️ 联机</button>
@@ -757,7 +779,7 @@ function triggerFencerCounter() {
   const targets = enemies.filter(e => e.alive && cheb(e, player) === 1);
   if (targets.length > 0) {
     const target = targets[randInt(targets.length)];
-    const dmg = player.meleeDmg * 2;
+    const dmg = rollPlayerMeleeDamage() * 2;
     /* 护盾词缀（ISSUE-20261028-05）：第一击被完全吸收 */
     const dealt = enemyTakeDamage(target, dmg);
     if (dealt > 0) {
@@ -822,7 +844,7 @@ async function executeAmiyaBurst(count) {
     /* 只要出手就能看到目标意图 */
     amiyaMarkReveal(target);
     await animateBullet({ x: player.x, y: player.y }, 'enemy-' + target.id, target, isCrit, false, 'player');
-    const dmg = player.rangedDmg * 2;
+    const dmg = rollPlayerRangedDamage() * 2;
     const dealt = enemyTakeDamage(target, dmg);
     /* 精神爆发的击杀不给技力（否则倾泻过程中边杀边攒，会滚雪球） */
     if (target.hp <= 0) target.alive = false;
@@ -1390,7 +1412,8 @@ function updateStats() {
   const atkNodes = attackIndices.length;
   const skillNodes = skillIndices.length;
   /* 角色只有一种伤害方式（攻击节点类型决定），只显示对应的那一个，另一格留空保持 2×2 */
-  const dmgVal = isRanged ? player.rangedDmg : player.meleeDmg;
+  /* 伤害格直接显示骰子文案（2d4+1 / 1d8+1），不再显示定值期望 —— 实际每次出手都要掷 */
+  const dmgVal = isRanged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
   const dmgProf = isRanged ? player.rangedProf : player.meleeProf;
   /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = 1（scout 奖励可 +1） */
   const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
@@ -1434,7 +1457,7 @@ function updateStats() {
     badges.push('<span class="badge gold">⚙️ 岩崩锤就绪 · 双击路径节点发动</span>');
   }
   if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-    badges.push('<span class="badge gold">冲锋中 · 禁攻击/趁乱</span>');
+    badges.push('<span class="badge gold">冲锋中 · 禁攻击</span>');
   } else if (selectedChar === 'wheelchair') {
     if (pathHasCharge(playerPath)) {
       /* 额度 = 剩余移动步数（ISSUE-20261028-01）：顺带在规划期就把「冲几格 / 打几次」显示出来 */
@@ -2365,7 +2388,8 @@ async function resolvePlayerAttack() {
         await sleep(120);
         continue;
       }
-      let dmg = player.meleeDmg;
+      /* 伤害 = 2d4 + 力量修正 + 锈蚀刀片（每次都掷一次），冲锋/暴击再乘在总伤害上 */
+      let dmg = rollPlayerMeleeDamage();
       if (selectedChar === 'wheelchair' && playerChargingThisTurn) dmg *= 2;
       const critTag = meleeCritTag(target, atk, 'cone');
       const isCrit = !!critTag;
@@ -2443,7 +2467,7 @@ async function resolvePlayerAttack() {
         addBloodAt(target.x, target.y);
       }
       if (hit) {
-        const dmg = player.rangedDmg * (isCrit ? 2 : 1);
+        const dmg = rollPlayerRangedDamage() * (isCrit ? 2 : 1);
         const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
         const dealt = enemyTakeDamage(target, dmg);
         if (target.hp <= 0) {
@@ -2736,7 +2760,7 @@ async function resolveStep(pIdxIn, eIdx) {
 
       for (const em of shootouts) {
         const ex = em.unit.x, ey = em.unit.y;
-        let pd = player.meleeDmg * 2;
+        let pd = rollPlayerMeleeDamage() * 2;
         if (playerChargingThisTurn) pd *= 2;
         const pdDealt = enemyTakeDamage(em.unit, pd);
         if (playerChargingThisTurn) {
@@ -2816,7 +2840,7 @@ async function resolveStep(pIdxIn, eIdx) {
       }
       if (blockingEnemy) {
         if (playerChargingThisTurn) {
-          let dmg = player.meleeDmg * 2;
+          let dmg = rollPlayerMeleeDamage() * 2;
           const dmgDealt = enemyTakeDamage(blockingEnemy, dmg);
           playerChargeCausedDamage = true;
           playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 撞击消耗 1 次额度

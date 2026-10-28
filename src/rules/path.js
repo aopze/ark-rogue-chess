@@ -140,7 +140,7 @@ function findFacingEnemiesWithin(origin, dir, maxDist) {
 
 /* 结算冲锋「剩余额度」（ISSUE-20261028-01）：
  * 撞到没秒掉的敌人会立即停下，但剩余攻击次数不作废 —— 继续按朝向逐次输出，
- * 直到额度用完或前方 3 格内再无可命中的敌人。每次伤害与冲锋撞击一致（meleeDmg × 2）。 */
+ * 直到额度用完或前方 3 格内再无可命中的敌人。每次伤害与冲锋撞击一致：近战伤害骰（2d4+修正）× 2。 */
 function resolveChargeRemainingHits() {
   if (!playerChargingThisTurn || !player || !player.alive || playerChargeBudget <= 0) return;
   const origin = { x: player.x, y: player.y };
@@ -149,7 +149,7 @@ function resolveChargeRemainingHits() {
     const list = findFacingEnemiesWithin(origin, playerChargeDir, CHARGE_FINISH_RANGE);
     if (list.length === 0) break;
     const target = list[0];                 // 优先最近的
-    const dmg = player.meleeDmg * 2;
+    const dmg = rollPlayerMeleeDamage() * 2;
     target.hp -= dmg;
     playerChargeCausedDamage = true;
     playerChargeBudget -= 1;

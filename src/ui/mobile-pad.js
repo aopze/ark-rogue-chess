@@ -56,9 +56,9 @@ function vpadSpInfo() {
 
 function vpadDamageValue() {
   if (!player) return '—';
+  /* 显示骰子文案（2d4+1 / 1d8+1）而不是定值：实际每次出手都掷骰，写死数字会骗人 */
   const ranged = isRangedChar(selectedChar);
-  const v = ranged ? player.rangedDmg : player.meleeDmg;
-  return String(Math.max(1, v || 0));
+  return ranged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
 }
 
 function mountVirtualPad() {

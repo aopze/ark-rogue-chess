@@ -43,13 +43,20 @@
     box-shadow:12px 0 32px rgba(0,0,0,.5);
     transform:translateX(-100%); transition:transform .22s ease-out; }
   #lobbyDrawer.on { transform:translateX(0); }
-  .dhead { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 12px 10px;
-    border-bottom:1px solid rgba(255,255,255,.08); }
+  /* 2026-10-29 人类 01:42：删掉 header 里那个小 ✕，标题挪到顶部右侧；
+     关闭改由「与 ♟ 入口角标同位置、同尺寸」的按钮负责（左上角），视觉上等于 ♟ 原地变成 ✕。 */
+  .dhead { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 12px 10px 56px;
+    border-bottom:1px solid rgba(255,255,255,.08); justify-content:flex-end; }
   .dtitle { font-size:14px; font-weight:800; letter-spacing:1px; color:#ffd166; }
-  .dclose { margin-left:auto; width:32px; height:32px; padding:0; display:flex; align-items:center;
-    justify-content:center; border-radius:9px; border:1px solid rgba(255,255,255,.16);
-    background:rgba(255,255,255,.06); color:#cfd2ff; font-size:15px; line-height:1; cursor:pointer; font-family:inherit; }
-  .dclose:active { transform:scale(.94); }
+  /* 角标尺寸对齐 ♟（棋盘左上格）：写死 36×36 是因为外壳读不到 iframe 里的 --cell；
+     与游戏内 .drawer-corner-x 保持同一套视觉语言（深底 / 细边 / 方角 / 同字重） */
+  .dcorner { position:absolute; left:10px; top:10px; z-index:2;
+    width:36px; height:36px; padding:0; display:flex; align-items:center; justify-content:center;
+    border-radius:3px; border:1px solid #3a3a55; background:rgba(24,24,42,.9); color:#cfe6ff;
+    font-size:18px; line-height:1; cursor:pointer; font-family:inherit;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.4); }
+  .dcorner:hover { background:rgba(48,48,72,.95); color:#fff; }
+  .dcorner:active { transform:scale(.92); }
   .dbody { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
     padding:12px; display:flex; flex-direction:column; gap:12px; }
 
@@ -139,9 +146,9 @@
 
 <!-- 左侧抽屉：① 我的账号 ② 排行榜 Top10 ③ 完整榜入口 -->
 <aside id="lobbyDrawer" tabindex="-1" aria-hidden="true" aria-label="账号与排行榜">
+  <button id="lobbyCornerClose" class="dcorner" title="关闭">✕</button>
   <header class="dhead">
     <span class="dtitle">账号与排行</span>
-    <button id="lobbyClose" class="dclose" title="关闭">✕</button>
   </header>
   <div class="dbody">
     <div class="acct">
@@ -247,7 +254,7 @@ var APP = {
 var MY_SCORE = null;
 
 // 构建号：每次发布 game.html 时同步改这里，iframe 用 ?v=BUILD 强制拿新版本
-var BUILD = '10290130';
+var BUILD = '10290150';
 
 var REPORT_URL_FALLBACK = '';
 var BOT_USER_FALLBACK = 'yu7_bot';
@@ -707,7 +714,8 @@ function init(){
   if(handle) handle.addEventListener('click', function(){ setLobbyOpen(!lobbyOpen); });
   // 画布/遮罩/✕ 关闭
   var mask = $('lobbyMask'); if(mask) mask.addEventListener('click', function(){ setLobbyOpen(false); });
-  var lc = $('lobbyClose'); if(lc) lc.addEventListener('click', function(){ setLobbyOpen(false); });
+  var lc = $('lobbyCornerClose'); if(lc) lc.addEventListener('click', function(){ setLobbyOpen(false); });
+  /* 点遮罩也能关（保留旧行为，遮罩不在本次改动范围内） */
   // Esc 关闭（焦点在抽屉里时有效；iframe 内的 Esc 由游戏自己处理）
   document.addEventListener('keydown', function(e){
     if(e.key === 'Escape' && lobbyOpen){ setLobbyOpen(false); e.preventDefault(); }

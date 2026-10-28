@@ -262,6 +262,27 @@
     font-size: 14px; line-height: 1; cursor: pointer; font-family: inherit;
   }
   .drawer-x:active { transform: scale(.94); }
+  /* ★ 设置面板专用关闭按钮（2026-10-29 人类 01:42 指令）：
+     「删掉面板里那个小 ✕，改成和 ⚙ 入口按钮同位置、同尺寸的关闭按钮，再按一下关闭，标题挪到顶部右侧」。
+     尺寸/圆角/配色/边框全部照抄 #setOpenBtn（var(--cell)），位置也用同一套 --corner-x / --corner-y，
+     所以抽屉滑进来时，视觉上就是「棋盘右上格那个 ⚙ 原地变成了 ✕」，点它即收起（.drawer 是 fixed，
+     内部绝对定位的 top/right 与屏幕坐标同源）。
+     属性/升级两个抽屉**不动**：它们的入口不在棋盘角上，没有「同一个位置」可对齐。 */
+  #drawerSettings .drawer-corner-x {
+    position: absolute; top: var(--corner-y); right: var(--corner-x); z-index: 2;
+    display: flex; width: var(--cell); height: var(--cell);
+    align-items: center; justify-content: center; padding: 0;
+    background: rgba(24,24,42,.9); color: #cfe6ff;
+    border: 1px solid #3a3a55; border-radius: 3px;
+    font-size: calc(var(--cell) * 0.5); line-height: 1;
+    cursor: pointer; touch-action: manipulation; font-family: inherit;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  #drawerSettings .drawer-corner-x:hover { background: rgba(48,48,72,.95); color: #fff; }
+  #drawerSettings .drawer-corner-x:active { transform: scale(.92); }
+  /* 标题靠右：右侧要给那个格子大小的关闭按钮让出位置（不然会压在标题上） */
+  .drawer-head.head-end { justify-content: flex-end; padding-right: calc(var(--corner-x) + var(--cell) + 8px); }
   .drawer-body {
     flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
     padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 10px;
@@ -556,11 +577,12 @@
 
 <!-- ① 设置抽屉（原 #logPanel 悬浮窗：⚔️联机 / ⟲重开 / ⟳旋转 + 战斗日志） -->
 <section class="drawer" id="drawerSettings" data-drawer="settings" aria-hidden="true">
-  <header class="drawer-head">
-    <span class="drawer-title">设置</span>
+  <header class="drawer-head head-end">
     <span id="setVer" title="当前版本"></span>
-    <button class="drawer-x" data-drawer-close title="关闭">✕</button>
+    <span class="drawer-title">设置</span>
   </header>
+  <!-- 关闭 = 棋盘右上格那个位置/那个尺寸（原 ⚙ 的形状），点一下收起，见 CSS .drawer-corner-x -->
+  <button class="drawer-corner-x" data-drawer-close title="关闭设置">✕</button>
   <div class="drawer-body">
     <div id="setBtns">
       <button id="setPvpBtn" title="联机对战">⚔️ 联机</button>
@@ -617,9 +639,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290130',
-  commit:  '323e435f309d4720aa780e6efebce041d7dc40dd',
-  builtAt: '2026-10-28T17:31:05Z'
+  build:   '10290150',
+  commit:  '86dd2dd9aa29022bcae31b78b5ecec3e760c0e66',
+  builtAt: '2026-10-28T17:50:37Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -666,6 +688,13 @@ const ABILITY_CAP = 20;
  * 旧常量 ABILITY_POINTS_PER_LEVEL = 1 已移除（曾每通关 1 关给 1 点）。 */
 const ABILITY_POINTS_PER_LEVELUP = 2;
 const PLAYER_RANGE = 3;   // 远程角色的攻击节点射程（近战角色攻击节点只打相邻 1 格）
+/* ★ 玩家伤害骰（人类 2026-10-29 01:37 指定）：近战 2d4、远程 1d8。
+ * 公式 = 骰子 + 属性修正（近战 STR / 远程 INT）+ 锈蚀刀片（仅近战），暴击再 ×2（乘在总伤害上）。
+ * 与敌人侧同一套 dice 形（{n, s}），rollEnemyDamage 用掷骰、面板用 diceAvg 期望值。
+ * 为什么不再用「1 + 属性修正」的定值：定值让近战只有 2 点，砍不动 18 HP 的敌人（删除自动补刀后
+ * 一回合只能出手 1 次，定值撑不起单回合输出）；改成骰子后近战期望 2d4+1=6、远程 1d8+1=5.5。 */
+const PLAYER_MELEE_DICE  = { n: 2, s: 4 };   // 2d4
+const PLAYER_RANGED_DICE = { n: 1, s: 8 };   // 1d8
 /* 玩家基础 HP 加成（ISSUE-20261028-04 配套）。
  * 敌人伤害从「常量 1」改为骰子后，首关承伤期望从每回合 0.99 涨到 1.38（+39%），
  * 玩家 HP10 撑不到清场，实测「第 1 关即死」比例 40% → 55%。补 4 点基础 HP 把它拉回来：
@@ -1861,12 +1890,51 @@ function fmtRoll(atk, ac) {
   }
   return `d20=${atk.roll}${atk.mod >= 0 ? '+' : ''}${atk.mod}${atk.prof ? '+熟' + atk.prof : ''}=${atk.total}${cmp}AC${ac}${forced}`;
 }
+/* =========================================================
+ * ★ 玩家伤害骰（2026-10-29，人类指令：近战 2d4 / 远程 1d8）
+ *
+ * 唯一伤害公式（每次出手各掷一次，技能倍率乘在**掷完之后的总伤害**上）：
+ *   近战 = 2d4 + ⌊(STR−10)/2⌋ + 锈蚀刀片层数      远程 = 1d8 + ⌊(INT−10)/2⌋
+ *   暴击 ×2（朝向暴击 / 自然20 / 8% 随机暴击 / 技能必暴）
+ *
+ * 为什么保留属性修正：加点系统（每级 2 点、上限 20）是升级唯一手感来源，
+ * 剥掉属性加成会让「加力量/智力」对伤害完全无效，六维只剩 HP/AC/移动/可见步。
+ * 为什么用 randInt 而不是别的随机源：randInt → 全局 rng()，与命中检定同一条随机流，
+ * 保证「同一回合内可复现」（测试用 __setD20 之类只替换 d20 时，伤害骰仍然真实随机）。
+ * ★ 面板用的 meleeDmg / rangedDmg 从此只是**期望值**（diceAvg + 修正），不要再拿它们当伤害用。
+ * ========================================================= */
+function rollDamageDice(dd) {
+  let total = 0;
+  for (let i = 0; i < dd.n; i++) total += 1 + randInt(dd.s);
+  return total;
+}
+function playerMeleeFlatBonus() { return abilityMod(playerStats.abilities.str) + buffMeleeBonus(); }
+function playerRangedFlatBonus() { return abilityMod(playerStats.abilities.int); }
+/* 真正用于扣血的入口 —— 战斗内所有近战/远程伤害都必须走这两个（含技能、冲锋、相杀、反击）。 */
+function rollPlayerMeleeDamage() {
+  return Math.max(1, rollDamageDice(PLAYER_MELEE_DICE) + playerMeleeFlatBonus());
+}
+function rollPlayerRangedDamage() {
+  return Math.max(1, rollDamageDice(PLAYER_RANGED_DICE) + playerRangedFlatBonus());
+}
+/* 面板文案：`2d4+1` / `1d8-1` / `2d4`（修正为 0 时不显示符号） */
+function fmtDmgDice(dd, flat) {
+  const base = diceLabel(dd);
+  if (flat > 0) return base + '+' + flat;
+  if (flat < 0) return base + '−' + Math.abs(flat);
+  return base;
+}
+function playerMeleeDmgLabel() { return fmtDmgDice(PLAYER_MELEE_DICE, playerMeleeFlatBonus()); }
+function playerRangedDmgLabel() { return fmtDmgDice(PLAYER_RANGED_DICE, playerRangedFlatBonus()); }
+
 function recomputePlayerDerivedStats() {
   const a = playerStats.abilities;
   playerStats.maxHp = a.con + BASE_HP_BONUS + levelHpBonus + buffHpBonus();
   playerStats.move = Math.max(1, Math.floor(a.dex / 2));
-  playerStats.meleeDmg = Math.max(1, 1 + abilityMod(a.str)) + buffMeleeBonus();
-  playerStats.rangedDmg = Math.max(1, 1 + abilityMod(a.int));
+  /* ★ 这两个字段**只是期望值**（AI 估值 / 面板兜底 / 日志），实际扣血一律用 rollPlayer*Damage()。
+   * diceAvg 与 rollDamageDice 的期望对齐：2d4→5、1d8→5。 */
+  playerStats.meleeDmg = Math.max(1, diceAvg(PLAYER_MELEE_DICE) + playerMeleeFlatBonus());
+  playerStats.rangedDmg = Math.max(1, diceAvg(PLAYER_RANGED_DICE) + playerRangedFlatBonus());
   playerStats.visibleSteps = 1 + Math.max(0, abilityMod(a.wis));
   playerStats.ac = computeAC(a);
   /* ISSUE-20261028-07：熟练加值改为绑定**角色等级**，每级 +1。
@@ -2201,7 +2269,7 @@ function findFacingEnemiesWithin(origin, dir, maxDist) {
 
 /* 结算冲锋「剩余额度」（ISSUE-20261028-01）：
  * 撞到没秒掉的敌人会立即停下，但剩余攻击次数不作废 —— 继续按朝向逐次输出，
- * 直到额度用完或前方 3 格内再无可命中的敌人。每次伤害与冲锋撞击一致（meleeDmg × 2）。 */
+ * 直到额度用完或前方 3 格内再无可命中的敌人。每次伤害与冲锋撞击一致：近战伤害骰（2d4+修正）× 2。 */
 function resolveChargeRemainingHits() {
   if (!playerChargingThisTurn || !player || !player.alive || playerChargeBudget <= 0) return;
   const origin = { x: player.x, y: player.y };
@@ -2210,7 +2278,7 @@ function resolveChargeRemainingHits() {
     const list = findFacingEnemiesWithin(origin, playerChargeDir, CHARGE_FINISH_RANGE);
     if (list.length === 0) break;
     const target = list[0];                 // 优先最近的
-    const dmg = player.meleeDmg * 2;
+    const dmg = rollPlayerMeleeDamage() * 2;
     target.hp -= dmg;
     playerChargeCausedDamage = true;
     playerChargeBudget -= 1;
@@ -3279,9 +3347,9 @@ function vpadSpInfo() {
 
 function vpadDamageValue() {
   if (!player) return '—';
+  /* 显示骰子文案（2d4+1 / 1d8+1）而不是定值：实际每次出手都掷骰，写死数字会骗人 */
   const ranged = isRangedChar(selectedChar);
-  const v = ranged ? player.rangedDmg : player.meleeDmg;
-  return String(Math.max(1, v || 0));
+  return ranged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
 }
 
 function mountVirtualPad() {
@@ -3476,7 +3544,7 @@ function triggerFencerCounter() {
   const targets = enemies.filter(e => e.alive && cheb(e, player) === 1);
   if (targets.length > 0) {
     const target = targets[randInt(targets.length)];
-    const dmg = player.meleeDmg * 2;
+    const dmg = rollPlayerMeleeDamage() * 2;
     /* 护盾词缀（ISSUE-20261028-05）：第一击被完全吸收 */
     const dealt = enemyTakeDamage(target, dmg);
     if (dealt > 0) {
@@ -3541,7 +3609,7 @@ async function executeAmiyaBurst(count) {
     /* 只要出手就能看到目标意图 */
     amiyaMarkReveal(target);
     await animateBullet({ x: player.x, y: player.y }, 'enemy-' + target.id, target, isCrit, false, 'player');
-    const dmg = player.rangedDmg * 2;
+    const dmg = rollPlayerRangedDamage() * 2;
     const dealt = enemyTakeDamage(target, dmg);
     /* 精神爆发的击杀不给技力（否则倾泻过程中边杀边攒，会滚雪球） */
     if (target.hp <= 0) target.alive = false;
@@ -4396,7 +4464,8 @@ function updateStats() {
   const atkNodes = attackIndices.length;
   const skillNodes = skillIndices.length;
   /* 角色只有一种伤害方式（攻击节点类型决定），只显示对应的那一个，另一格留空保持 2×2 */
-  const dmgVal = isRanged ? player.rangedDmg : player.meleeDmg;
+  /* 伤害格直接显示骰子文案（2d4+1 / 1d8+1），不再显示定值期望 —— 实际每次出手都要掷 */
+  const dmgVal = isRanged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
   const dmgProf = isRanged ? player.rangedProf : player.meleeProf;
   /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = 1（scout 奖励可 +1） */
   const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
@@ -4440,7 +4509,7 @@ function updateStats() {
     badges.push('<span class="badge gold">⚙️ 岩崩锤就绪 · 双击路径节点发动</span>');
   }
   if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-    badges.push('<span class="badge gold">冲锋中 · 禁攻击/趁乱</span>');
+    badges.push('<span class="badge gold">冲锋中 · 禁攻击</span>');
   } else if (selectedChar === 'wheelchair') {
     if (pathHasCharge(playerPath)) {
       /* 额度 = 剩余移动步数（ISSUE-20261028-01）：顺带在规划期就把「冲几格 / 打几次」显示出来 */
@@ -5371,7 +5440,8 @@ async function resolvePlayerAttack() {
         await sleep(120);
         continue;
       }
-      let dmg = player.meleeDmg;
+      /* 伤害 = 2d4 + 力量修正 + 锈蚀刀片（每次都掷一次），冲锋/暴击再乘在总伤害上 */
+      let dmg = rollPlayerMeleeDamage();
       if (selectedChar === 'wheelchair' && playerChargingThisTurn) dmg *= 2;
       const critTag = meleeCritTag(target, atk, 'cone');
       const isCrit = !!critTag;
@@ -5449,7 +5519,7 @@ async function resolvePlayerAttack() {
         addBloodAt(target.x, target.y);
       }
       if (hit) {
-        const dmg = player.rangedDmg * (isCrit ? 2 : 1);
+        const dmg = rollPlayerRangedDamage() * (isCrit ? 2 : 1);
         const forcedTag = atk.forcedHit ? ' · 必定命中' : '';
         const dealt = enemyTakeDamage(target, dmg);
         if (target.hp <= 0) {
@@ -5742,7 +5812,7 @@ async function resolveStep(pIdxIn, eIdx) {
 
       for (const em of shootouts) {
         const ex = em.unit.x, ey = em.unit.y;
-        let pd = player.meleeDmg * 2;
+        let pd = rollPlayerMeleeDamage() * 2;
         if (playerChargingThisTurn) pd *= 2;
         const pdDealt = enemyTakeDamage(em.unit, pd);
         if (playerChargingThisTurn) {
@@ -5822,7 +5892,7 @@ async function resolveStep(pIdxIn, eIdx) {
       }
       if (blockingEnemy) {
         if (playerChargingThisTurn) {
-          let dmg = player.meleeDmg * 2;
+          let dmg = rollPlayerMeleeDamage() * 2;
           const dmgDealt = enemyTakeDamage(blockingEnemy, dmg);
           playerChargeCausedDamage = true;
           playerChargeBudget = Math.max(0, playerChargeBudget - 1);   // 撞击消耗 1 次额度

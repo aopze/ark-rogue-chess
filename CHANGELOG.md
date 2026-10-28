@@ -103,6 +103,69 @@
   原第 6 组（验证被动吃朝向必中）整组替换为「机制已删除」的正面验证 + 「攻击节点仍是唯一出手口」。
 - 删除 `cdp_scuffle_test.cjs`（它验证的是「收窄」方案，该方案已被彻底删除取代）。
 
+## [10290150] — 2026-10-29 · 伤害改骰子（近战 2d4 / 远程 1d8）+ 关闭按钮改角标式
+
+> **已发版**：根目录 `game.html` **337,435 B / sha256 `81a38643`** / build `10290150`，
+> `index.html` 的 `var BUILD` 同步（双 BUILD 一致）。
+> 人类 01:37：「近战攻击造成 2d4 伤害，远程攻击造成 1d8 伤害」；01:42：「账号/排行/设置面板关闭按钮删掉，
+> 改成面板里与入口按钮同位置、同尺寸的关闭按钮，再按一下关闭，标题放到面板顶部右侧」。
+
+### ① 伤害改骰子
+
+| | 公式 | 起手（属性 12） | 期望 |
+|---|---|---|---|
+| 近战（风笛 / 泥岩） | 2d4 + ⌊(STR−10)/2⌋ + 锈蚀刀片层数 | 2d4+1 | 6.0 |
+| 远程（华法琳 / 阿米娅） | 1d8 + ⌊(INT−10)/2⌋ | 1d8+1 | 5.5 |
+
+- 常量：`src/data/constants.js` → `PLAYER_MELEE_DICE = {n:2,s:4}`、`PLAYER_RANGED_DICE = {n:1,s:8}`。
+- 新函数：`src/rules/dnd.js` → `rollDamageDice()` / `rollPlayerMeleeDamage()` / `rollPlayerRangedDamage()` /
+  `fmtDmgDice()` / `playerMeleeDmgLabel()` / `playerRangedDmgLabel()`；`recomputePlayerDerivedStats()` 里的
+  `meleeDmg / rangedDmg` **降级为期望值**（`diceAvg` + 修正），只给 AI 估值与兜底用。
+- **7 处伤害点全部改为掷骰**：近战攻击节点、远程攻击节点、岩崩锤反击、精神爆发、相杀、冲锋撞击、冲锋追击（`path.js`）。
+- 暴击乘在**掷完之后的总伤害**上（×2）：朝向暴击 / 自然 20 / 8% 随机 / 技能必暴。
+- 面板改显示骰子文案：角色卡数值格（`templates/game.html`）与手机虚拟键（`src/ui/mobile-pad.js`）显示 `2d4+1` / `1d8+1`。
+- `net/layout_chrome_test.mjs` 断言从「= 定值」改为「= 骰子文案」。
+- **PvP 未改**（`net/pvp-core.js` 是独立逐 tick 相杀模型）。
+
+### ② 关闭按钮改角标式
+
+- 设置抽屉：删 header 里 30px 的 `.drawer-x`；新增 `.drawer-corner-x`，尺寸 `var(--cell)`、位置 `var(--corner-x/y)`，
+  与棋盘右上格 ⚙ 完全同尺寸同位置；`header` 加 `.head-end`（标题靠右，右 padding 让出格子宽度）。
+- `index.html`「账号与排行」抽屉：删 `#lobbyClose`；新增 `#lobbyCornerClose`（左上 10px、36×36）；
+  `.dhead` 改 `justify-content:flex-end`、左 padding 56px；`.dclose` 样式停用（保留注释）。
+- **不动**：属性抽屉、升级奖励抽屉（入口不在棋盘角上）、完整排行榜浮层的 `#rankClose`（全屏 iframe 无其他退出路径）。
+
+### 平衡回归（80 局，参数与前两版一致）
+
+| 角色 | `10290123` | `10290150` | `10290058`（删被动前） |
+|---|---|---|---|
+| 风笛 | 1.20 关 | **1.80 关** | 3.00 关 |
+| 泥岩 | 1.00 关 | **1.80 关** | 2.80 关 |
+| 华法琳 | 1.00 关 | **1.20 关** | 1.60 关 |
+| 阿米娅 | 1.00 关 | **1.00 关** | 1.00 关 |
+
+均承伤仍 ≈ 14.6（满血）→ 现阶段瓶颈是**承伤**不是输出；继续加伤害收益递减，下一轮该动敌人伤害 / 玩家 HP / 动作数。
+数据：`SD工作空间/测试套件/runs_1029/`（`noscuffle_*`、`dice_*` 各 80 局 + 成绩表）。
+
+### 门禁（全部在发版产物上跑）
+
+| 套件 | 结果 |
+|---|---|
+| `node build/bundle_test.mjs` | 58/58 |
+| `net/dom_load_test.mjs` | 23/23 |
+| `net/layout_chrome_test.mjs` | 53/53 |
+| `net/lobby_shell_test.mjs` | 39/39 |
+| `net/battle_ui_test.mjs` | 24/24 |
+| `cdp_facing_test.cjs` | 24/24 |
+| `cdp_startcell_attack_test.cjs` | 14/14 |
+| `cdp_lobby_test.cjs` | 30/30 |
+| **`cdp_close_btn_shots.cjs`（新增）** | **14/14** |
+
+### 顺带记录（未修）
+
+- 远程攻击节点重复计数 `playerAttacksDone / playerActionsUsed`（`10290058` 起就有）→
+  `ISSUE-20261029-24-remote-action-double-count`，等「版本更新」修。
+
 ## [10290058] — 2026-10-29 · 起始格（原地）攻击修复（ISSUE-17）
 
 > **已发版**：根目录 `game.html` **332,257 B / sha256 `d8d5c7fd`** / build `10290058`，
