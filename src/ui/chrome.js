@@ -54,22 +54,39 @@ try { localStorage.removeItem('ark_log_pos'); } catch (_) {}
   }, { passive: false });
 })();
 
-// 「重开」：随时回到选角界面
+/* 「重开」：随时回到选角大厅（ISSUE-20261029-22：人类明确「重开不用提示是否确定」，
+ * 点了直接走 drawerClose() + initCharSelect()，与设置抽屉里其余按钮同一节奏。
+ * 取舍已知：战斗中手滑点它会立刻丢当前局、不可撤销 —— 这是「少一次点击 > 防误触」的
+ * 明确要求。将来若要防误触，正确做法是改成长按，不要把 confirm 加回来。 */
 logResetBtn.addEventListener('click', function (e) {
   e.stopPropagation();
-  if (window.confirm('确定重开游戏吗？当前进度将丢失。')) { drawerClose(); initCharSelect(); }
-});
-
-/* 「↩ 选角」（ISSUE-20261028-10 A3）：当前局未结束时二次确认，避免误点丢进度。
- * 注意：外壳的首页已被取消，这里不再调用 parent.goHome()。 */
-const setHomeBtn = document.getElementById('setHomeBtn');
-if (setHomeBtn) setHomeBtn.addEventListener('click', function (e) {
-  e.stopPropagation();
-  const inRun = phase !== PHASE.CHAR_SELECT && phase !== PHASE.GAMEOVER;
-  if (inRun && !window.confirm('这一局还没结束，返回选角大厅会丢失当前进度。继续？')) return;
   drawerClose();
   initCharSelect();
 });
+/* 「♟ 账号与排行」（ISSUE-20261029-21 S2）：游戏内只做按钮 + 点击链路。
+ * 联网与榜单本体留在外壳 index.html —— NB-04 规定单文件产物不得引入运行时外部依赖，
+ * 把 bot API 搬进 game.html 会让离线 / 微信 / TG 环境直接白屏。
+ * 点击 → postMessage 交外壳开 #lobbyDrawer；外壳开合后再回发状态，这里同步 .on / aria-expanded。
+ * 直开 game.html（window.parent === window）时按钮隐藏，不留一个点了没反应的死按钮。 */
+(function bindLobbyOpenBtn() {
+  const btn = document.getElementById('lobbyOpenBtn');
+  if (!btn) return;
+  let embedded = false;
+  try { embedded = !!(window.parent && window.parent !== window); } catch (e) { embedded = false; }
+  if (!embedded) { btn.hidden = true; return; }
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    try { window.parent.postMessage({ type: 'ark_open_lobby' }, '*'); } catch (e2) {}
+  });
+  window.addEventListener('message', function (e) {
+    const d = e && e.data;
+    if (!d || d.type !== 'ark_lobby_state') return;
+    const on = !!d.open;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  });
+})();
+
 /* @slot:beforeDlcChrome */
 /* P0.1-4 拆分 · DLC 外壳接管：patchDLCChrome（隐藏外壳 #btnHome / 劫持 showHint / #ghint 同步）
  * 嵌入 DLC 外壳（同源 iframe）时，由游戏侧统一接管两处外壳 UI：

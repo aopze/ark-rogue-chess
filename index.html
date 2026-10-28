@@ -247,7 +247,7 @@ var APP = {
 var MY_SCORE = null;
 
 // 构建号：每次发布 game.html 时同步改这里，iframe 用 ?v=BUILD 强制拿新版本
-var BUILD = '10290123';
+var BUILD = '10290130';
 
 var REPORT_URL_FALLBACK = '';
 var BOT_USER_FALLBACK = 'yu7_bot';
@@ -651,7 +651,10 @@ function setLobbyOpen(open){
   if(m) m.classList.toggle('on', lobbyOpen);
   if(h) h.setAttribute('aria-expanded', lobbyOpen ? 'true' : 'false');
   /* B4：抽屉打开时游戏输入必须暂停，否则点榜单会误触棋盘 */
-  if(f) f.style.pointerEvents = lobbyOpen ? 'none' : '';
+  if(f){ f.style.pointerEvents = lobbyOpen ? 'none' : '';
+    /* ISSUE-20261029-21 S2：把开合状态回发给游戏内的 ♟ 角标，让它同步高亮 / aria-expanded */
+    try { if(f.contentWindow) f.contentWindow.postMessage({ type:'ark_lobby_state', open: lobbyOpen }, '*'); } catch(e){}
+  }
   if(lobbyOpen){
     if(d && d.focus) { try { d.focus(); } catch(e){} }
     refreshBoard();     // 每次打开都拉一次实时榜
@@ -721,10 +724,12 @@ function init(){
   var rc = $('rankClose'); if(rc) rc.addEventListener('click', closeRank);
   var rf = $('rankFrame'); if(rf) rf.addEventListener('load', function(){ pushMyScore(); pushMyId(); pushSnapshot(); pushApiBase(); });
 
-  // 接收游戏 iframe 的成绩
+  // 接收游戏 iframe 的消息：成绩上报 / 打开账号与排行抽屉（ISSUE-20261029-21 S2）
   window.addEventListener('message', function(e){
     try{
-      var d = e.data; if(!d || d.type !== 'rogue_score') return;
+      var d = e.data; if(!d) return;
+      if(d.type === 'ark_open_lobby'){ setLobbyOpen(true); return; }
+      if(d.type !== 'rogue_score') return;
       reportScore(d.level||0, d.kills||0);
     }catch(err){}
   });

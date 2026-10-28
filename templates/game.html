@@ -6,7 +6,10 @@
 <title>方舟战棋</title>
 <style>
   * { box-sizing: border-box; }
-  :root { --cell: 50px; --unit-move-ms: 120ms; }
+  :root { --cell: 50px; --unit-move-ms: 120ms;
+          /* ISSUE-20261029-21：角标相对 #boardWrap 的偏移（棋盘居中留下的边距），
+             updateCellSize() 会改写；无 JS 时退回 0，角标仍贴在容器角上不跑位。 */
+          --corner-x: 0px; --corner-y: 0px; }
   body { font-family: system-ui, -apple-system, "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; background:#1a1a2e; color:#eee; margin:0; padding:0; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; display:flex; flex-direction:column; touch-action: manipulation; }
   #topbar { display:flex; align-items:center; justify-content:center; position:relative; flex-shrink:0; padding: 4px 12px; }
   #topbar h1 { font-size:18px; margin:4px 0; text-align:center; }
@@ -199,24 +202,36 @@
    * 抽屉体系（ISSUE-20261028-09 G）
    * 设计语言：方形 = 信息 · 圆形 = 交互（仅手机）· 浮层 = 从右侧滑入的侧边栏。
    * 旧的 #logPanel「可拖动悬浮窗」整体废除 —— 不允许凭空悬浮，也没有拖动位置记忆。
-   * z-index 收敛成三个变量，禁止各处硬编码。
+   * z-index 一律收敛成变量，禁止各处硬编码（--z-corner 是地图角标专用：30，必须低于单位层 40）。
    * ========================================================================= */
-  :root { --set-mini: clamp(26px, calc(var(--cell) * 0.5), 40px);
-          --z-btn: 1001; --z-mask: 1100; --z-drawer: 1101; --z-vpad: 1002; }
-  /* 左上角 ⚙：设置抽屉的开关（位置不变，语义从「展开悬浮窗」改为「开关抽屉」） */
-  #setOpenBtn {
-    position: fixed; left: 8px; top: 8px; z-index: var(--z-btn);
-    display: flex; width: var(--set-mini); height: var(--set-mini);
+  :root { --z-corner: 30; --z-mask: 1100; --z-drawer: 1101; --z-vpad: 1002; }
+  /* 地图角标（ISSUE-20261029-21 · B 方案「叠层」，人类 01:0x 拍板）：
+     ⚙ 设置 → 棋盘右上格；♟ 账号与排行 → 棋盘左上格。尺寸 = 恰好一个格子（var(--cell)），
+     随格子缩放；两者共用同一套样式（大小 / 圆角 / 配色 / 高亮态 / aria）。
+     --corner-x / --corner-y 由 updateCellSize() 算出：#board 在 #boardWrap 里居中，
+     四周可能各剩几像素，角标要贴的是「棋盘」的角而不是容器的角。
+     ★ z-index 必须低于 #unitLayer(40)，且单位层本身 pointer-events:none —— 站在角落的
+       敌人绘制在角标之上，血条 / 词缀 / 意图不会被盖住（本号 §B 强制处理 1）。
+     ★ 代价（人类明确接受）：这两格点不到、也走不上去；攻击 / 技能 / 闪避都是点路径节点，
+       所以角落里的敌人照样能打（§B 强制处理 3）。 */
+  #setOpenBtn, #lobbyOpenBtn {
+    position: absolute; top: var(--corner-y); z-index: var(--z-corner);
+    display: flex; width: var(--cell); height: var(--cell);
     align-items: center; justify-content: center; padding: 0;
-    background: rgba(24,24,42,.96); color: #cfe6ff;
-    border: 1px solid #3a3a55; border-radius: 9px;
-    font-size: calc(var(--set-mini) * 0.5); line-height: 1;
-    cursor: pointer; touch-action: manipulation;
-    box-shadow: 0 2px 8px rgba(0,0,0,.45);
+    background: rgba(24,24,42,.9); color: #cfe6ff;
+    border: 1px solid #3a3a55; border-radius: 3px;
+    font-size: calc(var(--cell) * 0.5); line-height: 1;
+    cursor: pointer; touch-action: manipulation; font-family: inherit;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
     transition: color .15s, border-color .15s, background .15s;
   }
-  #setOpenBtn:active { transform: scale(.94); }
-  #setOpenBtn.on { color: #ffd700; border-color: #6b5a1f; }
+  #setOpenBtn { right: var(--corner-x); }
+  #lobbyOpenBtn { left: var(--corner-x); }
+  #setOpenBtn:hover, #lobbyOpenBtn:hover { background: rgba(48,48,72,.95); color: #fff; }
+  #setOpenBtn:active, #lobbyOpenBtn:active { transform: scale(.92); }
+  #setOpenBtn.on, #lobbyOpenBtn.on { color: #ffd700; border-color: #6b5a1f; background: rgba(60,50,20,.92); }
+  /* 直开 game.html（无外壳）时 ♟ 由 chrome.js 置 hidden，不留死按钮 */
+  #lobbyOpenBtn[hidden] { display: none; }
   /* 遮罩：全屏半透明，抽屉本体 z-index 更高所以露在上面 */
   #drawerMask {
     position: fixed; inset: 0; z-index: var(--z-mask);
@@ -319,8 +334,8 @@
     user-select: none; -webkit-user-select: none; touch-action: manipulation; cursor: default; }
   #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
   #logBar button:hover { background: #3a3a5c; color: #fff; }
-  /* ---- 「设置」面板：主页 / 联机 / 重开 / 旋转 四按钮一行 ---- */
-  #setBtns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  /* ---- 「设置」面板：联机 / 重开 / 旋转 三按钮一行（ISSUE-20261029-22 删掉「↩ 选角」，列数同步由 4 改 3） ---- */
+  #setBtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
   #setBtns button { padding: 7px 2px; font-size: 11.5px; line-height: 1.1; font-weight: 700; white-space: nowrap; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 6px; cursor: pointer; touch-action: manipulation; font-family: inherit; }
   #setBtns button:hover { background: #3a3a5c; color: #fff; }
   #setBtns button:active { transform: scale(.96); }
@@ -511,6 +526,10 @@
     <div id="board"></div>
     <div id="unitLayer"></div>
     <div id="fxLayer"></div>
+    <!-- 地图角标（ISSUE-20261029-21）：♟ 左上格 / ⚙ 右上格，尺寸 = 一格。
+         不能放进 #board —— paintBoard() 每帧都 innerHTML 重刷那一层，角标会被冲掉。 -->
+    <button id="lobbyOpenBtn" title="账号与排行" aria-label="账号与排行" aria-expanded="false">♟</button>
+    <button id="setOpenBtn" title="设置" aria-label="设置" aria-expanded="false">⚙</button>
   </div>
   <div id="dragHandle" title="拖动调整地图与右侧UI的比例"><span class="grip"></span></div>
   <div id="sidebar">
@@ -530,13 +549,12 @@
   </div>
 </div>
 
-<!-- 设置抽屉的开关：位置与旧版 ⚙ 完全一致（左上角），只是语义从「展开悬浮窗」改为「开关抽屉」 -->
-<button id="setOpenBtn" title="设置" aria-label="设置" aria-expanded="false">⚙</button>
+<!-- 设置抽屉的开关 ⚙ 已搬进棋盘右上格（ISSUE-20261029-21），见 #boardWrap 内的角标 -->
 
 <!-- 抽屉遮罩：点一下关闭当前抽屉 -->
 <div id="drawerMask"></div>
 
-<!-- ① 设置抽屉（原 #logPanel 悬浮窗：↩选角 / 联机 / 重开 / 旋转 + 战斗日志） -->
+<!-- ① 设置抽屉（原 #logPanel 悬浮窗：⚔️联机 / ⟲重开 / ⟳旋转 + 战斗日志） -->
 <section class="drawer" id="drawerSettings" data-drawer="settings" aria-hidden="true">
   <header class="drawer-head">
     <span class="drawer-title">设置</span>
@@ -545,7 +563,6 @@
   </header>
   <div class="drawer-body">
     <div id="setBtns">
-      <button id="setHomeBtn" title="返回选角大厅">↩ 选角</button>
       <button id="setPvpBtn" title="联机对战">⚔️ 联机</button>
       <button id="logResetBtn" title="重开游戏（回到选角界面）">⟲ 重开</button>
       <button id="logRotateBtn" title="旋转屏幕 / 切换布局">⟳ 旋转</button>
@@ -1084,6 +1101,13 @@ function updateCellSize() {
   let cell = Math.floor(Math.min(wl, hl));
   cell = Math.max(16, Math.min(cell, 80));
   document.documentElement.style.setProperty('--cell', cell + 'px');
+  /* ISSUE-20261029-21：角标要贴「棋盘」的两角，而 #board 在 #boardWrap 里居中，
+     四周各剩 (side - 棋盘边长)/2。用公式算、不去量 offsetWidth —— 本函数可能早于
+     render() 写 gridTemplateColumns，量到的是上一张图的尺寸。 */
+  const bw = bc * cell + (bc - 1) * gap;
+  const bh = br * cell + (br - 1) * gap;
+  document.documentElement.style.setProperty('--corner-x', Math.max(0, Math.round((side - bw) / 2)) + 'px');
+  document.documentElement.style.setProperty('--corner-y', Math.max(0, Math.round((side - bh) / 2)) + 'px');
 }
 
 function logEnemyMainDirections() {
