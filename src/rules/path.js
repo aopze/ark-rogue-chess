@@ -47,7 +47,11 @@ function calcPathSignature() {
   // 原来只放玩家坐标，玩家画/撤回路径时坐标没变 → 签名不变 → 敌人意图永远不重算，
   // 于是「预判玩家路径」这套逻辑完全没有触发机会。
   const pathSig = playerPath.map(p => p.x + ',' + p.y).join('>');
-  return player.x + ',' + player.y + '|' + pathSig + '|' +
+  /* ISSUE-20261029-28：小队成员的位置也要进签名 —— 它们是敌人的移动占位，
+   * 漏了这条会让「成员走开 / 召唤出新成员」不触发敌人意图重算，箭头指向过期格子。 */
+  const squadSig = (typeof squadUnits !== 'undefined' ? squadUnits : [])
+    .map(s => s.x + ',' + s.y).join(';');
+  return player.x + ',' + player.y + '|' + pathSig + '|' + squadSig + '|' +
     enemies.map(e => e.alive ? key(e.x, e.y) : 'x').join(';');
 }
 
@@ -181,6 +185,9 @@ function skillReadyInfo(path, usePreview = true) {
       return { ready: !fencerCounterActive && fencerSp >= FENCER_SP_MAX, name: '岩崩锤', spNow: fencerSp, spMax: FENCER_SP_MAX };
     case 'amiya':
       return { ready: amiyaBonusTargets > 0, name: '精神爆发', spNow: amiyaBonusTargets, spMax: amiyaSpMax() };
+    case 'rookie':
+      /* ISSUE-20261029-28：技力满 5 才能召唤，没有「部分发动」这回事 */
+      return { ready: rookieSp >= ROOKIE_SP_MAX, name: '增援召唤', spNow: rookieSp, spMax: ROOKIE_SP_MAX };
     default:
       return { ready: false, name: '技能', spNow: 0, spMax: 0 };
   }

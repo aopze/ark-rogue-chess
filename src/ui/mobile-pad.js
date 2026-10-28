@@ -51,6 +51,7 @@ function vpadSpInfo() {
   if (selectedChar === 'amiya') return { cur: amiyaBonusTargets, max: amiyaSpMax() };
   if (selectedChar === 'wheelchair') return { cur: wheelchairPreviewSp(), max: WHEELCHAIR_SP_MAX };
   if (selectedChar === 'vampire') return { cur: vampireSp, max: VAMPIRE_SP_MAX };
+  if (selectedChar === 'rookie') return { cur: rookieSp, max: ROOKIE_SP_MAX };
   return null;
 }
 

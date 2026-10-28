@@ -29,6 +29,10 @@
   .cell.empty { background:#2d2d44; }
   .cell.void { background:transparent; cursor:default; pointer-events:none; }
   .cell.wall { background:#4a4a5a; cursor:not-allowed; border-radius:4px; }
+  /* ISSUE-20261028-10-B：粗圆岩 = Boss 落的动态墙。用暖褐 + 内描边和灰墙区分开，
+     但又不能比敌人/玩家更抢眼（它是地形，不是单位）。 */
+  .cell.rock { background:#6b5233; cursor:not-allowed; border-radius:4px;
+    box-shadow: inset 0 0 0 1px rgba(255,206,140,.45); }
   .cell.path { background:#3a5a8c; }
   /* 闪避节点：第一次等待（蓝色描边 + 内部蓝调） */
   .cell.dodge { box-shadow: inset 0 0 0 2px #7dd3fc; background:#2f5578; }
@@ -78,6 +82,8 @@
   .unit-abs.ua-player.ua-charging { outline:3px solid #ffd700; outline-offset:-3px; box-shadow: inset 0 0 15px #ffd700; }
   .unit-abs.ua-player.ua-attacked { outline:2px dashed #ffb86b; outline-offset:-2px; }
   .unit-abs.ua-enemy { outline:2px solid #e74c3c; outline-offset:-2px; }
+  /* ISSUE-20261029-28：召唤出来的小队成员 = 友军，绿框，与玩家青框 / 敌人红框区分 */
+  .unit-abs.ua-squad { outline:2px solid #4ade80; outline-offset:-2px; box-shadow: inset 0 0 8px rgba(74,222,128,0.25); }
   .unit-abs.ua-stunned { opacity: 0.55; filter: grayscale(0.35); }
   .unit-abs.ua-stunned::after {
     content: '💫';
@@ -939,11 +945,22 @@ function initLevel() {
     levelStartHp = player.hp;
     levelActions = 0;
     enemies = [];
+    /* ISSUE-20261028-10-B：粗圆岩是跨关的全局集合，map 虽然每关重生成，但集合必须显式清空，
+     * 否则上一关的坐标会落到新地图上，把随机一格错误地标成石头。 */
+    roughRocks.clear();
+    /* ISSUE-20261029-28：小队成员不跨关（每关重新召唤）；技力跨关继承，所以 rookieSp 不在这里清。
+     * lastSquadType 保留 —— 「不连续重复」跨关也要成立。 */
+    squadUnits = [];
+    const bossHere = isBossLevel(level) && numEnemies > 0;
     for (let i = 0; i < numEnemies; i++) {
       const s = gen.enemyStarts[i];
       /* 类型按关卡解锁 + 权重（ISSUE-20261028-04）：L1-2 只有骷髅，L3 起幽灵，
        * L5 起外星人（远程狙击），L8 起盾卫，L12 起自爆虫。 */
-      const type = pickEnemyType(level);
+      /* ★ ISSUE-20261028-10-B：Boss 关把**最后一只**换成圆岩巨像，而不是额外加一只
+       * （否则第 10 关等于「6 普通 + 1 Boss」，难度直接崩）。
+       * Boss 不参与词缀/精英抽取：它自己就是关底，再叠 2 个词缀会失控。 */
+      const isBossSlot = bossHere && i === numEnemies - 1;
+      const type = isBossSlot ? BOSS_TYPE : pickEnemyType(level);
       /* 成长面板（ISSUE-20261028-03）：第 level 关的敌人已推演过 level 次属性提升 + 每 3 关的升级 */
       const grow = computeEnemyGrowth(type, level, i, RUN_SEED);
       const eAbilities = grow.abilities;
@@ -952,7 +969,9 @@ function initLevel() {
       const eMove = Math.max(1, Math.floor(eAbilities.dex / 2));
       /* 词缀与精英（ISSUE-20261028-05）：L5 起每关 1 个精英（HP×1.5、必带 2 词缀），
        * 普通敌人按关卡概率带 1 个词缀。全部由 RUN_SEED 派生 → 同种子重开完全一致。 */
-      const affixPlan = rollEnemyAffixPlan(level, i, numEnemies, RUN_SEED);
+      const affixPlan = isBossSlot
+        ? { isElite: false, affixes: [] }
+        : rollEnemyAffixPlan(level, i, numEnemies, RUN_SEED);
       const hp = affixPlan.isElite ? Math.ceil(grow.maxHp * ELITE_HP_MUL) : grow.maxHp;
       /* 伤害骰（ISSUE-20261028-04）：结算走 rollEnemyDamage(e, kind) 掷骰，
        * meleeDmg/rangedDmg 保留为**骰子期望值**，供 AI 估值与日志面板展示。 */
@@ -981,6 +1000,9 @@ function initLevel() {
         amiyaRevealForNext: false,
         amiyaRevealActive: 0,
         stunTurns: 0,
+        /* ISSUE-20261028-10-B：Boss 落石计时（回合末递减，到 0 就落一块并重置）。
+         * 首回合不落 —— 让玩家先看清它长什么样、意图往哪走，再开始被堵。 */
+        rockCd: isBossSlot ? COLOSSUS_ROCK_EVERY : 0,
       });
     }
     playerPath = [{ x: player.x, y: player.y }];
@@ -1003,6 +1025,9 @@ function initLevel() {
     }
     if (selectedChar === 'fencer') {
       log(`泥岩技力：${fencerSp}/${FENCER_SP_MAX}（跨关继承）`);
+    }
+    if (selectedChar === 'rookie' && rookieSp > 0) {
+      log(`😶 预备干员技力：${rookieSp}/${ROOKIE_SP_MAX}（跨关继承；小队成员不继承，每关重新召唤）`);
     }
     /* 敌人面板按「本关实际生成的单位」打印（ISSUE-20261028-03）：
      * 成长是个体化的（依赖实例下标），所以不能再打印一份固定的三类模板，否则日志与场上数值对不上。 */
@@ -1173,6 +1198,16 @@ function buildBoardHtml() {
       if (m[y][x] === 1) {
         const hw = DIR4.some(([dx,dy]) => isWalkable(x+dx, y+dy));
         if (hw) cls += ' wall'; else cls += ' void';
+        /* ISSUE-20261028-10-B：粗圆岩标记在 roughRocks 里，渲染成石头而不是灰墙。
+         * 它在 map 里同样是 1，所以寻路 / 视线 / 站位全部自动当墙处理。 */
+        if (phase !== PHASE.CHAR_SELECT && roughRocks.has(key(x, y))) {
+          cls += ' rock';
+          /* ⚠️ 别换回 🪨：那是 Emoji 13.0（2020），本机 Chrome 的 Segoe UI Emoji 没有这个字形，
+           * 实测渲染成豆腐块「□」—— 截图上就是两个褐色格子中间一个空方框。
+           * ⛰️ 是 Emoji 1.0，和骷髅/幽灵同代，同一字体栈下必然可显示。
+           * （同类坑见 ISSUE-19 的 🪖 → 💂。） */
+          content = '⛰️';
+        }
       } else cls += ' empty';
       if (rangeSet && rangeSet.has(key(x, y))) cls += ' in-range';
       if (phase === PHASE.CHAR_SELECT) {
@@ -1463,6 +1498,7 @@ function updateStats() {
   else if (selectedChar === 'amiya') spInfo = { cur: amiyaBonusTargets, max: amiyaSpMax() };
   else if (selectedChar === 'wheelchair') spInfo = { cur: wheelchairPreviewSp(), max: WHEELCHAIR_SP_MAX };
   else if (selectedChar === 'vampire') spInfo = { cur: vampireSp, max: VAMPIRE_SP_MAX };
+  else if (selectedChar === 'rookie') spInfo = { cur: rookieSp, max: ROOKIE_SP_MAX };
   renderHero({
     name: `${charInfo ? charInfo.name : '未知'} ${charInfo ? charInfo.icon : ''}`,
     tag: `第 ${level} 关 · AC ${playerEffectiveAC()}${playerDodging ? ` (+${playerDodgeACBonus})` : ''}`,
@@ -1509,6 +1545,18 @@ function updateStats() {
       badges.push('<span class="badge gold">不稳定血浆 · 必定命中/暴击/留血迹（每次 -1 HP）</span>');
     } else if (vampireSp >= VAMPIRE_SP_MAX) {
       badges.push('<span class="badge gold">技力满 · 双击路径节点发动「不稳定血浆」</span>');
+    }
+  }
+  /* ISSUE-20261029-28：预备干员技力 / 小队编制 */
+  if (selectedChar === 'rookie') {
+    if (rookieSp >= ROOKIE_SP_MAX) {
+      badges.push('<span class="badge gold">😶 技力满 · 双击路径节点发动「增援召唤」</span>');
+    } else {
+      badges.push(`<span class="badge ${rookieSp > 0 ? 'white' : 'dim'}">😶 技力 ${rookieSp}/${ROOKIE_SP_MAX} · 造成攻击 +1</span>`);
+    }
+    if (squadUnits.length > 0) {
+      const list = squadUnits.map(u => u.icon).join('');
+      badges.push(`<span class="badge teal">小队 ${list} ×${squadUnits.length}</span>`);
     }
   }
   if (playerShield > 0) badges.push(`<span class="badge white">🛡 护盾 ×${playerShield}</span>`);
@@ -1705,6 +1753,8 @@ function handleKeyDown(e) {
     return;
   }
   if (phase !== PHASE.PLANNING) return;
+  /* ISSUE-20261028-10-B：眩晕时键盘同样不能规划（与鼠标同口径，别只在一边拦） */
+  if (player && player.stunTurns > 0) { stunBlockOnce(); return; }
   // 方向键与手机方向钮共用同一条移动路径
   if (['w','a','s','d'].includes(k)) stepPathByDir(k);
   if (k === 'q') {
@@ -1895,6 +1945,8 @@ boardEl.addEventListener('pointerdown', (e) => {
     const enemy = enemies.find(en => en.alive && en.x === cell.x && en.y === cell.y);
     if (enemy) { killEnemyByDebug(enemy); e.preventDefault(); return; }
   }
+  /* ISSUE-20261028-10-B：眩晕时不许规划路径 / 设节点，只能点「开始」原地结算 */
+  if (player && player.stunTurns > 0) { stunBlockOnce(); e.preventDefault(); return; }
   dragging = true; dragDownCell = cell; hasDragged = false;
   try { boardEl.setPointerCapture(e.pointerId); } catch (_) {}
   clearTimeout(pressTimer);
@@ -2072,6 +2124,16 @@ function prepareWheelchairCharge() {
 function confirmAction() {
   /* 联机模式：不本地结算，先把这一回合的计划交给房间服务，等两边齐了再一起算 */
   if (mode === 'pvp') { pvpSubmitPlan(); return; }
+  /* ISSUE-20261028-10-B：眩晕中只允许「原地不动」的确认 —
+   * 必须放行空路径，否则玩家会被彻底卡住（点了没反应，回合永远推不过去）。 */
+  if (player && player.stunTurns > 0
+      && (playerPath.length > 1 || attackIndices.length > 0 || skillIndices.length > 0)) {
+    log('💫 眩晕中：本回合只能原地不动，规划已被清除。');
+    playerPath = [{ x: player.x, y: player.y }];
+    attackIndices = []; skillIndices = [];
+    refreshBoardOnly();
+    return;
+  }
   phase = PHASE.RESOLVING;
   resetTurnState();
   clearEnemyArrows();
@@ -2233,6 +2295,11 @@ function generateEnemyPaths() {
   for (const e of aliveList) {
     for (let t = 0; t <= maxT; t++) occ[t].add(key(e.x, e.y));
   }
+  /* ISSUE-20261029-28：小队成员也算占位（敌人不会穿过自己人/友军，否则两个图标叠在一格）。
+   * 只占位、不当目标 —— 敌人 AI 依然只追玩家，成员在本轮里是无敌的。 */
+  for (const s of squadUnits) {
+    for (let t = 0; t <= maxT; t++) occ[t].add(key(s.x, s.y));
+  }
   const isOccupiedAt = (t, x, y) => !!occ[t] && occ[t].has(key(x, y));
 
   // 离玩家近的敌人先算，占路优先级更高。
@@ -2377,6 +2444,135 @@ async function settleTick() {
 /* 敌人落位：按寻路顺序（离玩家近的优先）依次结算。
  * 先把自己从占位表里拿掉再查目标格 —— 这样「跟到同伴本 tick 腾出的格子」合法，
  * 「撞上还没走的同伴」仍然会被拦住。 */
+/* =========================================================
+ * ★ ISSUE-20261028-10-B：圆岩巨像的两个专属动作
+ *
+ * ① bossPushPlayer：Boss 走到玩家格 → 把玩家沿自己的前进方向推开 1 格并眩晕。
+ * ② crushRoughRock：Boss 撞上（或把玩家推向）粗圆岩 → 石头碎、Boss 自伤 1。
+ *
+ * ★ 为什么推动要「替换」相杀而不是并存：
+ *   相杀是「玩家主动撞进敌人的格」，而 Boss 是**主动走过来推人**。
+ *   若沿用相杀，玩家会被锁在原地挨一次暴击 ×2 —— 那不是「被推开」，是「被处决」，
+ *   与 issue 要的「逼玩家换站位」完全相反。
+ * ★ 推不动也眩晕（issue §待确认 4 取「推不动也眩晕」）：接触即压制，
+ *   否则玩家会发现「贴墙站就免疫」，Boss 的威胁可以零成本规避。
+ * ========================================================= */
+
+/* Boss 每 COLOSSUS_ROCK_EVERY 回合在玩家身边落一块粗圆岩。
+ * 选格规则（issue §待确认 5 取「朝向最近的空格」）：
+ *   在玩家四邻的空地里挑「离 Boss 最近」的那格 —— 石头会挡在玩家与 Boss 之间，
+ *   玩家立刻能感受到「走位空间在变小」；并列时用全局 rng 打散，避免每次都落同一侧。
+ * ★ 硬保护：落完之后不许把玩家四邻**全部**堵死。否则玩家会被永久困在原地，
+ *   而「原地等待」并不能拆墙 —— 那是死局，不是难度。
+ * 返回 true = 真的落了。 */
+function placeRoughRock(boss) {
+  if (!player || !player.alive) return false;
+  const cands = DIR4
+    .map(([dx, dy]) => ({ x: player.x + dx, y: player.y + dy }))
+    .filter(p => p.x > 0 && p.y > 0 && p.x < COLS - 1 && p.y < ROWS - 1
+      && map[p.y][p.x] !== 1
+      && !roughRocks.has(key(p.x, p.y))
+      && !enemies.some(e => e.alive && e.x === p.x && e.y === p.y)
+      && !rewardItems.some(r => r.x === p.x && r.y === p.y));
+  if (cands.length === 0) {
+    log(`🗿 圆岩巨像${boss.id + 1} 想落石，但玩家四周没有空格，本次未落。`);
+    return false;
+  }
+  /* 离 Boss 最近优先（并列随机） */
+  let best = [], bestD = Infinity;
+  for (const p of cands) {
+    const d = cheb(p, boss);
+    if (d < bestD) { bestD = d; best = [p]; }
+    else if (d === bestD) best.push(p);
+  }
+  const pick = best[randInt(best.length)];
+  /* 死局保护：预测落完之后玩家还能不能动 */
+  const wouldTrap = DIR4.every(([dx, dy]) => {
+    const x = player.x + dx, y = player.y + dy;
+    if (x <= 0 || y <= 0 || x >= COLS - 1 || y >= ROWS - 1) return true;
+    if (x === pick.x && y === pick.y) return true;
+    return map[y][x] === 1;
+  });
+  if (wouldTrap) {
+    log(`🗿 圆岩巨像${boss.id + 1} 想落石，但那会把玩家彻底堵死，本次未落。`);
+    return false;
+  }
+  map[pick.y][pick.x] = 1;
+  roughRocks.add(key(pick.x, pick.y));
+  floatText(pick.x, pick.y, '落石!', '#c8a165');
+  ringFx(pick.x, pick.y, '#c8a165');
+  log(`🗿 圆岩巨像${boss.id + 1} 在 (${pick.x},${pick.y}) 落下一块粗圆岩（挡路，可被它自己撞碎）。`);
+  return true;
+}
+
+/* 粗圆岩被圆岩巨像撞碎：石头消失、Boss 掉 1 HP。
+ * ★ 打敌人只走 enemyTakeDamage（项目硬契约），这里不直接改 hp。 */
+function crushRoughRock(boss, x, y) {
+  roughRocks.delete(key(x, y));
+  if (map[y] && map[y][x] === 1) map[y][x] = 0;
+  const dealt = enemyTakeDamage(boss, COLOSSUS_ROCK_SELF_DAMAGE);
+  floatText(x, y, '岩碎', '#ffd166');
+  ringFx(x, y, '#ffd166');
+  hitFlashCell(x, y);
+  log(`⛰️ 粗圆岩被撞碎，圆岩巨像${boss.id + 1} 自伤 ${dealt} 点（剩 ${Math.max(0, boss.hp)}）。`);
+  if (boss.hp <= 0) {
+    killEnemy(boss, { floatMsg: '自毁', logText: `圆岩巨像${boss.id + 1} 被自己的石头撞碎` });
+  }
+}
+
+/* 返回 true = 玩家真的被推走了；false = 推不动（但玩家照样眩晕） */
+function bossPushPlayer(boss, em, taken, eIdx) {
+  const dx = Math.sign(em.to.x - em.from.x);
+  const dy = Math.sign(em.to.y - em.from.y);
+  const tx = player.x + dx, ty = player.y + dy;
+
+  /* 玩家身后正好是粗圆岩 → 先撞碎（Boss 自伤 1），碎完之后那格才可能站人 */
+  if (roughRocks.has(key(tx, ty))) {
+    crushRoughRock(boss, tx, ty);
+    if (!boss.alive) return false;
+  }
+
+  const blocked = !inBounds(tx, ty)
+    || map[ty][tx] === 1
+    || roughRocks.has(key(tx, ty))
+    || taken.has(key(tx, ty))
+    || (enemies.some(e => e.alive && e.id !== boss.id && e.x === tx && e.y === ty))
+    /* 不能把玩家推出地图可视区（外圈是 void，地图外一律不可站） */
+    || (tx <= 0 || ty <= 0 || tx >= COLS - 1 || ty >= ROWS - 1);
+
+  const px = player.x, py = player.y;
+  if (!blocked) {
+    player.x = tx; player.y = ty;
+    if (dx || dy) player.facing = { dx: -dx, dy: -dy };   // 面朝 Boss（晕着也得知道是谁推的）
+    taken.delete(key(boss.x, boss.y));
+    boss.x = px; boss.y = py;
+    taken.set(key(boss.x, boss.y), boss);
+    floatText(px, py, '推开!', '#ff9f43');
+    floatText(tx, ty, '眩晕', '#ffd166');
+    ringFx(px, py, '#ff9f43');
+    log(`🗿 圆岩巨像${boss.id + 1} 把玩家推开 1 格，你眩晕了（下一回合无法行动）。`);
+  } else {
+    floatText(player.x, player.y, '推不动', '#bbb');
+    log(`🗿 圆岩巨像${boss.id + 1} 想推开玩家，但后面被挡住了（推不动，仍然眩晕）。`);
+    /* 推不动 → Boss 不前进，停在原格；它的路径在这里截断，避免「下一 tick 直接穿人」 */
+    if (enemyPaths[em.enemyIdx]) enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
+  }
+
+  player.stunTurns = COLOSSUS_PUSH_STUN;
+  player.stunNoticeShown = false;   // 新一次眩晕 → 允许再提示一次
+  refreshUnits();
+  return !blocked;
+}
+
+/* 眩晕拦截的统一提示（只喊一次，别让每次点格子都刷一行日志） */
+function stunBlockOnce() {
+  if (!player || !(player.stunTurns > 0)) return;
+  if (player.stunNoticeShown) return;
+  player.stunNoticeShown = true;
+  log('💫 眩晕中：本回合无法移动 / 攻击 / 技能。点「开始」只能原地承受这一回合。');
+  floatText(player.x, player.y, '眩晕', '#ffd166');
+}
+
 function applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds) {
   const taken = new Map();
   for (const e of enemies) if (e.alive) taken.set(key(e.x, e.y), e);
@@ -2394,6 +2590,13 @@ function applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds) {
     if (em.unit.stunTurns > 0) continue;
     const u = em.unit;
 
+    /* ★ ISSUE-20261028-10-B：圆岩巨像走到玩家格 = 推开 + 眩晕，不是相杀。
+     * 必须放在「相杀」分支之前 —— 否则玩家会在原地被暴击 ×2，而不会被推开。 */
+    if (u.type === BOSS_TYPE && em.to.x === player.x && em.to.y === player.y) {
+      bossPushPlayer(u, em, taken, eIdx);
+      continue;
+    }
+
     // 走到玩家身上 → 相杀（交给相杀逻辑处理，这里不落位，仍占自己的格）
     if (em.to.x === player.x && em.to.y === player.y) {
       u.facing = faceToward(u, player);
@@ -2403,6 +2606,17 @@ function applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds) {
       continue;
     }
     if (em.to.x === u.x && em.to.y === u.y) continue;
+
+    /* ★ ISSUE-20261028-10-B：目标格是粗圆岩 → 撞碎（自己掉 1 HP），碎掉之后才落位。
+     * 正常寻路不会主动走向墙，但「玩家被推向石头 → 石头碎 → 玩家站到碎掉的位置」
+     * 与「Boss 贴着石头被挤」都会走到这里。 */
+    if (roughRocks.has(key(em.to.x, em.to.y))) {
+      crushRoughRock(u, em.to.x, em.to.y);
+      if (!u.alive) {
+        if (enemyPaths[em.enemyIdx]) enemyPaths[em.enemyIdx] = enemyPaths[em.enemyIdx].slice(0, eIdx + 1);
+        continue;
+      }
+    }
 
     const destKey = key(em.to.x, em.to.y);
     taken.delete(key(u.x, u.y));
@@ -2456,6 +2670,9 @@ async function resolvePlayerAttack() {
       return false;
     }
     const strMod = abilityMod(player.abilities.str);
+    /* ISSUE-20261029-28：预备干员「每次造成朝向攻击 +1 技力」。
+     * 一次出手打多个目标也只给 1 点（否则扇形一扫就满技力，召唤会变成每回合都能放）。 */
+    let rookieSpGained = false;
     for (const target of targets) {
       if (target.hp <= 0) continue;
       const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
@@ -2481,6 +2698,11 @@ async function resolvePlayerAttack() {
       if (selectedChar === 'amiya') amiyaMarkReveal(target);
       if (enemyThornsReflect(target)) return true;
       if (dealt === 0) { refreshUnits(); await sleep(120); continue; }
+      /* 朝向 = 玩家朝向扇形（与「朝向暴击」同一个判定）。只有真打出伤害才算「造成攻击」。 */
+      if (!rookieSpGained && selectedChar === 'rookie' && isInFacingCone(player, target)) {
+        rookieSpGained = true;
+        gainRookieSp(ROOKIE_SP_PER_ATTACK);
+      }
       slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
       hitFlashCell(target.x, target.y);
       if (isCrit) {
@@ -2570,6 +2792,9 @@ async function resolvePlayerAttack() {
   }
   /* 阿米娅：每次攻击（攻击节点出手，无论命中与否）+1 技力 */
   if (selectedChar === 'amiya') amiyaGainAttackSp();
+  /* ISSUE-20261029-28：预备干员的远程形态没有「朝向」概念（射程 3 走视线），
+   * 按「本次出手至少命中一个目标」等价处理 —— 否则远程形态永远攒不到技力，召唤形同不存在。 */
+  if (selectedChar === 'rookie' && hits.some(h => h.hit)) gainRookieSp(ROOKIE_SP_PER_ATTACK);
   /* 不稳定血浆的代价：每次远程攻击后自身 -1 HP（护盾可抵消） */
   if (selectedChar === 'vampire' && vampireSkillActive) {
     const selfRes = damagePlayer(1, '不稳定血浆');
@@ -2755,6 +2980,21 @@ async function triggerSkillNode(pathIdx) {
       floatText(player.x, player.y, '精神爆发！', '#ffd700');
       ringFx(player.x, player.y, '#ffd700');
       await executeAmiyaBurst(count);
+      break;
+    }
+    /* ISSUE-20261029-28：预备干员「增援召唤」。
+     * 8 格全被占（墙 / 敌人 / 自己的成员）时**退还技力与动作**，否则一次空放就把 5 点技力吞了。 */
+    case 'rookie': {
+      const res = summonSquadMember();
+      if (!res.ok) {
+        playerActionsUsed -= 1;       // 上面的统一扣费要还回去
+        rookieSp = ROOKIE_SP_MAX;     // 技力未消耗
+        log('😶 周围 8 格没有空位，增援召唤失败：技力与动作均未消耗。');
+        floatText(player.x, player.y, '无空位', '#bbb');
+        return false;
+      }
+      rookieSp = 0;
+      floatText(player.x, player.y, '增援召唤！', '#7dd3fc');
       break;
     }
   }
@@ -3083,6 +3323,11 @@ async function resolveAlienShots(eIdx) {
 async function endRound() {
   if (player.hp <= 0) { endGame(); return; }
   clearEnemyArrows();
+  /* ISSUE-20261029-28：小队成员的回合行动（玩家结算完 → 敌人结算完 → 小队）。
+   * ⚠️ 必须在下面 `phase = PHASE.PLANNING` 之前 —— resolveSquadTurn 只认 RESOLVING 相位。
+   * 成员清场时直接进通关，别让流程继续跑到「重新生成敌人意图」那一步。 */
+  await resolveSquadTurn();
+  if (enemies.every(e => !e.alive)) { onLevelClear(); return; }
   enemies.forEach(e => e.attackedThisRound = false);
   playerPath = [{ x: player.x, y: player.y }];
   attackIndices = []; skillIndices = []; enemyPaths = [];
@@ -3105,7 +3350,29 @@ async function endRound() {
         log(`敌人${e.id+1}解除眩晕。`);
       }
     }
+    /* ISSUE-20261028-10-B：Boss 落石计时。放在 endRound（回合切换点）而不是它自己行动时，
+     * 是因为石头必须出现在「玩家下一次规划之前」，否则玩家看不到新墙就撞上去。 */
+    if (e.alive && e.type === BOSS_TYPE) {
+      e.rockCd = (typeof e.rockCd === 'number' ? e.rockCd : COLOSSUS_ROCK_EVERY) - 1;
+      if (e.rockCd <= 0) {
+        placeRoughRock(e);
+        e.rockCd = COLOSSUS_ROCK_EVERY;
+      }
+    }
   });
+
+  /* ISSUE-20261028-10-B：玩家眩晕在**回合切换点**递减（与敌人同口径）。
+   * 被推时置 2 → 这里减到 1（下一回合不能动）→ 再减到 0（恢复）。 */
+  if (player && player.stunTurns > 0) {
+    player.stunTurns--;
+    if (player.stunTurns <= 0) {
+      player.stunTurns = 0;
+      player.stunNoticeShown = false;
+      log('眩晕解除，下一回合可以正常行动。');
+    } else {
+      log(`仍然眩晕：下一回合无法移动 / 攻击 / 技能（只剩原地承受）。`);
+    }
+  }
 
   generateEnemyPaths();
   logEnemyMainDirections();
@@ -3202,6 +3469,17 @@ function openLevelUp() {
     playerStats.abilityPoints += ABILITY_POINTS_PER_LEVELUP;
     if (player) { player.maxHp = playerStats.maxHp; player.hp = playerStats.maxHp; }
     log(`⭐ 升级！Lv.${heroLevel}：HP 上限 +${conMod}（体质加值，累计 +${levelHpBonus}），生命已回满（${playerStats.maxHp}/${playerStats.maxHp}），获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点。`);
+    /* ISSUE-20261029-28：预备干员的升级福利 —— **额外**获得一个收藏品。
+     * 走「随机直接到账」而不是「再弹一次三选一」：人类原话是「额外获得一个收藏品」，
+     * 多一次三选一会让预备干员的收藏品数量翻倍（3 选 1 变 2 个三选一），那是另一种规则。
+     * 连升多级时每次 openLevelUp 都会进这里，所以连升 2 级 = 额外 2 个，符合「每次升级」。 */
+    if (selectedChar === 'rookie') {
+      const extra = pickBuffChoices(1)[0];
+      if (extra) {
+        log(`🎁 预备干员专属：本次升级额外获得一个收藏品 —— ${extra.icon} ${extra.name}。`);
+        applyBuff(extra.id);
+      }
+    }
     updateStats();
   }
   showLevelUpOverlay(lastLevelUpConMod);

@@ -6,10 +6,12 @@
   "modules": [
     "src/data/constants.js",
     "src/data/characters.js",
+    "src/data/squad.js",
     "src/data/enemies.js",
     "src/rules/state.js",
     "src/rules/buffs.js",
     "src/rules/sp.js",
+    "src/rules/squad.js",
     "src/ui/dom-refs.js",
     "src/ui/drawer.js",
     "src/ui/panels.js",

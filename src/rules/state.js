@@ -15,6 +15,12 @@ let selectedChar = null;
 let level = 1;
 let ROWS = 11, COLS = 11;
 let map = [];
+/* ★ ISSUE-20261028-10-B：粗圆岩（Boss 每 2 回合落的动态墙）。
+ * 记的是 "x,y" 字符串集合；`map[y][x]` 同步置 1，所以**所有既有的墙判定
+ * （寻路 / 视线 / 站位）自动把它当墙**，不需要在别处再加判断。
+ * 这个集合只用来做三件事：① 渲染成石头而不是灰墙 ② 被 Boss 撞碎时还原地板 ③ 关卡重置时清空。
+ * ⚠️ initLevel 里必须 clear()：map 是新生成的，但集合是跨关的全局状态。 */
+let roughRocks = new Set();
 let player = null;
 let enemies = [];
 let rewardItems = [];
@@ -59,6 +65,15 @@ let playerChargeDir = { dx: 1, dy: 0 };
 let pendingAttack = false;
 let pendingChargeInfo = null;
 let amiyaBonusTargets = 0;
+/* ★ ISSUE-20261029-28 预备干员「增援召唤」
+ * rookieSp     技力（每次造成朝向攻击 +1，上限 5；跨关继承，换角色 / 重开清零）
+ * squadUnits   场上小队成员（**不入 enemies 数组**：它们不是敌人，不该被 AI 当目标、也不参加相杀结算）
+ * lastSquadType 上一次召唤的类型（「不连续重复」靠它排除）
+ * squadSeq     成员 uid 自增源（渲染层拿它当 key，不能用数组下标 —— 数组会 filter） */
+let rookieSp = 0;
+let squadUnits = [];
+let lastSquadType = null;
+let squadSeq = 0;
 let levelHpBonus = 0;
 // 点角色卡里的「近战伤害 / 远程伤害」→ 在地块上叠蓝色显示攻击范围
 let showRangeOverlay = false;

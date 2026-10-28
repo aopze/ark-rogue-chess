@@ -18,6 +18,11 @@ function resetSkillState() {
   vampireSp = 0;
   vampireSkillActive = false;
   amiyaBonusTargets = 0;
+  /* ISSUE-20261029-28：预备干员技力 + 小队成员一起清。
+   * ⚠️ 这里只能在「换角色 / 重开」清 —— 跨关（initLevel）要保留技力，别挪过去。 */
+  rookieSp = 0;
+  squadUnits = [];
+  lastSquadType = null;
 }
 /* 整局成长：等级 / 经验 / buff / 护盾 / 升级弹窗 */
 function resetRunProgress() {
@@ -85,6 +90,9 @@ function createPlayerUnit(start) {
     meleeProf: playerStats.meleeProf,
     rangedProf: playerStats.rangedProf,
     alive: true, facing: { dx: 1, dy: 0 },
+    /* ISSUE-20261028-10-B：被圆岩巨像推动后的眩晕计数。
+     * 每关重建玩家单位 → 跨关不会残留眩晕（进新关永远是清醒的）。 */
+    stunTurns: 0,
   };
 }
 /* 加点 / 升级后把派生面板同步到战斗单位（唯一入口，避免两边字段漂移） */

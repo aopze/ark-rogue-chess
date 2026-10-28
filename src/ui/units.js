@@ -48,7 +48,8 @@ function renderUnits() {
       key: 'player', x: player.x, y: player.y,
       icon: getUnitIcon(), hp: player.hp, maxHp: player.maxHp,
       isPlayer: true, isGhost: false, facing: getPlayerRenderFacing(),
-      stunTurns: 0,
+      /* ISSUE-20261028-10-B：被 Boss 推动后要看得见「晕」，否则玩家只会觉得「点了没反应」 */
+      stunTurns: player.stunTurns || 0,
     });
   }
   for (const e of enemies) {
@@ -65,6 +66,17 @@ function renderUnits() {
       /* 词缀 / 精英（ISSUE-20261028-05）：标签文字由数据层拼，渲染层只负责显示 */
       isElite: !!e.isElite,
       affixTag: enemyAffixLabel(e),
+    });
+  }
+  /* ISSUE-20261029-28：小队成员单独一层。它们不是敌人（不入 enemies），
+   * 也不吃敌人 AI，所以必须在这里单独渲染，否则召唤出来在棋盘上看不见。 */
+  for (const s of (typeof squadUnits !== 'undefined' ? squadUnits : [])) {
+    if (!s.alive) continue;
+    toRender.push({
+      key: 'squad-' + s.uid, x: s.x, y: s.y,
+      icon: s.icon, hp: s.hp, maxHp: s.maxHp,
+      isPlayer: false, isSquad: true, isGhost: false,
+      facing: s.facing, stunTurns: 0,
     });
   }
   /* 联机对战：对手是玩家控制的单位，不是敌人，单独一个渲染条目 */
@@ -136,7 +148,7 @@ function renderUnits() {
     }
     const pct = u.maxHp > 0 ? Math.max(0, Math.min(100, (u.hp / u.maxHp) * 100)) : 0;
     rec.hpFill.style.width = pct + '%';
-    rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : (u.isPeer ? '#e8a33d' : '#e74c3c');
+    rec.hpFill.style.background = u.isPlayer ? '#3b9eff' : (u.isPeer ? '#e8a33d' : (u.isSquad ? '#4ade80' : '#e74c3c'));
     if (u.facing) {
       const v = FACING_GLYPH[u.facing.dx + ',' + u.facing.dy];
       if (v) {
@@ -155,6 +167,10 @@ function renderUnits() {
     } else if (u.isPeer) {
       rec.el.classList.add('ua-peer');
       rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-charging', 'ua-attacked', 'ua-stunned');
+    } else if (u.isSquad) {
+      /* 友军绿框：与玩家的青框、敌人的红框区分开，避免被误认成敌人 */
+      rec.el.classList.add('ua-squad');
+      rec.el.classList.remove('ua-player', 'ua-enemy', 'ua-peer', 'ua-charging', 'ua-attacked', 'ua-stunned', 'ua-elite');
     } else {
       rec.el.classList.add('ua-enemy');
       rec.el.classList.remove('ua-player', 'ua-charging', 'ua-attacked');
