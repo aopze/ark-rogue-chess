@@ -14,17 +14,30 @@ const ABILITY_INFO = {
   cha: { name: '魅力', desc: '当前版本无任何数值作用（只显示、只参与面板展示）。' }
 };
 
-/* 当前该属性的数值：选角时看候选人，局内看 playerStats */
+/* 当前该属性的数值：选角时看候选人，局内看 playerStats
+ * ★ ISSUE-20261028-19：动态角色（预备干员）在选角阶段读的是**副本**，不是 CHARACTERS 静态值。 */
 function currentAbilityValue(k) {
   if (phase === PHASE.CHAR_SELECT && selectedCandidate && CHARACTERS[selectedCandidate.id]) {
-    return CHARACTERS[selectedCandidate.id].abilities[k] || 0;
+    const a = candidateAbilitiesOf(selectedCandidate.id);
+    return (a && a[k]) || 0;
   }
   if (playerStats && playerStats.abilities) return playerStats.abilities[k] || 0;
   if (player && player.abilities) return player.abilities[k] || 0;
   return 0;
 }
 
+/* 当前还能加几点：选角阶段看候选副本，局内看 playerStats */
+function pointsLeftNow() {
+  if (phase === PHASE.CHAR_SELECT) return candidatePointsLeft();
+  return playerStats ? (playerStats.abilityPoints || 0) : 0;
+}
+
 function canAllocateNow() {
+  if (phase === PHASE.CHAR_SELECT) {
+    /* ISSUE-20261028-19 B1：选角阶段只有动态角色（预备干员）能加点，且必须有剩余点数。
+     * 前四个角色在这一相位仍然不可加点 —— 行为与之前完全一致。 */
+    return candidatePointsLeft() > 0;
+  }
   return !!(playerStats && playerStats.abilityPoints > 0
     && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
 }
@@ -34,18 +47,25 @@ function renderAbilityDrawer() {
   const row = document.getElementById('abilityPointsRow');
   const tip = document.getElementById('statsDrawerTip');
   const inSelect = phase === PHASE.CHAR_SELECT;
-  const pts = playerStats ? (playerStats.abilityPoints || 0) : 0;
+  const pts = pointsLeftNow();
   if (row) {
-    row.textContent = (!inSelect && pts > 0) ? ('剩余 ' + pts + ' 点 · 点属性名加点') : '';
-    row.style.display = (!inSelect && pts > 0) ? '' : 'none';
+    /* ISSUE-20261028-19：选角 + 动态角色时**必须显示**点数行（原来 inSelect 一律隐藏），
+     * 否则玩家看不到「剩余 5 点」，只能在说明卡里猜。 */
+    const show = pts > 0 && (!inSelect || candidateIsDynamic());
+    row.textContent = show ? ('剩余 ' + pts + ' 点 · 点属性名加点') : '';
+    row.style.display = show ? '' : 'none';
   }
   if (tip) {
-    tip.textContent = inSelect
-      ? '六维越高越强：绿色 = 熟练项与最高属性。点属性名可看具体作用。'
-      : '点属性名查看作用与数值公式；有剩余点数时可原地加点（金色方框 = 还能加）。';
+    if (inSelect) {
+      tip.textContent = candidateIsDynamic()
+        ? '点属性名加点（剩余 ' + pts + ' 点）。智力高于力量 → 远程熟练，否则近战熟练。'
+        : '六维越高越强：绿色 = 熟练项与最高属性。点属性名可看具体作用。';
+    } else {
+      tip.textContent = '点属性名查看作用与数值公式；有剩余点数时可原地加点（金色方框 = 还能加）。';
+    }
   }
   const title = document.getElementById('drawerStatsTitle');
-  if (title) title.textContent = inSelect ? '角色属性' : '属性 · 加点';
+  if (title) title.textContent = (inSelect && !candidateIsDynamic()) ? '角色属性' : '属性 · 加点';
 }
 
 /* 说明卡：填内容 + 滑入二层。同一点属性名可原地刷新，不关闭卡片 */
@@ -57,6 +77,7 @@ function openAbilityInfo(k) {
   if (!body || !layer) return;
   const v = currentAbilityValue(k);
   const canAdd = canAllocateNow() && v < ABILITY_CAP;
+  const left = pointsLeftNow();
   body.innerHTML =
     '<div class="ab-info-name">' + info.name + '</div>' +
     '<div class="ab-info-val">当前 <b>' + v + '</b> · 修正 <b>' + abilityLabel(v) + '</b></div>' +
@@ -64,12 +85,14 @@ function openAbilityInfo(k) {
     '<div style="display:flex;align-items:center;gap:10px;margin-top:2px;">' +
       '<button class="ab-plus" id="abilityInfoPlus"' + (canAdd ? '' : ' disabled') + '>+1</button>' +
       '<span class="mini">' + (canAllocateNow()
-        ? ('剩余 ' + playerStats.abilityPoints + ' 点')
+        ? ('剩余 ' + left + ' 点')
         : (v >= ABILITY_CAP ? '已达上限 ' + ABILITY_CAP : '没有可分配的点数')) + '</span>' +
     '</div>';
   const plus = document.getElementById('abilityInfoPlus');
   if (plus) plus.onclick = function () {
     if (!canAllocateNow() || currentAbilityValue(k) >= ABILITY_CAP) return;
+    /* ISSUE-20261028-19：选角阶段加的是候选副本（不碰 CHARACTERS），局内加的是 playerStats。
+     * 分支放在 allocateAbilityPoint 里统一处理，这里只保留一个入口，免得两套加点逻辑走岔。 */
     allocateAbilityPoint(k);
     openAbilityInfo(k);                 // 原地刷新数值，说明卡不关闭
     renderAbilityDrawer();

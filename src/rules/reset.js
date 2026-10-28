@@ -55,10 +55,13 @@ function resetTurnState({ clearCounter = false } = {}) {
 function createPlayerStats(charId) {
   const char = CHARACTERS[charId];
   return {
+    charId: charId,                 /* ISSUE-19：动态熟练要靠它认人，别去读全局 selectedChar */
     abilities: { ...char.abilities },
     profMelee: char.profMelee,
     profRanged: char.profRanged,
-    abilityPoints: 0,
+    /* ISSUE-20261028-19：数据驱动 —— 只有声明了 startAbilityPoints 的角色开局带点（预备干员 5），
+     * 其余四人缺省 0。不要在这个共用入口里写 if (charId === 'rookie')。 */
+    abilityPoints: char.startAbilityPoints || 0,
     currentHp: 0,
     extraTargets: 0,
     extraAttacks: 0,

@@ -27,9 +27,16 @@ function initCharSelect() {
     { id: 'wheelchair', x: 2, y: 2, fx: 2, fy: 2, alive: true },
     { id: 'vampire', x: 2, y: 4, fx: 2, fy: 4, alive: true },
     { id: 'fencer', x: 2, y: 6, fx: 2, fy: 6, alive: true },
-    { id: 'amiya', x: 4, y: 2, fx: 4, fy: 2, alive: true }
+    { id: 'amiya', x: 4, y: 2, fx: 4, fy: 2, alive: true },
+    /* ISSUE-20261028-19：第五个角色「预备干员」。放 (4,4) —— 与阿米娅 (4,2) 纵向错开，
+     * 也不在 (2,4) 华法琳与出口 (7,4) 的连线上，不会挡路。 */
+    { id: 'rookie', x: 4, y: 4, fx: 4, fy: 4, alive: true }
   ];
   selectedCandidate = null;
+  /* ISSUE-20261028-19：新的一局 → 清空候选属性副本与剩余点数。
+   * 只在 initCharSelect 清（B4）：切到别的角色再切回来，已分配的点必须还在。 */
+  candidateAbilities = null;
+  candidatePoints = 0;
   clearLog();
   log('请点击选择一个角色，然后通过点击或 WASD 移动至 🚪 出口。');
   setTimeout(() => {
@@ -46,11 +53,57 @@ function selectCharacter(charId) {
   selectedChar = charId;
   setDebugMode(false);
   playerStats = createPlayerStats(charId);
+  /* ISSUE-20261028-19：把选角时加的 5 点交给正式面板，剩余点数一并带进第 1 关（B5）。
+   * 只有动态角色才可能有副本；没加完的点不清零 —— 大厅出口判定已经够敏感，再拦「必须先加完」会卡人。 */
+  if (candidateAbilities && charIsDynamic(charId)) {
+    playerStats.abilities = { ...candidateAbilities };
+    playerStats.abilityPoints = candidatePoints;
+  }
   level = 1;
   resetRunProgress();
   recomputePlayerDerivedStats();
   playerStats.currentHp = playerStats.maxHp;
   initLevel();
+}
+
+/* =========================================================
+ * 选角阶段的「候选属性副本」（ISSUE-20261028-19）
+ *
+ * ★ 绝对不许直接往 CHARACTERS.rookie.abilities 里写加点：那是模块级常量对象，
+ *   雷达图、面板、联机快照都直接读它 → 一写就是全局污染（重开一局、甚至下一局选别人都会带着）。
+ *   所以选中动态角色时建一份副本，加点只改副本；selectCharacter() 确认时才写进 playerStats。
+ * ========================================================= */
+let candidateAbilities = null;   /* 动态角色在选角阶段的六维副本 */
+let candidatePoints = 0;         /* 选角阶段剩余可分配点数 */
+
+/* 当前候选人的六维：动态角色读副本，静态角色读常量（后者永远不该被写） */
+function candidateAbilitiesOf(id) {
+  if (charIsDynamic(id) && candidateAbilities) return candidateAbilities;
+  return CHARACTERS[id] ? CHARACTERS[id].abilities : null;
+}
+/* 切到某个候选人（点角色时调用）：动态角色首次选中时建副本并发放点数 */
+function candidateSelect(id) {
+  if (!charIsDynamic(id)) return;
+  if (!candidateAbilities) {
+    candidateAbilities = { ...CHARACTERS[id].abilities };
+    candidatePoints = CHARACTERS[id].startAbilityPoints || 0;
+  }
+}
+function candidateIsDynamic() {
+  return !!(selectedCandidate && charIsDynamic(selectedCandidate.id));
+}
+function candidatePointsLeft() {
+  return candidateIsDynamic() ? candidatePoints : 0;
+}
+/* 选角阶段加点：只动副本，不碰 playerStats（那时它还不该存在） */
+function allocateCandidatePoint(k) {
+  if (!candidateIsDynamic()) return false;
+  if (candidatePoints <= 0) return false;
+  if (!candidateAbilities || !(k in candidateAbilities)) return false;
+  if (candidateAbilities[k] >= ABILITY_CAP) return false;
+  candidateAbilities[k] += 1;
+  candidatePoints -= 1;
+  return true;
 }
 
 /* =========================================================

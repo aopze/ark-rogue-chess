@@ -54,6 +54,30 @@ const CHARACTERS = {
       '被动：被阿米娅攻击的单位，额外显示移动意图',
       '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
     ]
+  },
+  /* ISSUE-20261028-19：第五个角色「预备干员」—— 全 8 白板 + 选角时 5 点自由分配。
+   * ★ dynamicProf: true 是它与前四人的唯一结构差别：熟练 / 攻击类型不再写死，
+   *   一律由 `int > str ? 远程 : 近战` 现算（严格大于，相等算近战 —— 人类 2026-10-28 23:54 拍板）。
+   *   `attackType: 'melee'` 只是「不做动态判定时的兜底值」（联机快照、旧存档、纯函数调用），
+   *   不要把它当成它的真实类型 —— 真实类型只认 charAttackTypeOf()。 */
+  rookie: {
+    /* 图标用 💂 而不是 🪖：🪖 是 Emoji 13.0（2020），Windows 的 Segoe UI Emoji 老版本没有，
+     * 实测在本机 Chrome 里渲染成豆腐块「□」，界面上就是「预备干员 □」。
+     * 💂 是 Emoji 1.0，四角色现用的都是同代，同一套字体栈下必然可显示。 */
+    name: '预备干员', icon: '💂',
+    attackType: 'melee',
+    abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+    profMelee: true, profRanged: false,
+    startAbilityPoints: 5,
+    dynamicProf: true,
+    desc: '六维全 8 的白板，选角时给 5 点自由分配，靠玩家自己堆成型：智力高于力量走远程熟练，否则近战熟练。',
+    tips: [
+      '自由分配：选角时可用 5 点任加六维（没加完的点带进第 1 关继续加）',
+      '熟练与攻击方式由分配结果决定：智力 > 力量 → 远程熟练，否则（含相等）近战熟练',
+      '两者都不加点时相等 → 按近战算，这不是缺陷，是规则',
+      '没有专属技能与技力：强度全靠那 5 点堆在哪',
+      '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
+    ]
   }
 };
 
@@ -70,3 +94,28 @@ function charAttackType(id) {
 }
 function isRangedChar(id) { return charAttackType(id) === 'ranged'; }
 function charDmgLabel(id) { return isRangedChar(id) ? '远程伤害' : '近战伤害'; }
+
+/* ISSUE-20261028-19：动态角色（预备干员）── 熟练与攻击类型由六维现算。
+ *
+ * 为什么不直接改 charAttackType()：它是纯函数、签名只有 id，读的是静态对象。
+ * 硬改成「读当前 playerStats」会让 6 个消费点在选角 / 联机 / 结算不同相位下读到不同的东西。
+ * 所以保留它原样给四个静态角色用，另开一个**可传六维**的版本，由调用方决定拿哪份数据。
+ * 规则只有一句：int > str → 远程；否则（含相等）→ 近战。严格大于，不为相等单开分支。 */
+function charIsDynamic(id) {
+  const c = CHARACTERS[id];
+  return !!(c && c.dynamicProf);
+}
+function dynamicAttackTypeOf(abilities) {
+  return (abilities && abilities.int > abilities.str) ? 'ranged' : 'melee';
+}
+function charAttackTypeOf(id, abilities) {
+  if (charIsDynamic(id)) {
+    /* 动态角色必须给六维：缺省时退回静态兜底（attackType 写的是 melee，即「不加点」的结果） */
+    return dynamicAttackTypeOf(abilities || CHARACTERS[id].abilities);
+  }
+  return charAttackType(id);
+}
+function isRangedCharOf(id, abilities) { return charAttackTypeOf(id, abilities) === 'ranged'; }
+function charDmgLabelOf(id, abilities) {
+  return isRangedCharOf(id, abilities) ? '远程伤害' : '近战伤害';
+}

@@ -124,9 +124,30 @@ function recomputePlayerDerivedStats() {
    * 实测（每方案 21 万次 attackRoll）：对当时真实敌人 AC，每级 +2 会在第 4 关就全类型封顶 95%，
    * 命中机制失效，故取 +1。 */
   playerStats.prof = 4 + Math.max(0, heroLevel - 1);
+  /* ISSUE-20261028-19：动态角色（预备干员）的熟练项由六维现算 —— 每次加点都会重跑本函数，
+   * 所以「先加智力变远程、再加力量翻回近战」是自动的，不需要额外挂钩。
+   * 静态角色继续用 createPlayerStats() 里写好的值，一行都不覆盖（其他四人行为必须完全不变）。 */
+  if (charIsDynamic(playerStats.charId)) {
+    const ranged = dynamicAttackTypeOf(a) === 'ranged';
+    playerStats.profMelee = !ranged;
+    playerStats.profRanged = ranged;
+  }
   playerStats.meleeProf = playerStats.profMelee ? playerStats.prof : 0;
   playerStats.rangedProf = playerStats.profRanged ? playerStats.prof : 0;
 }
+
+/* =========================================================
+ * 玩家侧攻击类型（ISSUE-20261028-19）
+ *
+ * 前四人静态，预备干员按当前六维现算。**所有运行时判定都必须走这里**，
+ * 不要再写 `selectedChar === 'wheelchair' || selectedChar === 'fencer'` 这种角色名硬判断 ——
+ * 那条判断在预备干员身上会直接把近战角色送进远程分支。
+ * ========================================================= */
+function playerAttackType() {
+  return charAttackTypeOf(selectedChar, playerStats && playerStats.abilities);
+}
+function playerIsRanged() { return playerAttackType() === 'ranged'; }
+function playerDmgLabel() { return playerIsRanged() ? '远程伤害' : '近战伤害'; }
 
 /* ★ 以下三个只读「基础面板（L1）」。
  * 运行时数值请一律用 computeEnemyGrowth(type, level, idx, RUN_SEED) —— 见上方 ISSUE-20261028-03。

@@ -130,7 +130,8 @@ function canRangedAttack(from, target, range) {
 function playerAttackRangeCells() {
   const set = new Set();
   if (phase !== PHASE.PLANNING || !player) return set;
-  const range = isRangedChar(selectedChar) ? (player.range || PLAYER_RANGE) : 1;
+  /* ISSUE-20261028-19：攻击类型按当前六维现算（预备干员可翻转），不要再读静态角色表 */
+  const range = playerIsRanged() ? (player.range || PLAYER_RANGE) : 1;
   const origin = rangeDisplayOrigin();
   if (!origin) return set;
   for (let y = origin.y - range; y <= origin.y + range; y++) {

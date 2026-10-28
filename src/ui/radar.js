@@ -30,7 +30,8 @@ function drawRadar() {
 
   let abilities = null;
   if (phase === PHASE.CHAR_SELECT) {
-    if (selectedCandidate) abilities = CHARACTERS[selectedCandidate.id].abilities;
+    /* ISSUE-20261028-19：动态角色读候选副本（加点后立刻反映），静态角色仍读常量 */
+    if (selectedCandidate) abilities = candidateAbilitiesOf(selectedCandidate.id);
   } else if (player) {
     abilities = player.abilities;
   } else if (playerStats && playerStats.abilities) {
@@ -116,7 +117,11 @@ function drawRadar() {
   // 轴名：2 字全称，按左右方向对齐向外排版（避免被画布裁切）
   ctx.font = `bold ${labelFont}px system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
-  const canAlloc = !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
+  /* ISSUE-20261028-19：选角阶段的可加点提示要跟随候选副本（预备干员有 5 点，前四人没有）。
+   * 这里不用 canAllocateNow() 是为了不让 radar.js 依赖 panels.js 的加载顺序 —— 语义完全一致。 */
+  const canAlloc = (phase === PHASE.CHAR_SELECT)
+    ? (candidatePointsLeft() > 0)
+    : !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
   for (let i = 0; i < n; i++) {
     const k = ABILITY_ORDER[i];
     const ang = -Math.PI / 2 + (Math.PI * 2 * i) / n;
@@ -125,8 +130,12 @@ function drawRadar() {
     const lx = cx + ca * dist, ly = cy + sa * dist;
     ctx.textAlign = ca > 0.2 ? 'left' : (ca < -0.2 ? 'right' : 'center');
     const inSelect = phase === PHASE.CHAR_SELECT;
-    const profMelee = inSelect ? !!(selectedCandidate && CHARACTERS[selectedCandidate.id].profMelee) : !!(playerStats && playerStats.profMelee);
-    const profRanged = inSelect ? !!(selectedCandidate && CHARACTERS[selectedCandidate.id].profRanged) : !!(playerStats && playerStats.profRanged);
+    /* 熟练项：选角时动态角色按副本现算（int > str → 远程），静态角色照旧读常量 */
+    const selRanged = inSelect
+      ? (selectedCandidate ? isRangedCharOf(selectedCandidate.id, abilities) : false)
+      : false;
+    const profMelee = inSelect ? !selRanged : !!(playerStats && playerStats.profMelee);
+    const profRanged = inSelect ? selRanged : !!(playerStats && playerStats.profRanged);
     const profMark = abilities && ((k === 'str' && profMelee) || (k === 'int' && profRanged));
     let col = profMark ? '#8fe28a' : '#9aa';
     if (canAlloc) col = '#cfe6ff';           // 可加点时整体提亮，提示可点击

@@ -357,7 +357,9 @@
   #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; cursor: pointer; touch-action: manipulation; }
   #logBar button:hover { background: #3a3a5c; color: #fff; }
   /* ---- 「设置」面板：联机 / 重开 / 旋转 三按钮一行（ISSUE-20261029-22 删掉「↩ 选角」，列数同步由 4 改 3） ---- */
-  #setBtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  /* auto-fit：按钮数量变了自动等分（ISSUE-20261029-27 关掉联机后只剩 2 个，
+     写死 repeat(3,1fr) 会在右边空一整格）。 */
+  #setBtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
   #setBtns button { padding: 7px 2px; font-size: 11.5px; line-height: 1.1; font-weight: 700; white-space: nowrap; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 6px; cursor: pointer; touch-action: manipulation; font-family: inherit; }
   #setBtns button:hover { background: #3a3a5c; color: #fff; }
   #setBtns button:active { transform: scale(.96); }
@@ -640,9 +642,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290257',
-  commit:  '6f7d6f2b70c4c4f05ab459cd8fc04ec51ff73a78',
-  builtAt: '2026-10-28T18:57:26Z'
+  build:   '10290342',
+  commit:  'a963b52ec3e0b371cbaf07ce2c43cc8ba15abacd',
+  builtAt: '2026-10-28T19:43:49Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -819,6 +821,30 @@ const CHARACTERS = {
       '被动：被阿米娅攻击的单位，额外显示移动意图',
       '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
     ]
+  },
+  /* ISSUE-20261028-19：第五个角色「预备干员」—— 全 8 白板 + 选角时 5 点自由分配。
+   * ★ dynamicProf: true 是它与前四人的唯一结构差别：熟练 / 攻击类型不再写死，
+   *   一律由 `int > str ? 远程 : 近战` 现算（严格大于，相等算近战 —— 人类 2026-10-28 23:54 拍板）。
+   *   `attackType: 'melee'` 只是「不做动态判定时的兜底值」（联机快照、旧存档、纯函数调用），
+   *   不要把它当成它的真实类型 —— 真实类型只认 charAttackTypeOf()。 */
+  rookie: {
+    /* 图标用 💂 而不是 🪖：🪖 是 Emoji 13.0（2020），Windows 的 Segoe UI Emoji 老版本没有，
+     * 实测在本机 Chrome 里渲染成豆腐块「□」，界面上就是「预备干员 □」。
+     * 💂 是 Emoji 1.0，四角色现用的都是同代，同一套字体栈下必然可显示。 */
+    name: '预备干员', icon: '💂',
+    attackType: 'melee',
+    abilities: { str: 8, dex: 8, con: 8, int: 8, wis: 8, cha: 8 },
+    profMelee: true, profRanged: false,
+    startAbilityPoints: 5,
+    dynamicProf: true,
+    desc: '六维全 8 的白板，选角时给 5 点自由分配，靠玩家自己堆成型：智力高于力量走远程熟练，否则近战熟练。',
+    tips: [
+      '自由分配：选角时可用 5 点任加六维（没加完的点带进第 1 关继续加）',
+      '熟练与攻击方式由分配结果决定：智力 > 力量 → 远程熟练，否则（含相等）近战熟练',
+      '两者都不加点时相等 → 按近战算，这不是缺陷，是规则',
+      '没有专属技能与技力：强度全靠那 5 点堆在哪',
+      '[闪避]：第一个等待节点 = 闪避，本回合 AC +3（占一次动作）'
+    ]
   }
 };
 
@@ -835,6 +861,31 @@ function charAttackType(id) {
 }
 function isRangedChar(id) { return charAttackType(id) === 'ranged'; }
 function charDmgLabel(id) { return isRangedChar(id) ? '远程伤害' : '近战伤害'; }
+
+/* ISSUE-20261028-19：动态角色（预备干员）── 熟练与攻击类型由六维现算。
+ *
+ * 为什么不直接改 charAttackType()：它是纯函数、签名只有 id，读的是静态对象。
+ * 硬改成「读当前 playerStats」会让 6 个消费点在选角 / 联机 / 结算不同相位下读到不同的东西。
+ * 所以保留它原样给四个静态角色用，另开一个**可传六维**的版本，由调用方决定拿哪份数据。
+ * 规则只有一句：int > str → 远程；否则（含相等）→ 近战。严格大于，不为相等单开分支。 */
+function charIsDynamic(id) {
+  const c = CHARACTERS[id];
+  return !!(c && c.dynamicProf);
+}
+function dynamicAttackTypeOf(abilities) {
+  return (abilities && abilities.int > abilities.str) ? 'ranged' : 'melee';
+}
+function charAttackTypeOf(id, abilities) {
+  if (charIsDynamic(id)) {
+    /* 动态角色必须给六维：缺省时退回静态兜底（attackType 写的是 melee，即「不加点」的结果） */
+    return dynamicAttackTypeOf(abilities || CHARACTERS[id].abilities);
+  }
+  return charAttackType(id);
+}
+function isRangedCharOf(id, abilities) { return charAttackTypeOf(id, abilities) === 'ranged'; }
+function charDmgLabelOf(id, abilities) {
+  return isRangedCharOf(id, abilities) ? '远程伤害' : '近战伤害';
+}
 
 /* src: src/data/enemies.js */
 /* P0.1-4 机械拆分：从 game.html（20261028b 基线）第 596-671 行原样搬移（敌人类型 / L1 基础面板 / 成长推演（computeEnemyGrowth））。
@@ -1473,17 +1524,30 @@ const ABILITY_INFO = {
   cha: { name: '魅力', desc: '当前版本无任何数值作用（只显示、只参与面板展示）。' }
 };
 
-/* 当前该属性的数值：选角时看候选人，局内看 playerStats */
+/* 当前该属性的数值：选角时看候选人，局内看 playerStats
+ * ★ ISSUE-20261028-19：动态角色（预备干员）在选角阶段读的是**副本**，不是 CHARACTERS 静态值。 */
 function currentAbilityValue(k) {
   if (phase === PHASE.CHAR_SELECT && selectedCandidate && CHARACTERS[selectedCandidate.id]) {
-    return CHARACTERS[selectedCandidate.id].abilities[k] || 0;
+    const a = candidateAbilitiesOf(selectedCandidate.id);
+    return (a && a[k]) || 0;
   }
   if (playerStats && playerStats.abilities) return playerStats.abilities[k] || 0;
   if (player && player.abilities) return player.abilities[k] || 0;
   return 0;
 }
 
+/* 当前还能加几点：选角阶段看候选副本，局内看 playerStats */
+function pointsLeftNow() {
+  if (phase === PHASE.CHAR_SELECT) return candidatePointsLeft();
+  return playerStats ? (playerStats.abilityPoints || 0) : 0;
+}
+
 function canAllocateNow() {
+  if (phase === PHASE.CHAR_SELECT) {
+    /* ISSUE-20261028-19 B1：选角阶段只有动态角色（预备干员）能加点，且必须有剩余点数。
+     * 前四个角色在这一相位仍然不可加点 —— 行为与之前完全一致。 */
+    return candidatePointsLeft() > 0;
+  }
   return !!(playerStats && playerStats.abilityPoints > 0
     && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
 }
@@ -1493,18 +1557,25 @@ function renderAbilityDrawer() {
   const row = document.getElementById('abilityPointsRow');
   const tip = document.getElementById('statsDrawerTip');
   const inSelect = phase === PHASE.CHAR_SELECT;
-  const pts = playerStats ? (playerStats.abilityPoints || 0) : 0;
+  const pts = pointsLeftNow();
   if (row) {
-    row.textContent = (!inSelect && pts > 0) ? ('剩余 ' + pts + ' 点 · 点属性名加点') : '';
-    row.style.display = (!inSelect && pts > 0) ? '' : 'none';
+    /* ISSUE-20261028-19：选角 + 动态角色时**必须显示**点数行（原来 inSelect 一律隐藏），
+     * 否则玩家看不到「剩余 5 点」，只能在说明卡里猜。 */
+    const show = pts > 0 && (!inSelect || candidateIsDynamic());
+    row.textContent = show ? ('剩余 ' + pts + ' 点 · 点属性名加点') : '';
+    row.style.display = show ? '' : 'none';
   }
   if (tip) {
-    tip.textContent = inSelect
-      ? '六维越高越强：绿色 = 熟练项与最高属性。点属性名可看具体作用。'
-      : '点属性名查看作用与数值公式；有剩余点数时可原地加点（金色方框 = 还能加）。';
+    if (inSelect) {
+      tip.textContent = candidateIsDynamic()
+        ? '点属性名加点（剩余 ' + pts + ' 点）。智力高于力量 → 远程熟练，否则近战熟练。'
+        : '六维越高越强：绿色 = 熟练项与最高属性。点属性名可看具体作用。';
+    } else {
+      tip.textContent = '点属性名查看作用与数值公式；有剩余点数时可原地加点（金色方框 = 还能加）。';
+    }
   }
   const title = document.getElementById('drawerStatsTitle');
-  if (title) title.textContent = inSelect ? '角色属性' : '属性 · 加点';
+  if (title) title.textContent = (inSelect && !candidateIsDynamic()) ? '角色属性' : '属性 · 加点';
 }
 
 /* 说明卡：填内容 + 滑入二层。同一点属性名可原地刷新，不关闭卡片 */
@@ -1516,6 +1587,7 @@ function openAbilityInfo(k) {
   if (!body || !layer) return;
   const v = currentAbilityValue(k);
   const canAdd = canAllocateNow() && v < ABILITY_CAP;
+  const left = pointsLeftNow();
   body.innerHTML =
     '<div class="ab-info-name">' + info.name + '</div>' +
     '<div class="ab-info-val">当前 <b>' + v + '</b> · 修正 <b>' + abilityLabel(v) + '</b></div>' +
@@ -1523,12 +1595,14 @@ function openAbilityInfo(k) {
     '<div style="display:flex;align-items:center;gap:10px;margin-top:2px;">' +
       '<button class="ab-plus" id="abilityInfoPlus"' + (canAdd ? '' : ' disabled') + '>+1</button>' +
       '<span class="mini">' + (canAllocateNow()
-        ? ('剩余 ' + playerStats.abilityPoints + ' 点')
+        ? ('剩余 ' + left + ' 点')
         : (v >= ABILITY_CAP ? '已达上限 ' + ABILITY_CAP : '没有可分配的点数')) + '</span>' +
     '</div>';
   const plus = document.getElementById('abilityInfoPlus');
   if (plus) plus.onclick = function () {
     if (!canAllocateNow() || currentAbilityValue(k) >= ABILITY_CAP) return;
+    /* ISSUE-20261028-19：选角阶段加的是候选副本（不碰 CHARACTERS），局内加的是 playerStats。
+     * 分支放在 allocateAbilityPoint 里统一处理，这里只保留一个入口，免得两套加点逻辑走岔。 */
     allocateAbilityPoint(k);
     openAbilityInfo(k);                 // 原地刷新数值，说明卡不关闭
     renderAbilityDrawer();
@@ -1954,9 +2028,30 @@ function recomputePlayerDerivedStats() {
    * 实测（每方案 21 万次 attackRoll）：对当时真实敌人 AC，每级 +2 会在第 4 关就全类型封顶 95%，
    * 命中机制失效，故取 +1。 */
   playerStats.prof = 4 + Math.max(0, heroLevel - 1);
+  /* ISSUE-20261028-19：动态角色（预备干员）的熟练项由六维现算 —— 每次加点都会重跑本函数，
+   * 所以「先加智力变远程、再加力量翻回近战」是自动的，不需要额外挂钩。
+   * 静态角色继续用 createPlayerStats() 里写好的值，一行都不覆盖（其他四人行为必须完全不变）。 */
+  if (charIsDynamic(playerStats.charId)) {
+    const ranged = dynamicAttackTypeOf(a) === 'ranged';
+    playerStats.profMelee = !ranged;
+    playerStats.profRanged = ranged;
+  }
   playerStats.meleeProf = playerStats.profMelee ? playerStats.prof : 0;
   playerStats.rangedProf = playerStats.profRanged ? playerStats.prof : 0;
 }
+
+/* =========================================================
+ * 玩家侧攻击类型（ISSUE-20261028-19）
+ *
+ * 前四人静态，预备干员按当前六维现算。**所有运行时判定都必须走这里**，
+ * 不要再写 `selectedChar === 'wheelchair' || selectedChar === 'fencer'` 这种角色名硬判断 ——
+ * 那条判断在预备干员身上会直接把近战角色送进远程分支。
+ * ========================================================= */
+function playerAttackType() {
+  return charAttackTypeOf(selectedChar, playerStats && playerStats.abilities);
+}
+function playerIsRanged() { return playerAttackType() === 'ranged'; }
+function playerDmgLabel() { return playerIsRanged() ? '远程伤害' : '近战伤害'; }
 
 /* ★ 以下三个只读「基础面板（L1）」。
  * 运行时数值请一律用 computeEnemyGrowth(type, level, idx, RUN_SEED) —— 见上方 ISSUE-20261028-03。
@@ -2001,7 +2096,8 @@ function drawRadar() {
 
   let abilities = null;
   if (phase === PHASE.CHAR_SELECT) {
-    if (selectedCandidate) abilities = CHARACTERS[selectedCandidate.id].abilities;
+    /* ISSUE-20261028-19：动态角色读候选副本（加点后立刻反映），静态角色仍读常量 */
+    if (selectedCandidate) abilities = candidateAbilitiesOf(selectedCandidate.id);
   } else if (player) {
     abilities = player.abilities;
   } else if (playerStats && playerStats.abilities) {
@@ -2087,7 +2183,11 @@ function drawRadar() {
   // 轴名：2 字全称，按左右方向对齐向外排版（避免被画布裁切）
   ctx.font = `bold ${labelFont}px system-ui, sans-serif`;
   ctx.textBaseline = 'middle';
-  const canAlloc = !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
+  /* ISSUE-20261028-19：选角阶段的可加点提示要跟随候选副本（预备干员有 5 点，前四人没有）。
+   * 这里不用 canAllocateNow() 是为了不让 radar.js 依赖 panels.js 的加载顺序 —— 语义完全一致。 */
+  const canAlloc = (phase === PHASE.CHAR_SELECT)
+    ? (candidatePointsLeft() > 0)
+    : !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
   for (let i = 0; i < n; i++) {
     const k = ABILITY_ORDER[i];
     const ang = -Math.PI / 2 + (Math.PI * 2 * i) / n;
@@ -2096,8 +2196,12 @@ function drawRadar() {
     const lx = cx + ca * dist, ly = cy + sa * dist;
     ctx.textAlign = ca > 0.2 ? 'left' : (ca < -0.2 ? 'right' : 'center');
     const inSelect = phase === PHASE.CHAR_SELECT;
-    const profMelee = inSelect ? !!(selectedCandidate && CHARACTERS[selectedCandidate.id].profMelee) : !!(playerStats && playerStats.profMelee);
-    const profRanged = inSelect ? !!(selectedCandidate && CHARACTERS[selectedCandidate.id].profRanged) : !!(playerStats && playerStats.profRanged);
+    /* 熟练项：选角时动态角色按副本现算（int > str → 远程），静态角色照旧读常量 */
+    const selRanged = inSelect
+      ? (selectedCandidate ? isRangedCharOf(selectedCandidate.id, abilities) : false)
+      : false;
+    const profMelee = inSelect ? !selRanged : !!(playerStats && playerStats.profMelee);
+    const profRanged = inSelect ? selRanged : !!(playerStats && playerStats.profRanged);
     const profMark = abilities && ((k === 'str' && profMelee) || (k === 'int' && profRanged));
     let col = profMark ? '#8fe28a' : '#9aa';
     if (canAlloc) col = '#cfe6ff';           // 可加点时整体提亮，提示可点击
@@ -2660,10 +2764,13 @@ function resetTurnState({ clearCounter = false } = {}) {
 function createPlayerStats(charId) {
   const char = CHARACTERS[charId];
   return {
+    charId: charId,                 /* ISSUE-19：动态熟练要靠它认人，别去读全局 selectedChar */
     abilities: { ...char.abilities },
     profMelee: char.profMelee,
     profRanged: char.profRanged,
-    abilityPoints: 0,
+    /* ISSUE-20261028-19：数据驱动 —— 只有声明了 startAbilityPoints 的角色开局带点（预备干员 5），
+     * 其余四人缺省 0。不要在这个共用入口里写 if (charId === 'rookie')。 */
+    abilityPoints: char.startAbilityPoints || 0,
     currentHp: 0,
     extraTargets: 0,
     extraAttacks: 0,
@@ -2734,9 +2841,16 @@ function initCharSelect() {
     { id: 'wheelchair', x: 2, y: 2, fx: 2, fy: 2, alive: true },
     { id: 'vampire', x: 2, y: 4, fx: 2, fy: 4, alive: true },
     { id: 'fencer', x: 2, y: 6, fx: 2, fy: 6, alive: true },
-    { id: 'amiya', x: 4, y: 2, fx: 4, fy: 2, alive: true }
+    { id: 'amiya', x: 4, y: 2, fx: 4, fy: 2, alive: true },
+    /* ISSUE-20261028-19：第五个角色「预备干员」。放 (4,4) —— 与阿米娅 (4,2) 纵向错开，
+     * 也不在 (2,4) 华法琳与出口 (7,4) 的连线上，不会挡路。 */
+    { id: 'rookie', x: 4, y: 4, fx: 4, fy: 4, alive: true }
   ];
   selectedCandidate = null;
+  /* ISSUE-20261028-19：新的一局 → 清空候选属性副本与剩余点数。
+   * 只在 initCharSelect 清（B4）：切到别的角色再切回来，已分配的点必须还在。 */
+  candidateAbilities = null;
+  candidatePoints = 0;
   clearLog();
   log('请点击选择一个角色，然后通过点击或 WASD 移动至 🚪 出口。');
   setTimeout(() => {
@@ -2753,11 +2867,57 @@ function selectCharacter(charId) {
   selectedChar = charId;
   setDebugMode(false);
   playerStats = createPlayerStats(charId);
+  /* ISSUE-20261028-19：把选角时加的 5 点交给正式面板，剩余点数一并带进第 1 关（B5）。
+   * 只有动态角色才可能有副本；没加完的点不清零 —— 大厅出口判定已经够敏感，再拦「必须先加完」会卡人。 */
+  if (candidateAbilities && charIsDynamic(charId)) {
+    playerStats.abilities = { ...candidateAbilities };
+    playerStats.abilityPoints = candidatePoints;
+  }
   level = 1;
   resetRunProgress();
   recomputePlayerDerivedStats();
   playerStats.currentHp = playerStats.maxHp;
   initLevel();
+}
+
+/* =========================================================
+ * 选角阶段的「候选属性副本」（ISSUE-20261028-19）
+ *
+ * ★ 绝对不许直接往 CHARACTERS.rookie.abilities 里写加点：那是模块级常量对象，
+ *   雷达图、面板、联机快照都直接读它 → 一写就是全局污染（重开一局、甚至下一局选别人都会带着）。
+ *   所以选中动态角色时建一份副本，加点只改副本；selectCharacter() 确认时才写进 playerStats。
+ * ========================================================= */
+let candidateAbilities = null;   /* 动态角色在选角阶段的六维副本 */
+let candidatePoints = 0;         /* 选角阶段剩余可分配点数 */
+
+/* 当前候选人的六维：动态角色读副本，静态角色读常量（后者永远不该被写） */
+function candidateAbilitiesOf(id) {
+  if (charIsDynamic(id) && candidateAbilities) return candidateAbilities;
+  return CHARACTERS[id] ? CHARACTERS[id].abilities : null;
+}
+/* 切到某个候选人（点角色时调用）：动态角色首次选中时建副本并发放点数 */
+function candidateSelect(id) {
+  if (!charIsDynamic(id)) return;
+  if (!candidateAbilities) {
+    candidateAbilities = { ...CHARACTERS[id].abilities };
+    candidatePoints = CHARACTERS[id].startAbilityPoints || 0;
+  }
+}
+function candidateIsDynamic() {
+  return !!(selectedCandidate && charIsDynamic(selectedCandidate.id));
+}
+function candidatePointsLeft() {
+  return candidateIsDynamic() ? candidatePoints : 0;
+}
+/* 选角阶段加点：只动副本，不碰 playerStats（那时它还不该存在） */
+function allocateCandidatePoint(k) {
+  if (!candidateIsDynamic()) return false;
+  if (candidatePoints <= 0) return false;
+  if (!candidateAbilities || !(k in candidateAbilities)) return false;
+  if (candidateAbilities[k] >= ABILITY_CAP) return false;
+  candidateAbilities[k] += 1;
+  candidatePoints -= 1;
+  return true;
 }
 
 /* =========================================================
@@ -3207,7 +3367,8 @@ function canRangedAttack(from, target, range) {
 function playerAttackRangeCells() {
   const set = new Set();
   if (phase !== PHASE.PLANNING || !player) return set;
-  const range = isRangedChar(selectedChar) ? (player.range || PLAYER_RANGE) : 1;
+  /* ISSUE-20261028-19：攻击类型按当前六维现算（预备干员可翻转），不要再读静态角色表 */
+  const range = playerIsRanged() ? (player.range || PLAYER_RANGE) : 1;
   const origin = rangeDisplayOrigin();
   if (!origin) return set;
   for (let y = origin.y - range; y <= origin.y + range; y++) {
@@ -3426,7 +3587,7 @@ function vpadSpInfo() {
 function vpadDamageValue() {
   if (!player) return '—';
   /* 显示骰子文案（2d4+1 / 1d8+1）而不是定值：实际每次出手都掷骰，写死数字会骗人 */
-  const ranged = isRangedChar(selectedChar);
+  const ranged = playerIsRanged();   /* ISSUE-20261028-19：动态角色按六维现算 */
   return ranged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
 }
 
@@ -4496,29 +4657,48 @@ function renderCharSelectStats() {
     return;
   }
   const char = CHARACTERS[selectedCandidate.id];
-  const a = char.abilities;
+  /* ISSUE-20261028-19：动态角色读"候选副本"（加点后立刻反映），静态角色仍读常量对象 */
+  const a = candidateAbilitiesOf(selectedCandidate.id);
   const mv = Math.max(1, Math.floor(a.dex / 2));
-  /* 每个角色只有一种伤害方式（攻击节点类型决定），四格只显示对应的那一个伤害 */
-  const selRanged = isRangedChar(selectedCandidate.id);
-  const selDmg = selRanged ? Math.max(1, 1 + abilityMod(a.int)) : Math.max(1, 1 + abilityMod(a.str));
-  const selDmgProf = selRanged ? char.profRanged : char.profMelee;
+  /* 每个角色只有一种伤害方式（攻击节点类型决定），四格只显示对应的那一个伤害。
+   * 攻击类型一律走 charAttackTypeOf（带六维），预备干员加智力后会翻成远程。 */
+  const selRanged = isRangedCharOf(selectedCandidate.id, a);
+  /* 伤害格与对局内一致，显示骰子文案（2d4±修正 / 1d8±修正），不再显示定值期望。
+   * 选角阶段没有遗物，所以近战只算力量修正（锈蚀刀片层数恒为 0）。 */
+  const selDmg = selRanged
+    ? fmtDmgDice(PLAYER_RANGED_DICE, abilityMod(a.int))
+    : fmtDmgDice(PLAYER_MELEE_DICE, abilityMod(a.str));
+  /* 熟练标记：动态角色的熟练项由六维现算（选远程 ⇔ 远程熟练），静态角色沿用角色表旗标 */
+  const selDmgProf = charIsDynamic(selectedCandidate.id)
+    ? true
+    : (selRanged ? !!char.profRanged : !!char.profMelee);
   /* 选角阶段预览技力槽：泥岩/风笛/华法琳 5、阿米娅上限 = 感知，其余角色无技力机制 */
   const spPreview = selectedCandidate.id === 'fencer' || selectedCandidate.id === 'wheelchair' || selectedCandidate.id === 'vampire'
     ? { cur: 0, max: FENCER_SP_MAX }
     : (selectedCandidate.id === 'amiya' ? { cur: 0, max: Math.max(1, a.wis) } : null);
   renderHero({
     name: `${char.name} ${char.icon}`,
-    tag: '待选择',
-    hp: a.con, maxHp: a.con,
+    /* 预备干员把「熟练 / 攻击方式」直接写在 tag 上：加点会实时翻转，玩家不用自己推 */
+    tag: charIsDynamic(selectedCandidate.id)
+      ? (selRanged ? '待选择 · 远程熟练' : '待选择 · 近战熟练')
+      : '待选择',
+    /* 与对局内一致：开局 HP = 体质 + BASE_HP_BONUS（旧版这里只显示体质，等于少报 9 点） */
+    hp: a.con + BASE_HP_BONUS, maxHp: a.con + BASE_HP_BONUS,
     sp: spPreview,
     kvHtml: renderKvGrid([
       ['移动', `${mv}`, ''],
       ['AC', `${computeAC(a)}`, ''],
-      [charDmgLabel(selectedCandidate.id), `${selDmg}`, selDmgProf ? 'prof' : ''],
+      [charDmgLabelOf(selectedCandidate.id, a), `${selDmg}`, selDmgProf ? 'prof' : ''],
       null,   // 角色只有一种伤害方式 → 另一格留空，保持 2×2
     ]),
   });
+  /* ISSUE-20261028-19：动态角色在选角阶段显示剩余点数（没加完也能直接出门，点数带进第 1 关） */
+  const ptsLeft = candidatePointsLeft();
+  const ptsLine = (charIsDynamic(selectedCandidate.id) && ptsLeft > 0)
+    ? `<div class="stat" style="color:#ffd700">剩余 ${ptsLeft} 点属性未分配 · 点六维图上的属性名加点</div>`
+    : '';
   statsEl.innerHTML = `
+    ${ptsLine}
     <div class="card">
       <div class="card-title">技能说明</div>
       <div class="card-meta">${char.desc}</div>
@@ -4536,7 +4716,7 @@ function updateStats() {
   if (player.hp > 0 && player.alive) playerStats.currentHp = player.hp;
   const charInfo = CHARACTERS[selectedChar] || null;
   const a = player.abilities;
-  const isRanged = isRangedChar(selectedChar);
+  const isRanged = playerIsRanged();   /* ISSUE-20261028-19：动态角色按六维现算，别读静态表 */
   const isFencer = selectedChar === 'fencer';
 
   /* 角色卡：左六维图 / 右上 HP+技力 / 右下 2×2 仪表 */
@@ -4562,7 +4742,7 @@ function updateStats() {
     ['步数', `${moveUsed}/${player.move}`, moveUsed >= player.move ? 'hi' : '', 'wait'],
     ['攻击', `${atkNodes}`, atkNodes > 0 ? 'on' : 'dim', 'attack'],
     ['技能', `${skillNodes}`, skillNodes > 0 ? 'on' : (skillReadyInfo(playerPath).ready ? 'hi' : 'dim'), 'skill'],
-    [charDmgLabel(selectedChar), `${dmgVal}`, dmgProf ? 'prof' : '', 'range', showRangeOverlay],
+    [playerDmgLabel(), `${dmgVal}`, dmgProf ? 'prof' : '', 'range', showRangeOverlay],
     ['动作', actionLabel, actionUsed > actionMax ? 'hi' : (actionUsed > 0 ? 'on' : 'dim')],
   ]);
   /* 技力槽：泥岩固定上限 5；阿米娅上限 = 感知；风笛上限 5（沿直线移动积累，规划时预览增量）；华法琳上限 5（捡血迹） */
@@ -4660,6 +4840,15 @@ function updateStats() {
 }
 
 function allocateAbilityPoint(abilityKey) {
+  /* ISSUE-20261028-19：选角阶段加的是「候选副本」，不进 playerStats（那时它还不该存在）。
+   * 注意这里只放行**动态角色**（预备干员）：前四个角色在选角相位仍然加不了点，行为与之前完全一致。 */
+  if (phase === PHASE.CHAR_SELECT) {
+    if (!allocateCandidatePoint(abilityKey)) return;
+    renderCharSelectStats();      /* 面板数值实时跟手 */
+    renderAbilityDrawer();
+    try { drawRadar(); } catch (_) {}
+    return;
+  }
   if (phase !== PHASE.PLANNING && phase !== PHASE.LEVELCLEAR) return;
   if (playerStats.abilityPoints <= 0) return;
   if (playerStats.abilities[abilityKey] >= ABILITY_CAP) return;
@@ -4979,7 +5168,7 @@ boardEl.addEventListener('pointerdown', (e) => {
     freeMovePress = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false, id: e.pointerId };
     /* 选中角色：按「与角色中心的距离」判定，角色停在格与格之间也能点中 */
     const cand = freeMoveCandidateAt(cell.x, cell.y);
-    if (cand) { selectedCandidate = cand; render(); freeMoveRenderAll(); e.preventDefault(); return; }
+    if (cand) { selectedCandidate = cand; candidateSelect(cand.id); render(); freeMoveRenderAll(); e.preventDefault(); return; }
     /* 点地图 = 设一个「走到这里」的目标点（可连续改向，不等走完） */
     if (selectedCandidate) {
       if (!freeMoveGeom && !freeMoveMeasure()) return;
@@ -5538,8 +5727,11 @@ async function resolvePlayerAttack() {
     return false;
   }
 
-  /* ---- 近战：周围 1 格全部目标 ---- */
-  if (selectedChar === 'wheelchair' || selectedChar === 'fencer') {
+  /* ---- 近战：周围 1 格全部目标 ----
+   * ★ ISSUE-20261028-19：这里原本写的是 `selectedChar === 'wheelchair' || selectedChar === 'fencer'`。
+   *   预备干员的攻击类型由加点决定，用角色名判断会把它直接送进下面的远程分支（近战角色打 3 格）。
+   *   改成按「当前攻击类型」判定：静态四人结果完全不变，预备干员按 int 与 str 的大小走。 */
+  if (!playerIsRanged()) {
     if (!(playerAttacksDone < maxAttacks && canPerformAttackAction())) return false;
     playerAttacksDone++;
     playerActionsUsed++;   // 攻击占用一次动作
@@ -6639,6 +6831,16 @@ function pvpStartMatch() {
   selectedChar = pvpChars[pvpSlot] || 'fencer';
 
   playerStats = createPlayerStats(selectedChar);
+  /* ISSUE-20261028-19：预备干员的自由加点**不进联机**。
+   * pvpMakeUnit() 用的是 CHARACTERS 静态值重建双方单位（快照只传 charId，不传六维），
+   * 本地点数若真能加，面板会变、结算却不变（联机结算只读 pvpUnits），是「假加点」。
+   * 因此联机里预备干员一律按全 8 静态值打，双方对称、公平性不变；
+   * 真同步需要 bot 侧在 create/join 里转发 abilities 字段（本机无 bot 源码），已单开 issue 跟踪。 */
+  const rookieInPvp = charIsDynamic(selectedChar);
+  if (rookieInPvp) {
+    playerStats.abilities = { ...CHARACTERS[selectedChar].abilities };
+    playerStats.abilityPoints = 0;
+  }
   recomputePlayerDerivedStats();
   playerStats.currentHp = playerStats.maxHp;
   player = createPlayerUnit(PVP_SPAWNS[pvpSlot]);
@@ -6664,6 +6866,7 @@ function pvpStartMatch() {
   log('你：' + (CHARACTERS[selectedChar] ? CHARACTERS[selectedChar].name : selectedChar) +
       '　对手：' + pvpNames[1 - pvpSlot] + '（' + (CHARACTERS[peer.charId] ? CHARACTERS[peer.charId].name : peer.charId) + '）');
   log('回合 ' + (pvpTurn + 1) + '：规划你的路径与攻击节点，然后点「开始」。');
+  if (rookieInPvp) log('⚠️ 联机模式里「预备干员」不参与自由分配：双方都按全 8 静态六维作战（加点仅单人局生效）。');
   if (typeof updateCellSize === 'function') updateCellSize();
   render();
 }
@@ -6866,7 +7069,22 @@ PVP_NET.on('closed', function (ev) {
 });
 
 /* ---------------- UI ---------------- */
+
+/* ★★ ISSUE-20261029-27（2026-10-29，人类拍板「先关闭联机系统，PVP 搁置」）
+ * 联机唯一开关。改回 true 即完整恢复（按钮 / 面板 / 建房 / 加入 / 房间流程的代码一行没删）。
+ * 为什么用开关而不是删代码：联机不是「坏的」，是「先不开」；删了以后要重写，
+ * 而且 pvp-core.js 的协议、pvpMakeUnit 的镜像逻辑都是花时间调出来的。
+ * ★ 关闭时的实际效果：设置抽屉里看不到「⚔️ 联机」按钮，且 #pvpMask 根本不会被创建
+ *   → 客户端不存在任何可达的联机入口（连手改 DOM 找按钮也没有，因为它 display:none 且没绑定）。 */
+const PVP_ENABLED = false;
+
 function pvpInjectUI() {
+  /* 闸门放在最前面：不建 style、不建 #pvpMask、不给 #setPvpBtn 绑 onclick */
+  if (!PVP_ENABLED) {
+    const b = document.getElementById('setPvpBtn');
+    if (b) { b.hidden = true; b.style.display = 'none'; }
+    return;
+  }
   const style = document.createElement('style');
   style.textContent = [
     '#pvpBtn{position:fixed;right:10px;bottom:64px;z-index:9000;padding:9px 14px;border-radius:22px;',
