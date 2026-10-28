@@ -1,5 +1,5 @@
 {
- "updated_at": 1793211355,
+ "updated_at": 1793216954,
  "entries": [
   {
    "id": "5648491503",
@@ -67,6 +67,13 @@
   {
    "id": "dev_d47fe9d430ec419a9d273eb2d997a78f",
    "name": "何人",
+   "level": 0,
+   "kills": 0,
+   "runs": 0
+  },
+  {
+   "id": "dev_d808eef015604867a0022eef2b7c248e",
+   "name": "小雨",
    "level": 0,
    "kills": 0,
    "runs": 0
