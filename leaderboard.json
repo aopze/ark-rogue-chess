@@ -1,5 +1,5 @@
 {
- "updated_at": 1793197911,
+ "updated_at": 1793197983,
  "entries": [
   {
    "id": "5648491503",
@@ -23,6 +23,13 @@
    "runs": 1
   },
   {
+   "id": "dev_a40de3f57ee44fd4b45ab73fbdbac7dd",
+   "name": "starry",
+   "level": 2,
+   "kills": 3,
+   "runs": 2
+  },
+  {
    "id": "dev_0a1b6da2105c4978b97262e61d7f357a",
    "name": "Coco",
    "level": 1,
@@ -41,13 +48,6 @@
    "name": "玩家f831",
    "level": 1,
    "kills": 1,
-   "runs": 1
-  },
-  {
-   "id": "dev_a40de3f57ee44fd4b45ab73fbdbac7dd",
-   "name": "starry",
-   "level": 1,
-   "kills": 0,
    "runs": 1
   },
   {
