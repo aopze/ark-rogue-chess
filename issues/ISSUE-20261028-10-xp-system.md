@@ -5,7 +5,7 @@
 等人类维护者说「版本更新」时才会按 issues/ 里的条目一次性实施，完工后删除本文件。
 -->
 
-- **提出人 / 时间**：用户 / 2026-10-28 16:48（17:0x 按用户澄清重写）
+- **提出人 / 时间**：用户 / 2026-10-28 16:48（17:0x 按用户澄清重写；17:05 确认「负失血夹零」与「升级回满血不影响经验」）
 - **类型**：balance（附带少量 ui：经验条 + 结算日志）
 - **优先级**：P1 明显影响体验（改变整条成长曲线，所有平衡基线作废）
 - **状态**：ready
@@ -33,9 +33,11 @@
   - 必须取 `player.hp` 而不是 `playerStats.currentHp`：后者是跨关持久值，进关瞬间两者相等，但只有 `player.hp` 是战斗中的唯一真实血量。
 - `endHp`：在 `onLevelClear()` 里、**华法琳吸完场上血迹之后**取 `player.hp`。此时 `playerStats.currentHp = player.hp` 已在函数开头同步过，两者一致。
   - 顺序理由：华法琳通关回血本身就是「关卡结束时血量」的一部分，算在失血里才自洽。
-- `hpLoss = max(0, levelStartHp - endHp)`
-  - 取 0 下限：关内净回血（吃 ❤️ / 🩸 抵消了伤害）时失血记 0，不给负经验。
+- `hpLoss = max(0, levelStartHp - endHp)` —— **取 0 下限是硬要求，不是可选优化**（用户 17:05 明确要求「防止负失血」）。
+  - 关内净回血（吃 ❤️ +3 / 🩸 +1~2 / 华法琳吸血迹 +2 抵消了伤害）时 `levelStartHp - endHp` 会是负数，必须夹到 0；否则 `efficiency = ref - hpLoss` 会超过 `ref`，经验突破上限 24。
+  - 日志里最小只显示 `失血 0`，不出现负数。
 - **关末不回血**（用户明确要求）：不做任何 `currentHp += regen` 之类的结算，血量照原样带进下一关，与现状一致。
+- **升级回满血保留，且不影响本关经验**（用户 17:05 确认）：`openLevelUp()` 是在 `onLevelClear()` 里 `setTimeout(..., 600)` 之后才执行的，属于**两关之间**的动作；而 `hpLoss` / `xpGain` 在 `onLevelClear()` 内就已算完冻结。所以回满血只会抬高**下一关**的 `levelStartHp`（从而抬高下一关的 `ref`），对已经结算的这一关零影响。
 
 ### B. 每关经验
 
@@ -137,8 +139,8 @@ while (pendingLevelUps < 3 && xp >= XP_TABLE[heroLevel]) {
 7. **重开 / 二周目**：`xp`、`pendingLevelUps`、`levelStartHp` 必须进 `reset.js`，漏一个就会「二周目带经验开局」。
 8. **`levelUpPending` 的旧布尔语义要清干净**：`renderControls()` 和 `setTimeout(() => openLevelUp(), 600)` 两处都读它；改成计数后，`if (levelUpPending)` 会把 `0` 当 `false`、`2` 当 `true` 但只弹一次，需逐处改成 `pendingLevelUps > 0`。
 9. **加点即时加 HP 不影响本关经验**：`allocateAbilityPoint()` 在 LEVELCLEAR 阶段会因体质变化 `player.hp += diff`（`1288`）。经验必须在通关瞬间（进入 LEVELCLEAR 之前）算完并冻结，不能延后到加点之后再算，否则玩家加体质能给自己刷经验。
-10. **净回血会让 `hpLoss` 变小 → 经验变多，这是设计而非 bug**：吃 ❤️ / 🩸 既是回血也是「打得好」的证据，允许双重收益。但 `hpLoss` 必须 `max(0, …)`，否则会出负失血。
-11. **升级仍然回满血**（现有 `openLevelUp()` 行为，保留）。这是关卡之间唯一的回血口子；用户要求的「关卡结束不回血」指不新增关末休整结算。若希望连升级也不回满，另开 issue 单独讨论。
+10. **负失血必须夹到 0**（用户明确要求）：净回血会让 `levelStartHp - endHp` 变负，`hpLoss` 一律 `max(0, …)`。不夹的后果不只是「给负经验」——`efficiency = ref - hpLoss` 会超过 `ref`，经验突破 24 上限，保底/上限两条算术保证同时失效。写完后用「先被打到 1 HP 再连吃两个 ❤️」的用例验证一次。
+11. **升级回满血保留，且不参与本关经验计算**（用户 17:05 确认）：`openLevelUp()` 由 `setTimeout(..., 600)` 在两关之间触发，比 `onLevelClear()` 里的经验结算晚；回满血只改变**下一关**的 `levelStartHp` 与 `ref`。**不允许**为了「统一血量口径」而把经验结算挪到 `openLevelUp()` 之后——那样升级回满会先把 `endHp` 抬到 `maxHp`，失血归零，每关白送满效率。
 
 ---
 
@@ -149,6 +151,8 @@ while (pendingLevelUps < 3 && xp >= XP_TABLE[heroLevel]) {
 - [ ] 单关经验恒在 `[12, 24]`；`hpLoss = max(0, levelStartHp − endHp)`，与结算日志里的数字一致。
 - [ ] **关末不回血**：通关后 `currentHp` 与通关瞬间 `player.hp` 完全相等（除升级回满外）；连续两关不动血进关，`initLevel` 前后 HP 不变。
 - [ ] **残血不漏经验也不能刷**：带 1 HP 进关且零失血 → 效率按 `ref = max(2, round(1×0.4)) = 2` 计 2 步（不是满 6 步）。
+- [ ] **负失血夹零**：关内先被打到 1 HP，再连吃 ≥2 个恢复道具 ❤️ 把血吃回上限 → `levelStartHp - endHp` 为负，但 `hpLoss === 0`、`xpGain === 24`（**不得超过 24**），结算日志显示「失血 0」而非负数。
+- [ ] **升级回满不影响本关经验**：某关结算时记下 `xpGain` 与日志里的「失血 / 经验」数字，`openLevelUp()` 回满血后这些值一字不变；下一关 `levelStartHp === maxHp`（`ref` 回到满血基准）。
 - [ ] **华法琳口径**：同种子下让她通关时场上有 N 处血迹，`endHp` 包含每处 +2 的回复（日志中的失血 = 实际掉血 − 血迹回复）。
 - [ ] 结算日志同时包含：本关失血、失血基准、获得经验、当前经验/阈值。
 - [ ] 角色卡 `Lv.N` 旁有经验条，进度与 `xp / XP_TABLE[heroLevel]` 一致，加点触发 `render()` 后不消失。
