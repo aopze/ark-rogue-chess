@@ -287,6 +287,29 @@
     transition: color .15s, border-color .15s, background .15s;
   }
   #drawerSettings .drawer-corner-x:hover { background: rgba(48,48,72,.95); color: #fff; }
+  /* =========================================================================
+   * ★ 设置面板改为「覆盖棋盘格」（ISSUE-20261029-29，人类 2026-10-29 04:42）
+   *   「设置按钮点开之后，弹窗改成覆盖棋盘格，相当于地图变成了显示设置的面板」。
+   * 旧行为：从屏幕右侧滑入的 360px 宽抽屉，地图还露在左边。
+   * 新行为：面板直接盖在棋盘那块正方形上（--board-* 由 JS 按 #board 的实时矩形写入），
+   *   视觉上就是「地图原地变成了设置面板」，关掉后地图原样露出来。
+   * ★ 显隐机制必须换掉：原 .drawer 靠 translateX(100%) 平移到屏幕外收起，
+   *   而现在面板左边缘在棋盘位置，向右平移 100% 会正好盖住右侧栏 —— 收起=盖住别的东西。
+   *   所以这里改用 opacity + visibility 淡入淡出（ID 选择器优先级高于 .drawer.on，覆盖安全）。
+   * ★ 关闭按钮也从「对齐屏幕上的棋盘角」改成「对齐面板自己的右上角」：
+   *   面板现在就是棋盘那块，top/right 归零即与 ⚙ 原位重合。
+   * ========================================================================= */
+  #drawerSettings {
+    top: var(--board-top, 0); left: var(--board-left, 0);
+    right: auto; bottom: auto;
+    width: var(--board-w, min(360px, 86vw));
+    height: var(--board-h, 100%);
+    max-width: none; border-left: 1px solid #33334f; border-radius: 0; box-shadow: none;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
+  }
+  #drawerSettings.on { opacity: 1; visibility: visible; transform: none; }
+  #drawerSettings .drawer-corner-x { top: 0; right: 0; }
   #drawerSettings .drawer-corner-x:active { transform: scale(.92); }
   /* 标题靠右：右侧要给那个格子大小的关闭按钮让出位置（不然会压在标题上） */
   .drawer-head.head-end { justify-content: flex-end; padding-right: calc(var(--corner-x) + var(--cell) + 8px); }
@@ -514,14 +537,40 @@
   }
 
   /* =========================================================================
-   * 手机虚拟圆钮（ISSUE-20261028-09 D）
+   * 手机虚拟圆钮（ISSUE-20261028-09 D / ISSUE-20261029-29 改版）
    * 挂载判据由 JS 负责：只有 (pointer:coarse) 且无 (any-pointer:fine) 才建 DOM，
    * PC 与「带鼠标的触屏笔记本」一律不渲染 —— 所以这里没有桌面分支。
-   * 放在 #sidebar 底部（文档流），不浮在地图上：悬浮会挡格子，也与「不要凭空悬浮」冲突。
-   * 形状规则：圆形 = 交互（仅此处的方向键与三键），胶囊 = 特殊动作（开始行动）。
+   *
+   * ★ 2026-10-29 04:16 人类指令：「虚拟按钮也做进独立面板，手机端固定在屏幕下方，
+   *   电脑端不显示。开始行动的按钮放在虚拟按钮面板里面的顶部，布局是开始行动在上面，
+   *   左下方向键，右下 等待/攻击/技能」。
+   *   旧版是「方向键 + 三键」平铺在 #sidebar 底部（文档流），「开始行动」另找槽位；
+   *   现在整块改成 fixed 底栏面板，从下往上依次是：
+   *     ① 顶部 = 开始行动（整行宽，拇指最容易够到的第一排）
+   *     ② 下方一行 = 左下方向键 / 右下 等待·攻击·技能
+   *   面板 z-index(--z-vpad:1002) 低于抽屉遮罩(--z-mask:1100) —— 抽屉一开它自动被盖住，
+   *   不会出现在「设置面板之上还能点棋盘」的荒唐状态。
+   *   形状规则不变：圆形 = 交互，胶囊 = 特殊动作（开始行动）。
    * ========================================================================= */
-  #vpadHost { display: none; flex: 0 0 auto; }
-  #vpadHost.on { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px; }
+  #vpadHost { display: none; }
+  #vpadHost.on {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-vpad);
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+    background: rgba(17,17,32,.96);
+    border-top: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 -10px 26px rgba(0,0,0,.5);
+  }
+  /* 顶行：开始行动（renderControls 注入 .start-btn） */
+  .vpad-top { display: flex; flex: 0 0 auto; }
+  .vpad-top .start-btn { flex: 1 1 auto; width: 100%; }
+  .vpad-top:empty { display: none; }
+  /* 面板脱离文档流，用 --vpad-h（JS 实测写入）给 #game 补一圈底部留白。
+     boardAvailSize() 算的是 clientHeight − padding，棋盘因此自动缩小让位，
+     不需要在 JS 里再减一次高度。 */
+  body.vpad-on #game { padding-bottom: calc(var(--vpad-h, 0px) + 8px); }
+  /* 底行：左方向键 / 右三键 */
+  .vpad-bot { display: flex; flex: 0 0 auto; align-items: flex-end; justify-content: space-between; gap: 8px; }
   .vpad-dir { display: grid; grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); gap: 5px; }
   .vpad-dir .vbtn:nth-child(1) { grid-column: 2; grid-row: 1; }
   .vpad-dir .vbtn:nth-child(2) { grid-column: 1; grid-row: 2; }
@@ -544,6 +593,26 @@
     font-size: 9px; font-weight: 900; line-height: 14px; text-align: center; }
   /* 技力环：SVG 叠在技能键外侧，按 spMax 等分扇段 */
   .vring { position: absolute; inset: -4px; pointer-events: none; overflow: visible; }
+
+  /* =========================================================================
+   * 选角厅「技能说明展开层」（ISSUE-20261029-29）
+   * 盖在棋盘中部（第 1 行 ~ 倒数第 2 行）：出口所在的第一行、角色所在的最后一行都留在外面，
+   * 否则玩家既看不见出口、也看不见自己走到哪。内容超出高度可滚轮 / 触摸滑动。
+   * z-index 45：高于 #unitLayer(40)（说明展开时角色还没动，不存在盖住角色的问题），
+   *            低于 #fxLayer(50) 与抽屉遮罩(1100)，不挡浮字与抽屉。
+   * ========================================================================= */
+  #charInfoSheet { position: absolute; z-index: 45; box-sizing: border-box;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+    background: rgba(15,15,29,.96); border: 1px solid rgba(255,255,255,.13); border-radius: 8px;
+    padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,.55);
+    font-size: 12.5px; line-height: 1.6; color: #d5d5e6; }
+  #charInfoSheet[hidden] { display: none; }
+  .cis-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cis-ico { font-size: 22px; line-height: 1; }
+  .cis-name { font-size: 15px; font-weight: 900; color: #4ecdc4; letter-spacing: 1px; }
+  .cis-hint { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #7e7e97; white-space: nowrap; }
+  .cis-desc { font-size: 12.5px; color: #c3c3da; margin-bottom: 7px; }
+  .cis-tips { gap: 5px; }
 </style>
 </head>
 <body>
@@ -560,6 +629,10 @@
          不能放进 #board —— paintBoard() 每帧都 innerHTML 重刷那一层，角标会被冲掉。 -->
     <button id="lobbyOpenBtn" title="账号与排行" aria-label="账号与排行" aria-expanded="false">♟</button>
     <button id="setOpenBtn" title="设置" aria-label="设置" aria-expanded="false">⚙</button>
+    <!-- 选角厅「技能说明展开层」（ISSUE-20261029-29）：点角色后盖在棋盘中部（第 1 行 ~ 倒数第 2 行），
+         出口所在的第一行不遮。放在 #boardWrap 里而不是 #board 里：paintBoard() 每次都 innerHTML
+         重建 #board 那一层，放进去会被冲掉。位置由 layoutCharInfoSheet() 按格子矩形实算。 -->
+    <div id="charInfoSheet" hidden></div>
   </div>
   <div id="dragHandle" title="拖动调整地图与右侧UI的比例"><span class="grip"></span></div>
   <div id="sidebar">
@@ -922,13 +995,14 @@ function initLevel() {
     pendingAttack = false;
     pendingChargeInfo = null;
     vampireSkillActive = false;   // 不稳定血浆只在本关内持续
-    const numEnemies = Math.min(3 + Math.floor((level - 1) / 2), 6);
-    const targetWalkable = 70 + numEnemies * 8;
-    const baseSize = Math.max(11, Math.ceil(Math.sqrt(targetWalkable * 2.5)));
-    ROWS = baseSize + Math.floor((level - 1) / 3) * 2;
-    COLS = baseSize + Math.floor((level - 1) / 3) * 2;
-    if (level % 3 === 0) { ROWS += 1; COLS += 2; }
-    ROWS = Math.min(ROWS, 25); COLS = Math.min(COLS, 25);
+    const numEnemies = Math.min(3 + Math.floor((level - 1) / 2), MAX_ENEMIES_PER_LEVEL);
+    /* ★ ISSUE-20261029-29：棋盘固定 9×9（人类 04:42）。
+     * 旧的「按关卡长地图」公式整段删除 —— 现在行 / 列恒为 9，
+     * 随机地形、起点筛选、奖励摆放全部沿用原逻辑，只是尺寸参数换成了常量。
+     * 视觉侧不受影响：updateCellSize() 仍按可用区域短边算正方形格边长，格子只会更大更清楚。 */
+    const targetWalkable = BOARD_TARGET_WALKABLE;
+    ROWS = BOARD_ROWS;
+    COLS = BOARD_COLS;
     const gen = generateMap(numEnemies, targetWalkable);
     map = gen.map;
     rewardItems = gen.rewards || [];
@@ -1159,6 +1233,11 @@ function updateCellSize() {
   const bh = br * cell + (br - 1) * gap;
   document.documentElement.style.setProperty('--corner-x', Math.max(0, Math.round((side - bw) / 2)) + 'px');
   document.documentElement.style.setProperty('--corner-y', Math.max(0, Math.round((side - bh) / 2)) + 'px');
+  /* 棋盘尺寸刚变过 → 覆盖棋盘的「设置面板」矩形也要跟着变（ISSUE-20261029-29）。
+   * 转屏/换布局时窗口尺寸不一定变，只靠 resize 监听会漏，所以在这里补一次。 */
+  try { if (typeof syncBoardOverlayRect === 'function') syncBoardOverlayRect(); } catch (_) {}
+  /* 选角厅的技能说明层是按格子矩形实算的，格子一变它也要重新贴一次 */
+  try { if (typeof layoutCharInfoSheet === 'function') layoutCharInfoSheet(); } catch (_) {}
 }
 
 function logEnemyMainDirections() {
@@ -1231,13 +1310,19 @@ function buildBoardHtml() {
         const playerHere = player.alive && player.x === x && player.y === y;
         const enemyHere = enemies.find(e => e.alive && e.x === x && e.y === y);
         const bloodHere = bloodDrops.some(b => b.x === x && b.y === y);
+        /* ★ ISSUE-20261029-29：血迹的底色**必须先于单位判断**加上。
+         * 旧写法把 blood-cell 放在「格子空着」的分支里，结果是：敌人踩在自己流的血上时
+         * 整格一点提示都没有，等它走开、另一个敌人路过，那格才突然冒出 🩸
+         * —— 玩家看到的就是「血迹显示在另一个敌人的位置」。
+         * 现在血迹格永远带底色（单位站上去只是盖住图标，底色照旧），
+         * 「血是谁流的」一眼可辨，拾取点也不会因为敌人走位而错位。 */
+        if (bloodHere) cls += ' blood-cell';
         if (playerHere || enemyHere) {
           /* 有单位站在这格时看不见格内文字，节点靠底色 + 描边提示 */
         } else if (rewardItems.some(r => r.x === x && r.y === y)) {
           cls += ' item-cell';
           content = `<span class="item-pulse" style="font-size:calc(var(--cell)*0.5);">❤️</span>`;
         } else if (bloodHere) {
-          cls += ' blood-cell';
           content = `<span class="item-pulse" style="font-size:calc(var(--cell)*0.5);">🩸</span>`;
         } else if (stepsAtCell.length > 0) {
           const lastIdx = stepsAtCell[stepsAtCell.length - 1];
@@ -1444,13 +1529,11 @@ function renderCharSelectStats() {
   const ptsLine = (charIsDynamic(selectedCandidate.id) && ptsLeft > 0)
     ? `<div class="stat" style="color:#ffd700">剩余 ${ptsLeft} 点属性未分配 · 点六维图上的属性名加点</div>`
     : '';
-  statsEl.innerHTML = `
-    ${ptsLine}
-    <div class="card">
-      <div class="card-title">技能说明</div>
-      <div class="card-meta">${char.desc}</div>
-      <ul class="tips">${renderTips(char.tips)}</ul>
-    </div>`;
+  /* ★ ISSUE-20261029-29（人类 04:16 / 04:42）：原先这里还挂着一张「技能说明」卡片
+   * （char.desc + tips 列表）。现在技能说明改由棋盘上那块 #charInfoSheet 展开层承担
+   * ——「点击角色之后，角色这一行以上的部分展开角色技能说明文字，可以滚轮滑动查看，
+   * 删掉之前的技能说明面板」。侧栏只留点数提醒，避免同一份文字两处各写一遍。 */
+  statsEl.innerHTML = ptsLine;
   return;
 }
 
@@ -1630,17 +1713,24 @@ function allocateAbilityPoint(abilityKey) {
 
 function updateStartBtn() {
   if (phase !== PHASE.PLANNING) return;
-  // 开始行动按钮可能位于 #controls（横屏）或 #actionSlot（竖屏，放在六维图上方）
-  const btn = controlsEl.querySelector('.start-btn') || (actionSlotEl ? actionSlotEl.querySelector('.start-btn') : null);
+  /* 开始行动按钮现在可能有三个位置（ISSUE-20261029-29）：
+   * 手机底栏面板顶部（vpadStartSlot）> 竖屏 #actionSlot > 底部 #controls（横屏桌面）。 */
+  const vpadSlot = (typeof vpadStartSlotEl === 'function') ? vpadStartSlotEl() : null;
+  const btn = (vpadSlot && vpadSlot.querySelector('.start-btn'))
+    || controlsEl.querySelector('.start-btn')
+    || (actionSlotEl ? actionSlotEl.querySelector('.start-btn') : null);
   if (btn) btn.disabled = playerPath.length === 0;
 }
 
 function renderControls() {
   controlsEl.innerHTML = '';
   if (actionSlotEl) actionSlotEl.innerHTML = '';
-  /* 竖屏（layout-v）：「开始行动」按钮放到六维图上方的 #actionSlot；横屏则留在底部 #controls */
+  /* ISSUE-20261029-29：手机端「开始行动」进底栏面板顶部（最高优先级），
+   * 否则竖屏走 #actionSlot、横屏走 #controls —— 与改造前逐条等价。 */
+  const vpadSlot = (typeof vpadStartSlotEl === 'function') ? vpadStartSlotEl() : null;
+  if (vpadSlot) vpadSlot.innerHTML = '';
   const vertical = document.body.classList.contains('layout-v');
-  const btnHost = (vertical && actionSlotEl) ? actionSlotEl : controlsEl;
+  const btnHost = vpadSlot || ((vertical && actionSlotEl) ? actionSlotEl : controlsEl);
   if (phase === PHASE.PLANNING) {
     const confirm = document.createElement('button');
     confirm.className = 'start-btn';
@@ -1695,6 +1785,8 @@ function renderControls() {
     }
   }
   controlsEl.dataset.phase = phase;
+  /* 底栏面板里塞进 / 拿掉「开始行动」后高度会变，重新补一次让位高度 */
+  try { if (typeof syncVpadInset === 'function') syncVpadInset(); } catch (_) {}
 }
 
 function syncControlsIfNeeded() {
@@ -1930,7 +2022,16 @@ boardEl.addEventListener('pointerdown', (e) => {
     freeMovePress = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false, id: e.pointerId };
     /* 选中角色：按「与角色中心的距离」判定，角色停在格与格之间也能点中 */
     const cand = freeMoveCandidateAt(cell.x, cell.y);
-    if (cand) { selectedCandidate = cand; candidateSelect(cand.id); render(); freeMoveRenderAll(); e.preventDefault(); return; }
+    /* ISSUE-20261029-29：点角色 = 选中 + 在角色行以上展开技能说明（可滚轮；点空白处收起） */
+    if (cand) {
+      selectedCandidate = cand;
+      candidateSelect(cand.id);
+      render();
+      freeMoveRenderAll();
+      openCharInfoSheet();
+      e.preventDefault();
+      return;
+    }
     /* 点地图 = 设一个「走到这里」的目标点（可连续改向，不等走完） */
     if (selectedCandidate) {
       if (!freeMoveGeom && !freeMoveMeasure()) return;
@@ -2378,11 +2479,17 @@ function clearItemCell(x, y) {
   }
 }
 
-/* 在指定格留下血迹（同一格只留一处） */
+/* 在指定格留下血迹（同一格只留一处）
+ * ★ ISSUE-20261029-29：必须**当场重绘一次棋盘**。
+ * 旧代码只 push 进数组，而结算里后续只调 refreshUnits()（它只刷单位层与数值，不刷格子），
+ * 于是 🩸 要等下一次整盘 render() 才出现 —— 那时敌人已经走完这一步了：
+ * 血留在 A 的旧位置，A 走开、B 路过，玩家看到的就是「血迹生成在了另一个敌人那里」。
+ * 立刻重绘 → 血在被击中的那一格、在敌人还没动的那一刻出现。 */
 function addBloodAt(x, y) {
   if (bloodDrops.some(b => b.x === x && b.y === y)) return false;
   bloodDrops.push({ x, y });
   log('华法琳的攻击留下了血迹 🩸！');
+  try { refreshBoardOnly(); } catch (_) {}
   return true;
 }
 

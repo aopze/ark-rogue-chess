@@ -3,6 +3,23 @@
 const SPAWN_CLEAR_RADIUS = 2;
 const OBSTACLE_MAX_GROUP = 4;
 const OBSTACLE_GROUPS_TRY = 8;
+/* ★ 固定棋盘尺寸（ISSUE-20261029-29，人类 2026-10-29 04:42）
+ * 「地图改成固定的 9*9，随机地图的机制不变，最长的列和最长的行都固定为 9」。
+ * 旧公式按关卡把地图从 16×16 一路长到 25×25（格子越往后越小、走位越挤），
+ * 现在行列都写死 9：内部可用 7×7 = 49 格，随机生成流程（growRegion → smooth →
+ * placeObstacles → 起点筛选）一行不改，只是把「目标可走格数」从 70+ 降到适配 49 格的量级。 */
+const BOARD_ROWS = 9;
+const BOARD_COLS = 9;
+/* 目标可走格数（喂给 growRegion，最终还要再被 smooth / placeObstacles 削一轮）。
+ * 9×9 内部只有 7×7 = 49 格：写 42 时实测最终只剩 29 格可走，5 只敌人 + 玩家挤得没法走位；
+ * 提到 46（＝内部的 94%）后实测 36-40 格，既留得出掩体也留得出绕后的路。 */
+const BOARD_TARGET_WALKABLE = 46;
+/* 单关敌人上限：9×9 定版后从 6 降到 5。
+ * 旧地图 16×16（后期 25×25）装 6 只还有走位空间；9×9 内部只有 49 格、实际可走 ~38 格，
+ * 6 只 + 玩家会把整张图塞满：generateMap 要求「两两曼哈顿 ≥2 且离玩家 ≥5」的起点，
+ * 6 只经常凑不出来 → 400 次尝试全失败 → 掉进兜底空房间（地形变得千篇一律）。
+ * 降到 5 后起点筛选稳定通过，同时难度不会崩（敌人数量公式 3+⌊(关-1)/2⌋ 不变，只是封顶低一档）。 */
+const MAX_ENEMIES_PER_LEVEL = 5;
 const UNIT_MOVE_MS = 120;
 const ABILITY_CAP = 20;
 /* 属性点改为绑定「升级」发放：每 LEVELUP_EVERY_N_LEVELS 关升 1 级时给 2 点（ISSUE-20261028-03）。

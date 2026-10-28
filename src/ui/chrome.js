@@ -74,14 +74,35 @@ logResetBtn.addEventListener('click', function (e) {
   let embedded = false;
   try { embedded = !!(window.parent && window.parent !== window); } catch (e) { embedded = false; }
   if (!embedded) { btn.hidden = true; return; }
+
+  /* ★ ISSUE-20261029-29：账号面板与设置面板一样改成「覆盖棋盘格」。
+   * 面板本体在外壳（index.html）里，而棋盘的位置只有游戏内部量得到，
+   * 所以这里在请求打开的同时把棋盘的矩形（iframe 内坐标系）一并上报，
+   * 外壳再加上 iframe 自身的偏移即可把面板贴到棋盘上。
+   * 转屏 / 换布局时窗口尺寸不一定变，所以抽屉开着还要在 resize 里补报一次。 */
+  let lobbyDrawerOpen = false;
+  function postBoardRect() {
+    try {
+      const r = boardEl.getBoundingClientRect();
+      if (!(r.width > 0) || !(r.height > 0)) return;
+      window.parent.postMessage({
+        type: 'ark_board_rect',
+        rect: { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) },
+      }, '*');
+    } catch (e) {}
+  }
+
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
+    postBoardRect();
     try { window.parent.postMessage({ type: 'ark_open_lobby' }, '*'); } catch (e2) {}
   });
+  window.addEventListener('resize', function () { if (lobbyDrawerOpen) setTimeout(postBoardRect, 160); });
   window.addEventListener('message', function (e) {
     const d = e && e.data;
     if (!d || d.type !== 'ark_lobby_state') return;
     const on = !!d.open;
+    lobbyDrawerOpen = on;
     btn.classList.toggle('on', on);
     btn.setAttribute('aria-expanded', on ? 'true' : 'false');
   });

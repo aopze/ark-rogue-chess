@@ -58,10 +58,12 @@ function renderAbilityDrawer() {
   if (tip) {
     if (inSelect) {
       tip.textContent = candidateIsDynamic()
-        ? '点属性名加点（剩余 ' + pts + ' 点）。智力高于力量 → 远程熟练，否则近战熟练。'
-        : '六维越高越强：绿色 = 熟练项与最高属性。点属性名可看具体作用。';
+        ? '点属性名直接加点（剩余 ' + pts + ' 点）。智力高于力量 → 远程熟练，否则近战熟练。'
+        : '六维越高越强：绿色 = 熟练项与最高属性。点属性名看具体作用。';
     } else {
-      tip.textContent = '点属性名查看作用与数值公式；有剩余点数时可原地加点（金色方框 = 还能加）。';
+      tip.textContent = pts > 0
+        ? '点属性名直接 +1（金色方框 = 还能加）；点数用完后点属性名看作用与数值公式。'
+        : '点属性名查看作用与数值公式（没有可分配的点数）。';
     }
   }
   const title = document.getElementById('drawerStatsTitle');

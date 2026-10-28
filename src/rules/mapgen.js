@@ -90,8 +90,14 @@ function countWalkable(m) {
 }
 function placeObstacles(m, spawnX, spawnY) {
   const obstacleCells = new Set();
+  /* ★ ISSUE-20261029-29：障碍组数按内部面积自适应。
+   * 旧值写死 8 组（每组 1-4 格，平均吃掉 ~16 格）是为 16×16 / 25×25 的大图定的；
+   * 9×9 内部只有 49 格，照搬会把近 1/3 的可走区变成石头堆（实测可走只剩 29 格）。
+   * 公式在 25×25 时算出 44 → 仍取 OBSTACLE_GROUPS_TRY(8)，与旧行为逐格一致；
+   * 9×9 时 49/12 ≈ 4 组，够做掩体又不至于堵死。 */
+  const maxGroups = Math.max(2, Math.min(OBSTACLE_GROUPS_TRY, Math.round((ROWS - 2) * (COLS - 2) / 12)));
   let groupsPlaced = 0, attempts = 0;
-  while (groupsPlaced < OBSTACLE_GROUPS_TRY && attempts < 60) {
+  while (groupsPlaced < maxGroups && attempts < 60) {
     attempts++;
     const candidates = [];
     for (let y = 1; y < ROWS - 1; y++) for (let x = 1; x < COLS - 1; x++) {
@@ -177,7 +183,11 @@ function generateMap(numEnemies, targetWalkable) {
     for (let x = 0; x < COLS; x++) { m[0][x] = 1; m[ROWS - 1][x] = 1; }
     for (let y = 0; y < ROWS; y++) { m[y][0] = 1; m[y][COLS - 1] = 1; }
     const cells = [...reach].map(k => { const [x, y] = k.split(',').map(Number); return { x, y }; });
-    const far = cells.filter(c => dist(c, playerStart) >= 6 && m[c.y][c.x] === 0);
+    /* ★ ISSUE-20261029-29：定版 9×9 后「离玩家 ≥6 格」太苛刻 —— 内部只有 7×7，
+     * 硬卡 6 会让 5 个起点经常凑不齐（每次都掉进下面的兜底空房间）。
+     * 改成按棋盘短边自适应：25 格时代 ≈ 6（与原值一致），9×9 时 = 5。 */
+    const farDist = Math.max(4, Math.round(Math.min(ROWS, COLS) * 0.55));
+    const far = cells.filter(c => dist(c, playerStart) >= farDist && m[c.y][c.x] === 0);
     if (far.length < numEnemies) continue;
     const shuffled = far.sort(() => rng() - 0.5);
     const enemyStarts = [];
@@ -213,18 +223,27 @@ function generateMap(numEnemies, targetWalkable) {
     }
     return { map: m, playerStart, enemyStarts, rewards };
   }
+  /* ★ 兜底图（400 次都没生成出合格地图时）也按新尺寸重做：
+   * 旧写法硬编码 `playerStart.x + 4 + i` / `playerStart.y - 4 - i`，在 9×9 下会算出 (7,2)、(7,2)…
+   * 两个敌人重叠在同一格（后面 spawn 时两只怪叠一起，谁也走不动）。
+   * 改成「内部全开 → 按离玩家的距离从远到近挑起点、两两保持 ≥2 格」，与原兜底语义一致但不会撞车。 */
   const m = Array.from({ length: ROWS }, () => Array(COLS).fill(1));
-  const playerStart = { x: 3, y: ROWS - 3 };
-  for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
-    const nx = playerStart.x + dx, ny = playerStart.y + dy;
-    if (nx > 0 && nx < COLS - 1 && ny > 0 && ny < ROWS - 1 && Math.abs(dx) + Math.abs(dy) <= 6) m[ny][nx] = 0;
-  }
+  const playerStart = { x: 1, y: ROWS - 2 };
+  for (let y = 1; y < ROWS - 1; y++) for (let x = 1; x < COLS - 1; x++) m[y][x] = 0;
   clearSpawnArea(m, playerStart.x, playerStart.y, SPAWN_CLEAR_RADIUS);
   for (let x = 0; x < COLS; x++) { m[0][x] = 1; m[ROWS - 1][x] = 1; }
   for (let y = 0; y < ROWS; y++) { m[y][0] = 1; m[y][COLS - 1] = 1; }
+  const cells = [];
+  for (let y = 1; y < ROWS - 1; y++) for (let x = 1; x < COLS - 1; x++) if (m[y][x] === 0) cells.push({ x, y });
+  cells.sort((a, b) => dist(b, playerStart) - dist(a, playerStart));
   const enemyStarts = [];
-  for (let i = 0; i < numEnemies; i++) enemyStarts.push({ x: Math.min(COLS - 3, playerStart.x + 4 + i), y: Math.max(2, playerStart.y - 4 - i) });
-  for (const e of enemyStarts) m[e.y][e.x] = 0;
+  for (const c of cells) {
+    if (dist(c, playerStart) < 3) continue;
+    if (enemyStarts.every(s => dist(s, c) >= 2)) {
+      enemyStarts.push(c);
+      if (enemyStarts.length >= numEnemies) break;
+    }
+  }
   return { map: m, playerStart, enemyStarts, rewards: [] };
 }
 

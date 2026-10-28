@@ -15,24 +15,31 @@ function initCharSelect() {
   hasDragged = false;
   clearTimeout(pressTimer);
   clearUnitLayer();
-  ROWS = 9; COLS = 9;
+  ROWS = BOARD_ROWS; COLS = BOARD_COLS;
+  /* ★ ISSUE-20261029-29：选角厅改版（人类 04:42）
+   *   「选角界面改成角色在最后一行并列，第一行中间的位置放开始游戏的出口」。
+   * 旧布局：外圈四周全是墙，5 个角色散在左上区域，出口在右侧中间 (7,4)。
+   * 新布局：
+   *   - 左右两列仍是墙（保留「厅堂有边界」的框感，也避免角色走出画面）；
+   *   - 第 0 行整行可走 → 中间那格 (4,0) 放出口 🚪；
+   *   - 最后一行（ROWS-1）整行可走 → 5 个角色在这一行居中并列（x = 2..6）。
+   * ★ 上下两行必须显式开成可走：freeMove 的夹取范围与「墙」判定都读 selMap，
+   *   若留着旧的外圈墙，角色会卡在 y=1..7，永远够不到第 0 行的出口。 */
   selMap = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
-  for (let i = 0; i < ROWS; i++) { selMap[i][0] = 1; selMap[i][COLS-1] = 1; }
-  for (let i = 0; i < COLS; i++) { selMap[0][i] = 1; selMap[ROWS-1][i] = 1; }
+  for (let i = 0; i < ROWS; i++) { selMap[i][0] = 1; selMap[i][COLS - 1] = 1; }
   /* 内部不再摆任何阻挡物（ISSUE-20261028-13 方案 A）：大厅是选角厅，不是战场。
    * 联机 9×9 竞技场不再复用这张图，改用 buildPvpArena() 的独立快照，联机地形一格不变。 */
-  selExit = { x: 7, y: 4 };
+  selExit = { x: 4, y: 0 };
   selMap[selExit.y][selExit.x] = 0;
-  charCandidates = [
-    { id: 'wheelchair', x: 2, y: 2, fx: 2, fy: 2, alive: true },
-    { id: 'vampire', x: 2, y: 4, fx: 2, fy: 4, alive: true },
-    { id: 'fencer', x: 2, y: 6, fx: 2, fy: 6, alive: true },
-    { id: 'amiya', x: 4, y: 2, fx: 4, fy: 2, alive: true },
-    /* ISSUE-20261028-19：第五个角色「预备干员」。放 (4,4) —— 与阿米娅 (4,2) 纵向错开，
-     * 也不在 (2,4) 华法琳与出口 (7,4) 的连线上，不会挡路。 */
-    { id: 'rookie', x: 4, y: 4, fx: 4, fy: 4, alive: true }
-  ];
+  /* 5 个角色在最后一行并列：9 列去掉两侧墙剩 7 格，取中间 5 格（x = 2..6）居中。
+   * 顺序沿用原顺序（风笛 / 华法琳 / 泥岩 / 阿米娅 / 预备干员），索引变了不影响任何逻辑。 */
+  charCandidates = ['wheelchair', 'vampire', 'fencer', 'amiya', 'rookie'].map((id, i) => {
+    const x = 2 + i, y = ROWS - 1;
+    return { id, x, y, fx: x, fy: y, alive: true };
+  });
   selectedCandidate = null;
+  /* 回大厅 = 说明层必须收起（charSheetOpen 是下面声明的 let，本函数在运行时才被调用，无 TDZ 风险） */
+  charSheetOpen = false;
   /* ISSUE-20261028-19：新的一局 → 清空候选属性副本与剩余点数。
    * 只在 initCharSelect 清（B4）：切到别的角色再切回来，已分配的点必须还在。 */
   candidateAbilities = null;
@@ -269,11 +276,15 @@ function stopFreeMove() {
 function freeMoveSetTarget(fx, fy, follow) {
   if (!freeMoveActive) return;
   if (!freeMoveGeom && !freeMoveMeasure()) return;
+  /* 选角厅上下两行现在是可走的（出口在第 0 行、角色站在最后一行），
+   * y 的夹取范围必须跟着放开（ISSUE-20261029-29）—— 留着旧的 1..ROWS-2 就永远走不到出口。 */
   freeMoveTarget = {
     fx: Math.max(1, Math.min(COLS - 2, fx)),
-    fy: Math.max(1, Math.min(ROWS - 2, fy)),
+    fy: Math.max(0, Math.min(ROWS - 1, fy)),
     follow: !!follow,
   };
+  /* 开始走动了就把技能说明收起来：它还盖在棋盘中部，挡着看走路 */
+  closeCharInfoSheet();
   freeMoveKick();
 }
 
@@ -287,6 +298,7 @@ function freeMoveKeyDown(k) {
   if (!freeMoveActive || !selectedCandidate) return false;
   if (!FREE_MOVE_KEYS.includes(k)) return false;
   freeMoveKeys[k] = true;
+  closeCharInfoSheet();      /* 键盘移动同样要收起说明，理由同 freeMoveSetTarget */
   freeMoveKick();
   return true;
 }
@@ -296,6 +308,91 @@ function freeMoveKeyUp(k) {
 }
 
 /* 点击命中角色：按「中心距 <= 0.75 格」判定，角色不在格中心也能点中 */
+/* =========================================================================
+ * ★ 选角厅「技能说明展开层」（ISSUE-20261029-29，人类 04:42）
+ *   「点击角色之后，角色这一行以上的部分展开角色技能说明文字，可以滚轮滑动查看，
+ *     删掉之前的技能说明面板」。
+ *
+ * 形态：一块盖在棋盘「第 1 行 ~ 倒数第 2 行」上的半透明卡片（出口所在的第一行不遮，
+ *   否则玩家看不见、也走不到出口），内容 = 角色简介 + tips，超出高度可滚轮 / 触摸滑动。
+ * 为什么做成棋盘上的覆盖层而不是侧栏卡片：需求就写在棋盘上；且手机端侧栏在下方，
+ *   说明放那儿要低头找，放棋盘中部是拇指区。
+ * 收起时机（三条，都是「玩家要开始操作了」的信号）：
+ *   ① 点面板空白处（位移 ≤8px 且 ≤700ms 才算「点」，滚动手指不会误触）
+ *   ② 点地图设目标（freeMoveSetTarget）
+ *   ③ 按 WASD（freeMoveKeyDown）
+ * 位置靠量单元格 (1,1) 与 (COLS-2, ROWS-2) 的矩形算，不用 --cell 反推公式
+ *   —— 后者要在 CSS 里复述一遍 gap 与居中偏移，两处一旦不同步就会错位半格。
+ * ========================================================================= */
+let charSheetOpen = false;
+
+function openCharInfoSheet() {
+  charSheetOpen = true;
+  renderCharInfoSheet();
+}
+
+function closeCharInfoSheet() {
+  if (!charSheetOpen) return;
+  charSheetOpen = false;
+  renderCharInfoSheet();
+}
+
+function layoutCharInfoSheet() {
+  const el = document.getElementById('charInfoSheet');
+  if (!el || el.hidden) return;
+  const a = getCellEl(1, 1);
+  const b = getCellEl(COLS - 2, ROWS - 2);
+  if (!a || !b) return;
+  const lr = boardWrap.getBoundingClientRect();
+  const ar = a.getBoundingClientRect();
+  const br = b.getBoundingClientRect();
+  if (!(ar.width > 0) || !(br.width > 0)) return;
+  el.style.left = (ar.left - lr.left) + 'px';
+  el.style.top = (ar.top - lr.top) + 'px';
+  el.style.width = (br.left + br.width - ar.left) + 'px';
+  el.style.height = (br.top + br.height - ar.top) + 'px';
+}
+
+function renderCharInfoSheet() {
+  const el = document.getElementById('charInfoSheet');
+  if (!el) return;
+  if (phase !== PHASE.CHAR_SELECT || !selectedCandidate || !charSheetOpen) {
+    el.hidden = true;
+    return;
+  }
+  const char = CHARACTERS[selectedCandidate.id];
+  if (!char) { el.hidden = true; return; }
+  el.hidden = false;
+  el.innerHTML =
+    '<div class="cis-head">' +
+      '<span class="cis-ico">' + char.icon + '</span>' +
+      '<span class="cis-name">' + char.name + '</span>' +
+      '<span class="cis-hint">滚轮 / 上下滑动查看 · 点空白处收起</span>' +
+    '</div>' +
+    '<div class="cis-desc">' + char.desc + '</div>' +
+    '<ul class="tips cis-tips">' + renderTips(char.tips) + '</ul>';
+  layoutCharInfoSheet();
+}
+
+(function bindCharInfoSheet() {
+  const el = document.getElementById('charInfoSheet');
+  if (!el) return;
+  let down = null;
+  el.addEventListener('pointerdown', function (e) {
+    down = { x: e.clientX, y: e.clientY, t: Date.now() };
+  });
+  el.addEventListener('pointerup', function (e) {
+    if (!down) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    const dt = Date.now() - down.t;
+    down = null;
+    if (moved <= 8 && dt <= 700) closeCharInfoSheet();
+  });
+  el.addEventListener('pointercancel', function () { down = null; });
+  /* 滚轮只在本层滚，别把页面带着一起滚（body 是 overflow:hidden，这里只是保险） */
+  el.addEventListener('wheel', function (e) { e.stopPropagation(); }, { passive: true });
+})();
+
 function freeMoveCandidateAt(x, y, radius) {
   let best = null;
   let bestD = radius || 0.75;
@@ -361,8 +458,8 @@ function freeMoveTick(ts) {
         moving = true;
       }
     }
-    /* F1：中心点夹在可行走区域内，外圈仍是墙 */
-    const minX = 1, maxX = COLS - 2, minY = 1, maxY = ROWS - 2;
+    /* F1：中心点夹在可行走区域内 —— 左右两列仍是墙，上下两行可走（出口行 / 角色行） */
+    const minX = 1, maxX = COLS - 2, minY = 0, maxY = ROWS - 1;
     if (c.fx < minX) { c.fx = minX; freeMoveTarget = null; }
     if (c.fx > maxX) { c.fx = maxX; freeMoveTarget = null; }
     if (c.fy < minY) { c.fy = minY; freeMoveTarget = null; }
