@@ -21,16 +21,9 @@
     border-radius:18px; font-size:12px; background:rgba(20,22,44,.82); color:#cfd2ff;
     border:1px solid rgba(255,255,255,.12); max-width:80%; text-align:center; }
 
-  /* ===== 左边缘把手（ISSUE-20261028-10 B1/B5） ===== */
-  #lobbyHandle { position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:70;
-    width:8px; height:96px; padding:0; border:0; border-radius:0 8px 8px 0;
-    background:rgba(255,209,102,.26); cursor:pointer; display:flex; align-items:center;
-    justify-content:center; transition:width .18s ease, background .18s ease; }
-  #lobbyHandle .grip { width:2px; height:40px; border-radius:1px; background:rgba(255,209,102,.8); }
-  #lobbyHandle:hover, #lobbyHandle[aria-expanded="true"] { background:rgba(255,209,102,.48); }
-  /* 战斗中把手缩成 2px 细条：不挡棋盘，也不用担心误触（phase 由 iframe 轮询得到） */
-  body.in-battle #lobbyHandle { width:2px; height:72px; background:rgba(255,209,102,.16); }
-  body.in-battle #lobbyHandle .grip { opacity:0; }
+  /* ===== 左边缘把手（ISSUE-20261028-10 B1/B5） =====
+     2026-10-29 02:0x 人类：「再删掉金色的旧侧边栏排行榜按钮」→ 整块删除。
+     入口只剩游戏棋盘左上角的 ♟ 角标（ISSUE-20261029-21），开合靠 postMessage。 */
 
   #lobbyMask { position:fixed; inset:0; z-index:80; background:rgba(0,0,0,.45);
     opacity:0; pointer-events:none; transition:opacity .2s ease-out; }
@@ -139,8 +132,7 @@
   <iframe id="game" src="" onload="onGameLoad()"></iframe>
 </div>
 
-<!-- 左边缘把手：点它或右滑拉出抽屉 -->
-<button id="lobbyHandle" aria-label="账号与排行榜" aria-expanded="false" title="账号与排行榜"><span class="grip"></span></button>
+<!-- 账号与排行榜入口：游戏内棋盘左上格的 ♟ 角标（postMessage 'ark_open_lobby'），外壳不再挂左边缘把手 -->
 
 <div id="lobbyMask"></div>
 
@@ -254,7 +246,7 @@ var APP = {
 var MY_SCORE = null;
 
 // 构建号：每次发布 game.html 时同步改这里，iframe 用 ?v=BUILD 强制拿新版本
-var BUILD = '10290150';
+var BUILD = '10290257';
 
 var REPORT_URL_FALLBACK = '';
 var BOT_USER_FALLBACK = 'yu7_bot';
@@ -544,7 +536,7 @@ function reportScore(level, kills){
   pushMyScore();
   if(CAN_REPORT && W && W.sendData){
     W.sendData(JSON.stringify({type:'rogue_score', level:level, kills:kills, tg_id:0, tg_name:APP.myName||'', initData:''}));
-    toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n左滑把手可看排行榜', 5000);
+    toast('📊 成绩已提交：第 '+level+' 层 / 击杀 '+kills+'\n点棋盘左上角 ♟ 可看排行榜', 5000);
     return;
   }
   if(APP.reportUrl && (HAS_INIT || IS_WEB)){
@@ -560,7 +552,7 @@ function reportScore(level, kills){
       body: JSON.stringify(body)
     }).then(function(r){ return r.json(); }).then(function(j){
       if(j && j.ok){
-        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n左滑把手可看排行榜', 5000);
+        toast('📊 成绩已记录：第 '+level+' 层 / 击杀 '+kills+'\n点棋盘左上角 ♟ 可看排行榜', 5000);
         if(j.leaderboard && applyBoard(j.leaderboard)) paintBoard();
         else refreshBoard();
         setTimeout(refreshBoard, 3000);
@@ -653,10 +645,9 @@ function startGame(){
 var lobbyOpen = false;
 function setLobbyOpen(open){
   lobbyOpen = !!open;
-  var d = $('lobbyDrawer'), m = $('lobbyMask'), h = $('lobbyHandle'), f = $('game');
+  var d = $('lobbyDrawer'), m = $('lobbyMask'), f = $('game');
   if(d){ d.classList.toggle('on', lobbyOpen); d.setAttribute('aria-hidden', lobbyOpen ? 'false' : 'true'); }
   if(m) m.classList.toggle('on', lobbyOpen);
-  if(h) h.setAttribute('aria-expanded', lobbyOpen ? 'true' : 'false');
   /* B4：抽屉打开时游戏输入必须暂停，否则点榜单会误触棋盘 */
   if(f){ f.style.pointerEvents = lobbyOpen ? 'none' : '';
     /* ISSUE-20261029-21 S2：把开合状态回发给游戏内的 ♟ 角标，让它同步高亮 / aria-expanded */
@@ -668,19 +659,7 @@ function setLobbyOpen(open){
   }
 }
 
-/* B5：战斗中把手缩成 2px 细条。phase 在 iframe 里，同源可直接读（跨域时静默失败）。 */
-function gamePhase(){
-  try {
-    var f = $('game');
-    var w = f && f.contentWindow;
-    return (w && typeof w.phase !== 'undefined') ? w.phase : null;
-  } catch(e){ return null; }
-}
-function syncBattleMode(){
-  var p = gamePhase();
-  var inBattle = (p === 'planning' || p === 'resolving');
-  document.body.classList.toggle('in-battle', inBattle);
-}
+/* 2026-10-29 02:0x：左边缘把手删除后，gamePhase() / syncBattleMode() 一并移除（只为它俩服务） */
 
 // ===== 入口提示 + 初始化 =====
 function init(){
@@ -707,12 +686,9 @@ function init(){
       }
     }
     // 新账号：收起提示前先告诉玩家要补口令
-    if(APP.isNewAccount) setTimeout(function(){ toast('你的账号是「'+APP.myAccount+'」\n点左侧把手 → 编辑，可以改成自己的名字（数字口令 4–8 位）', 7000); }, 1200);
+    if(APP.isNewAccount) setTimeout(function(){ toast('你的账号是「'+APP.myAccount+'」\n点棋盘左上角 ♟ → 编辑，可以改成自己的名字（数字口令 4–8 位）', 7000); }, 1200);
   });
 
-  var handle = $('lobbyHandle');
-  if(handle) handle.addEventListener('click', function(){ setLobbyOpen(!lobbyOpen); });
-  // 画布/遮罩/✕ 关闭
   var mask = $('lobbyMask'); if(mask) mask.addEventListener('click', function(){ setLobbyOpen(false); });
   var lc = $('lobbyCornerClose'); if(lc) lc.addEventListener('click', function(){ setLobbyOpen(false); });
   /* 点遮罩也能关（保留旧行为，遮罩不在本次改动范围内） */
@@ -741,10 +717,6 @@ function init(){
       reportScore(d.level||0, d.kills||0);
     }catch(err){}
   });
-
-  // 把手粗细跟随战斗状态（1.2s 一次，够用且几乎无开销）
-  setInterval(syncBattleMode, 1200);
-  syncBattleMode();
 
   try { if(W){ W.ready(); W.expand(); } } catch(e){}
 }

@@ -65,14 +65,20 @@ function selectCharacter(charId) {
  *       两者共用同一套向量/位移代码；虚拟摇杆本轮不做（见 issue §待确认 1）。
  * ========================================================= */
 const FREE_MOVE_SPEED = 4.5;    /* 格/秒，与 ISSUE-12 §待确认 2 的建议值一致 */
-const FREE_MOVE_ARRIVE = 0.05;  /* 到达判定：距目标 < 0.05 格即停，避免抖动 */
+const FREE_MOVE_ARRIVE = 0.05;  /* 点击到位的到达判定：距目标 < 0.05 格即停，避免抖动 */
 const FREE_MOVE_EXIT_EPS = 0.5; /* 与出口格矩形相交（中心距 <= 0.5 格）即算踩到 */
 const FREE_MOVE_KEYS = ['w', 'a', 's', 'd'];
+/* ISSUE-20261028-18 跟随指针 */
+const FREE_MOVE_FOLLOW_DEADZONE = 0.18;  /* 跟随模式的到达半径：指针永远在微动，0.05 会每帧抖 */
+const FREE_MOVE_EXIT_DWELL = 0.15;       /* 在出口格连续停留这么久才进关（人类 23:42 拍板 B 方案） */
+const FREE_MOVE_DRAG_THRESHOLD = 8;      /* 触屏位移超过 8px 才算「拖动跟随」，否则仍算点击（B4） */
+const FREE_MOVE_TOUCH_LIFT = 1.2;        /* 触屏拖动时目标点上移 1.2 格，别让手指盖住角色（§待确认 2 推荐 B） */
 
 let freeMoveActive = false;     /* 大厅里是否启用自由移动 */
 let freeMoveRaf = 0;
 let freeMoveLast = 0;           /* 上一帧时间戳，dt 用它算（不能按固定步长） */
-let freeMoveTarget = null;      /* 点击目标 {fx, fy} */
+let freeMoveTarget = null;      /* 移动目标 {fx, fy, follow}；follow=true 表示由指针跟随写入 */
+let freeMoveExitDwell = 0;      /* 在出口格内已连续停留的秒数（ISSUE-18 D1） */
 let freeMoveExiting = false;    /* 已触发进关，防重复 */
 let freeMoveGeom = null;        /* { ox, oy, sx, sy, cw, ch } 像素几何 */
 const freeMoveKeys = { w: false, a: false, s: false, d: false };
@@ -107,6 +113,10 @@ function freeMoveMeasure() {
     sx: (bx - ax) / (COLS - 3),
     sy: (by - ay) / (ROWS - 3),
     cw: ar.width, ch: ar.height,
+    /* 把 unitLayer 的视口偏移也缓存下来：pointermove 里要按每秒 500+ 次换算坐标，
+       每次都 getBoundingClientRect() 会强制重排（ISSUE-18 约束 1）。
+       页面滚动 / 尺寸变化时统一重测（见文件末尾的 scroll / resize 监听）。 */
+    lx: lr.left, ly: lr.top,
   };
   return Math.abs(freeMoveGeom.sx) > 0.5 && Math.abs(freeMoveGeom.sy) > 0.5;
 }
@@ -116,12 +126,13 @@ function freeMoveToPixels(fx, fy) {
   return { x: g.ox + (fx - 1) * g.sx - g.cw / 2, y: g.oy + (fy - 1) * g.sy - g.ch / 2 };
 }
 
+/* 视口坐标 → 连续格坐标。只用缓存的几何，不读布局（约束 1：pointermove 高频调用） */
 function freeMoveClientToCell(clientX, clientY) {
   const g = freeMoveGeom;
-  const lr = unitLayer.getBoundingClientRect();
+  if (!g) return { fx: 1, fy: 1 };
   return {
-    fx: 1 + (clientX - lr.left - g.ox) / g.sx,
-    fy: 1 + (clientY - lr.top - g.oy) / g.sy,
+    fx: 1 + (clientX - g.lx - g.ox) / g.sx,
+    fy: 1 + (clientY - g.ly - g.oy) / g.sy,
   };
 }
 
@@ -170,6 +181,7 @@ function freeMoveRenderAll() {
 function initFreeMoveLobby() {
   stopFreeMove();
   freeMoveExiting = false;
+  freeMoveExitDwell = 0;   /* ISSUE-18：进出关都要清停留计时 */
   freeMoveEnsureEls();
   if (!freeMoveMeasure()) {
     /* 布局还没稳定（例如刚切横竖屏）：下一帧再试一次，量不到就保持静止 */
@@ -194,17 +206,28 @@ function stopFreeMove() {
   freeMoveRaf = 0;
   freeMoveLast = 0;
   freeMoveTarget = null;
+  freeMoveExitDwell = 0;
   freeMoveClearKeys();
 }
 
-function freeMoveSetTarget(fx, fy) {
+/* 单一入口：点击补位（follow=false）与指针跟随（follow=true）都走这里。
+ * ★ 只写目标点，绝不直接写 c.fx / c.fy —— 位移永远由 freeMoveTick 用
+ *   Math.min(d, FREE_MOVE_SPEED * dt) 封顶（ISSUE-18 约束 6 / A0）。 */
+function freeMoveSetTarget(fx, fy, follow) {
   if (!freeMoveActive) return;
   if (!freeMoveGeom && !freeMoveMeasure()) return;
   freeMoveTarget = {
     fx: Math.max(1, Math.min(COLS - 2, fx)),
     fy: Math.max(1, Math.min(ROWS - 2, fy)),
+    follow: !!follow,
   };
   freeMoveKick();
+}
+
+/* 清掉目标点（指针离开棋盘 / 中断 / 松手）：只清目标，不停表 ——
+   停表交给 freeMoveTick 的自然静止分支，避免这里和 tick 抢 rAF 句柄。 */
+function freeMoveClearTarget() {
+  freeMoveTarget = null;
 }
 
 function freeMoveKeyDown(k) {
@@ -230,10 +253,17 @@ function freeMoveCandidateAt(x, y, radius) {
   return best;
 }
 
-function freeMoveTouchesExit(c) {
-  if (freeMoveExiting || !c) return false;
+/* 纯检测：角色中心是否落在出口格判定区内（不再直接触发，ISSUE-18 D1 要累计停留） */
+function freeMoveInExitZone(c) {
+  if (!c) return false;
   if (Math.abs(c.fx - selExit.x) > FREE_MOVE_EXIT_EPS) return false;
   if (Math.abs(c.fy - selExit.y) > FREE_MOVE_EXIT_EPS) return false;
+  return true;
+}
+
+function freeMoveTouchesExit(c) {
+  if (freeMoveExiting || !c) return false;
+  if (!freeMoveInExitZone(c)) return false;
   freeMoveExiting = true;
   const id = c.id;
   stopFreeMove();          /* E2：先停表，否则进关后 rAF 还在跑 */
@@ -267,7 +297,9 @@ function freeMoveTick(ts) {
       const tx = freeMoveTarget.fx - c.fx;
       const ty = freeMoveTarget.fy - c.fy;
       const d = Math.hypot(tx, ty);
-      if (d <= FREE_MOVE_ARRIVE) {
+      /* 跟随模式用更大的死区：指针永远在微动，0.05 会让角色在指针附近每帧微抖（ISSUE-18 约束 2） */
+      const arrive = freeMoveTarget.follow ? FREE_MOVE_FOLLOW_DEADZONE : FREE_MOVE_ARRIVE;
+      if (d <= arrive) {
         freeMoveTarget = null;                      /* B3：到点就停，不抖 */
       } else {
         const step = Math.min(d, FREE_MOVE_SPEED * dt);
@@ -286,12 +318,22 @@ function freeMoveTick(ts) {
     c.x = Math.round(c.fx);
     c.y = Math.round(c.fy);
     freeMovePlace(c);
-    /* 出口判定每帧都做：可能「刚好停进出口格」而没有位移（E1） */
-    if (freeMoveTouchesExit(c)) return;
-    if (moving || freeMoveTarget) {
+    /* 出口判定每帧都做：可能「刚好停进出口格」而没有位移（E1）。
+     * ISSUE-18 D1：改成「在出口格内连续停留 0.15s 才进关」，中途离开立刻清零。
+     * ★ 这里还有一个必须处理的坑（约束 5）：角色停在出口格上时是静止的，
+     *   旧代码静止就停 rAF → dwell 永远累加不到 0.15s，表现为「出口点了没反应」。
+     *   所以下面的续帧条件必须带上 inExit。 */
+    const inExit = freeMoveInExitZone(c);
+    if (inExit) {
+      freeMoveExitDwell += dt;
+      if (freeMoveExitDwell >= FREE_MOVE_EXIT_DWELL && freeMoveTouchesExit(c)) return;
+    } else {
+      freeMoveExitDwell = 0;
+    }
+    if (moving || freeMoveTarget || inExit) {
       freeMoveRaf = requestAnimationFrame(freeMoveTick);
     } else {
-      freeMoveLast = 0;   /* 静止：停表，等下一次输入再 kick，不空转烧 CPU */
+      freeMoveLast = 0;   /* 静止且不在出口区：停表，等下一次输入再 kick，不空转烧 CPU */
     }
     return;
   }
@@ -317,3 +359,10 @@ window.addEventListener('resize', () => {
     freeMoveRenderAll();
   }, 140);
 });
+
+/* ISSUE-18：pointermove 用缓存的视口偏移换算坐标，页面一滚缓存就偏了 → 滚动时重测。
+ * passive + 只在自由移动相位里干活，不阻塞滚动。 */
+window.addEventListener('scroll', () => {
+  if (!isFreeMovePhase()) return;
+  freeMoveMeasure();
+}, { passive: true });

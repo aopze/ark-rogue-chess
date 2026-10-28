@@ -52,9 +52,20 @@ function plannedActionInfo(path, atkIdxs, skillIdxs) {
   };
 }
 
-// 再加一个节点会不会超出动作上限（用于设置节点时的提示）
+// 再加一个节点会不会超出预算（用于设置节点时的提示）：
+// ① 动作数 ≤ maxActionsThisTurn()（ISSUE-20261029-25 起为 2）② 攻击节点数 ≤ maxAttacksThisTurn()（仍为 1）
 function nodeFitsBudget(path, atkIdxs, skillIdxs) {
-  return plannedActionInfo(path, atkIdxs, skillIdxs).actions <= maxActionsThisTurn();
+  const info = plannedActionInfo(path, atkIdxs, skillIdxs);
+  return info.actions <= maxActionsThisTurn() && info.attackCount <= maxAttacksThisTurn();
+}
+// 被拒时说清是哪条线撞的（ISSUE-20261029-25 起「动作数」与「攻击次数」是两个不同的上限，
+// 一句「动作上限 2」会把玩家带偏 —— 明明只放了一个攻击节点也会被拒）
+function budgetRejectReason(path, atkIdxs, skillIdxs) {
+  const info = plannedActionInfo(path, atkIdxs, skillIdxs);
+  if (info.attackCount > maxAttacksThisTurn()) {
+    return `攻击次数上限 ${maxAttacksThisTurn()}：本回合只能出手 ${maxAttacksThisTurn()} 次（动作预算 ${maxActionsThisTurn()} 件里最多 1 件是攻击，其余留给技能/闪避）。`;
+  }
+  return `动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过 ${maxActionsThisTurn()} 件。`;
 }
 
 /* 玩家当前有效 AC：闪避状态下额外 +N（闪避持续到本回合结束） */

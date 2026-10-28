@@ -19,7 +19,8 @@
   /* 正方形棋盘：宽高都由 JS 设成同一个像素值（短边），aspect-ratio 只是无 JS 时的兜底。
      不能用 flex-grow —— 一旦拉伸就会破坏 1:1。 */
   #boardWrap { flex: 0 0 auto; display: flex; justify-content: center; align-items: center; position:relative; min-width: 0; min-height: 0; overflow: hidden; aspect-ratio: 1 / 1; }
-  #board { display:grid; gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; position: relative; }
+  /* ISSUE-18 B5：iOS Safari 长按会弹「拷贝/放大镜」，拖动跟随前必须关掉 callout */
+  #board { display:grid; gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; position: relative; }
   #unitLayer { position:absolute; inset:0; pointer-events:none; z-index:40; overflow:visible; }
   #fxLayer { position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:50; }
   /* 正方形格子（ISSUE-20261028-09 A）：原来 height 是 calc(var(--cell) * 1.12)，
@@ -639,9 +640,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290150',
-  commit:  '86dd2dd9aa29022bcae31b78b5ecec3e760c0e66',
-  builtAt: '2026-10-28T17:50:37Z'
+  build:   '10290257',
+  commit:  '6f7d6f2b70c4c4f05ab459cd8fc04ec51ff73a78',
+  builtAt: '2026-10-28T18:57:26Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -699,8 +700,17 @@ const PLAYER_RANGED_DICE = { n: 1, s: 8 };   // 1d8
  * 敌人伤害从「常量 1」改为骰子后，首关承伤期望从每回合 0.99 涨到 1.38（+39%），
  * 玩家 HP10 撑不到清场，实测「第 1 关即死」比例 40% → 55%。补 4 点基础 HP 把它拉回来：
  * 前期收益最大（10→14，+40%），后期被 con/升级稀释（20→24，+20%），符合「前期该更宽容」。
- * 校准记录：+2 时 80 局测试仍为 -43%（旧 1.21 关 → 新 0.69 关），故提到 +4。 */
-const BASE_HP_BONUS = 4;
+ * 校准记录：+2 时 80 局测试仍为 -43%（旧 1.21 关 → 新 0.69 关），故提到 +4。
+ * ★ ISSUE-20261029-25（2026-10-29）：删掉自动补刀被动后 100% 阵亡、73.8% 死在第 1 关，
+ *   与「每回合 2 动作」同批把本值 4 → 9。80 局：均关 1.30 → 1.86、L1 死亡率 73.8% → 37.5%。
+ *   单加 HP 治不了华法琳/阿米娅（她们是清场太慢），所以这条必须与 BASE_ACTIONS_PER_TURN 配套看。 */
+const BASE_HP_BONUS = 9;
+
+/* 每回合「可以做几件事」（攻击 / 技能 / 闪避各 1 件）—— ISSUE-20261029-25。
+ * 删被动前玩家靠「每个 tick 对相邻补一刀」获得约两倍出手量；删掉后只剩一件/回合，
+ * 清场速度腰斩 → 被围殴致死。把预算放回 2 件是最小、最可控的补偿：
+ * 「攻击次数」上限（maxAttacks = 1 + extraAttacks）不变，所以不是简单翻倍输出。 */
+const BASE_ACTIONS_PER_TURN = 2;
 
 const ABILITY_ORDER = ['str', 'dex', 'con', 'int', 'wis', 'cha'];
 const ABILITY_FULL = { str: '力量', dex: '敏捷', con: '体质', int: '智力', wis: '感知', cha: '魅力' };
@@ -1157,7 +1167,8 @@ let playerDodging = false;
 let playerDodgeACBonus = 0;
 // 本回合闪避触发的路径下标（-1 = 本回合不闪避）
 let dodgeTriggerIndex = -1;
-// 本回合已使用的「动作」数：一回合只能进行一次动作（闪避 / 攻击 / 技能）
+// 本回合已使用的「动作」数：上限 = maxActionsThisTurn() = BASE_ACTIONS_PER_TURN(2) + extraAttacks，
+// 闪避 / 攻击 / 技能各占 1 个（ISSUE-20261029-25 起不再是「一回合只做一件事」）
 let playerActionsUsed = 0;
 let fencerCounterActive = false;
 let playerStats = {};
@@ -2397,9 +2408,20 @@ function plannedActionInfo(path, atkIdxs, skillIdxs) {
   };
 }
 
-// 再加一个节点会不会超出动作上限（用于设置节点时的提示）
+// 再加一个节点会不会超出预算（用于设置节点时的提示）：
+// ① 动作数 ≤ maxActionsThisTurn()（ISSUE-20261029-25 起为 2）② 攻击节点数 ≤ maxAttacksThisTurn()（仍为 1）
 function nodeFitsBudget(path, atkIdxs, skillIdxs) {
-  return plannedActionInfo(path, atkIdxs, skillIdxs).actions <= maxActionsThisTurn();
+  const info = plannedActionInfo(path, atkIdxs, skillIdxs);
+  return info.actions <= maxActionsThisTurn() && info.attackCount <= maxAttacksThisTurn();
+}
+// 被拒时说清是哪条线撞的（ISSUE-20261029-25 起「动作数」与「攻击次数」是两个不同的上限，
+// 一句「动作上限 2」会把玩家带偏 —— 明明只放了一个攻击节点也会被拒）
+function budgetRejectReason(path, atkIdxs, skillIdxs) {
+  const info = plannedActionInfo(path, atkIdxs, skillIdxs);
+  if (info.attackCount > maxAttacksThisTurn()) {
+    return `攻击次数上限 ${maxAttacksThisTurn()}：本回合只能出手 ${maxAttacksThisTurn()} 次（动作预算 ${maxActionsThisTurn()} 件里最多 1 件是攻击，其余留给技能/闪避）。`;
+  }
+  return `动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过 ${maxActionsThisTurn()} 件。`;
 }
 
 /* 玩家当前有效 AC：闪避状态下额外 +N（闪避持续到本回合结束） */
@@ -2411,11 +2433,18 @@ function playerEffectiveAC() {
 
 /* src: src/ui/units.js */
 /* P0.1-4 拆分 · 20261028b 基线 1623-1768 行 · 动作预算与单位渲染 */
-/* ★ 动作预算：一回合只能进行一次动作。
- * 闪避节点与攻击节点互斥 —— 闪避后不能再攻击，攻击后也不能再闪避。
- * scout 奖励提供的额外攻击次数同样受动作预算限制。
+/* ★ 动作预算（ISSUE-20261029-25 起）：一回合可以做 BASE_ACTIONS_PER_TURN = 2 件事。
+ * 攻击 / 技能 / 闪避各算 1 件 —— 不再是「互斥二选一」，可以「打一拳 + 闪一次」。
+ * ★ 但「攻击次数」仍由 maxAttacks（templates 里 1 + extraAttacks）单独限制，动作预算放宽不等于攻击翻倍。
+ * scout（探测先锋）的 +1 加在动作预算上，所以拿到它就是 3 件事。
  * playerActionsUsed = 本回合已消耗的动作数（闪避占 1，攻击每执行一次占 1）。 */
 function maxActionsThisTurn() {
+  return BASE_ACTIONS_PER_TURN + (player ? player.extraAttacks : 0);
+}
+/* ★ 攻击次数上限（与动作预算分开）：每回合 1 次 + 探测先锋。
+ * ISSUE-20261029-25 把动作预算放宽到 2 之后，这两个数不再相等 ——
+ * 「2 件事」里最多只有 1 件是攻击。所有「攻击还能不能打」的判定都该用这个函数。 */
+function maxAttacksThisTurn() {
   return 1 + (player ? player.extraAttacks : 0);
 }
 function canPerformAttackAction() {
@@ -2743,14 +2772,20 @@ function selectCharacter(charId) {
  *       两者共用同一套向量/位移代码；虚拟摇杆本轮不做（见 issue §待确认 1）。
  * ========================================================= */
 const FREE_MOVE_SPEED = 4.5;    /* 格/秒，与 ISSUE-12 §待确认 2 的建议值一致 */
-const FREE_MOVE_ARRIVE = 0.05;  /* 到达判定：距目标 < 0.05 格即停，避免抖动 */
+const FREE_MOVE_ARRIVE = 0.05;  /* 点击到位的到达判定：距目标 < 0.05 格即停，避免抖动 */
 const FREE_MOVE_EXIT_EPS = 0.5; /* 与出口格矩形相交（中心距 <= 0.5 格）即算踩到 */
 const FREE_MOVE_KEYS = ['w', 'a', 's', 'd'];
+/* ISSUE-20261028-18 跟随指针 */
+const FREE_MOVE_FOLLOW_DEADZONE = 0.18;  /* 跟随模式的到达半径：指针永远在微动，0.05 会每帧抖 */
+const FREE_MOVE_EXIT_DWELL = 0.15;       /* 在出口格连续停留这么久才进关（人类 23:42 拍板 B 方案） */
+const FREE_MOVE_DRAG_THRESHOLD = 8;      /* 触屏位移超过 8px 才算「拖动跟随」，否则仍算点击（B4） */
+const FREE_MOVE_TOUCH_LIFT = 1.2;        /* 触屏拖动时目标点上移 1.2 格，别让手指盖住角色（§待确认 2 推荐 B） */
 
 let freeMoveActive = false;     /* 大厅里是否启用自由移动 */
 let freeMoveRaf = 0;
 let freeMoveLast = 0;           /* 上一帧时间戳，dt 用它算（不能按固定步长） */
-let freeMoveTarget = null;      /* 点击目标 {fx, fy} */
+let freeMoveTarget = null;      /* 移动目标 {fx, fy, follow}；follow=true 表示由指针跟随写入 */
+let freeMoveExitDwell = 0;      /* 在出口格内已连续停留的秒数（ISSUE-18 D1） */
 let freeMoveExiting = false;    /* 已触发进关，防重复 */
 let freeMoveGeom = null;        /* { ox, oy, sx, sy, cw, ch } 像素几何 */
 const freeMoveKeys = { w: false, a: false, s: false, d: false };
@@ -2785,6 +2820,10 @@ function freeMoveMeasure() {
     sx: (bx - ax) / (COLS - 3),
     sy: (by - ay) / (ROWS - 3),
     cw: ar.width, ch: ar.height,
+    /* 把 unitLayer 的视口偏移也缓存下来：pointermove 里要按每秒 500+ 次换算坐标，
+       每次都 getBoundingClientRect() 会强制重排（ISSUE-18 约束 1）。
+       页面滚动 / 尺寸变化时统一重测（见文件末尾的 scroll / resize 监听）。 */
+    lx: lr.left, ly: lr.top,
   };
   return Math.abs(freeMoveGeom.sx) > 0.5 && Math.abs(freeMoveGeom.sy) > 0.5;
 }
@@ -2794,12 +2833,13 @@ function freeMoveToPixels(fx, fy) {
   return { x: g.ox + (fx - 1) * g.sx - g.cw / 2, y: g.oy + (fy - 1) * g.sy - g.ch / 2 };
 }
 
+/* 视口坐标 → 连续格坐标。只用缓存的几何，不读布局（约束 1：pointermove 高频调用） */
 function freeMoveClientToCell(clientX, clientY) {
   const g = freeMoveGeom;
-  const lr = unitLayer.getBoundingClientRect();
+  if (!g) return { fx: 1, fy: 1 };
   return {
-    fx: 1 + (clientX - lr.left - g.ox) / g.sx,
-    fy: 1 + (clientY - lr.top - g.oy) / g.sy,
+    fx: 1 + (clientX - g.lx - g.ox) / g.sx,
+    fy: 1 + (clientY - g.ly - g.oy) / g.sy,
   };
 }
 
@@ -2848,6 +2888,7 @@ function freeMoveRenderAll() {
 function initFreeMoveLobby() {
   stopFreeMove();
   freeMoveExiting = false;
+  freeMoveExitDwell = 0;   /* ISSUE-18：进出关都要清停留计时 */
   freeMoveEnsureEls();
   if (!freeMoveMeasure()) {
     /* 布局还没稳定（例如刚切横竖屏）：下一帧再试一次，量不到就保持静止 */
@@ -2872,17 +2913,28 @@ function stopFreeMove() {
   freeMoveRaf = 0;
   freeMoveLast = 0;
   freeMoveTarget = null;
+  freeMoveExitDwell = 0;
   freeMoveClearKeys();
 }
 
-function freeMoveSetTarget(fx, fy) {
+/* 单一入口：点击补位（follow=false）与指针跟随（follow=true）都走这里。
+ * ★ 只写目标点，绝不直接写 c.fx / c.fy —— 位移永远由 freeMoveTick 用
+ *   Math.min(d, FREE_MOVE_SPEED * dt) 封顶（ISSUE-18 约束 6 / A0）。 */
+function freeMoveSetTarget(fx, fy, follow) {
   if (!freeMoveActive) return;
   if (!freeMoveGeom && !freeMoveMeasure()) return;
   freeMoveTarget = {
     fx: Math.max(1, Math.min(COLS - 2, fx)),
     fy: Math.max(1, Math.min(ROWS - 2, fy)),
+    follow: !!follow,
   };
   freeMoveKick();
+}
+
+/* 清掉目标点（指针离开棋盘 / 中断 / 松手）：只清目标，不停表 ——
+   停表交给 freeMoveTick 的自然静止分支，避免这里和 tick 抢 rAF 句柄。 */
+function freeMoveClearTarget() {
+  freeMoveTarget = null;
 }
 
 function freeMoveKeyDown(k) {
@@ -2908,10 +2960,17 @@ function freeMoveCandidateAt(x, y, radius) {
   return best;
 }
 
-function freeMoveTouchesExit(c) {
-  if (freeMoveExiting || !c) return false;
+/* 纯检测：角色中心是否落在出口格判定区内（不再直接触发，ISSUE-18 D1 要累计停留） */
+function freeMoveInExitZone(c) {
+  if (!c) return false;
   if (Math.abs(c.fx - selExit.x) > FREE_MOVE_EXIT_EPS) return false;
   if (Math.abs(c.fy - selExit.y) > FREE_MOVE_EXIT_EPS) return false;
+  return true;
+}
+
+function freeMoveTouchesExit(c) {
+  if (freeMoveExiting || !c) return false;
+  if (!freeMoveInExitZone(c)) return false;
   freeMoveExiting = true;
   const id = c.id;
   stopFreeMove();          /* E2：先停表，否则进关后 rAF 还在跑 */
@@ -2945,7 +3004,9 @@ function freeMoveTick(ts) {
       const tx = freeMoveTarget.fx - c.fx;
       const ty = freeMoveTarget.fy - c.fy;
       const d = Math.hypot(tx, ty);
-      if (d <= FREE_MOVE_ARRIVE) {
+      /* 跟随模式用更大的死区：指针永远在微动，0.05 会让角色在指针附近每帧微抖（ISSUE-18 约束 2） */
+      const arrive = freeMoveTarget.follow ? FREE_MOVE_FOLLOW_DEADZONE : FREE_MOVE_ARRIVE;
+      if (d <= arrive) {
         freeMoveTarget = null;                      /* B3：到点就停，不抖 */
       } else {
         const step = Math.min(d, FREE_MOVE_SPEED * dt);
@@ -2964,12 +3025,22 @@ function freeMoveTick(ts) {
     c.x = Math.round(c.fx);
     c.y = Math.round(c.fy);
     freeMovePlace(c);
-    /* 出口判定每帧都做：可能「刚好停进出口格」而没有位移（E1） */
-    if (freeMoveTouchesExit(c)) return;
-    if (moving || freeMoveTarget) {
+    /* 出口判定每帧都做：可能「刚好停进出口格」而没有位移（E1）。
+     * ISSUE-18 D1：改成「在出口格内连续停留 0.15s 才进关」，中途离开立刻清零。
+     * ★ 这里还有一个必须处理的坑（约束 5）：角色停在出口格上时是静止的，
+     *   旧代码静止就停 rAF → dwell 永远累加不到 0.15s，表现为「出口点了没反应」。
+     *   所以下面的续帧条件必须带上 inExit。 */
+    const inExit = freeMoveInExitZone(c);
+    if (inExit) {
+      freeMoveExitDwell += dt;
+      if (freeMoveExitDwell >= FREE_MOVE_EXIT_DWELL && freeMoveTouchesExit(c)) return;
+    } else {
+      freeMoveExitDwell = 0;
+    }
+    if (moving || freeMoveTarget || inExit) {
       freeMoveRaf = requestAnimationFrame(freeMoveTick);
     } else {
-      freeMoveLast = 0;   /* 静止：停表，等下一次输入再 kick，不空转烧 CPU */
+      freeMoveLast = 0;   /* 静止且不在出口区：停表，等下一次输入再 kick，不空转烧 CPU */
     }
     return;
   }
@@ -2995,6 +3066,13 @@ window.addEventListener('resize', () => {
     freeMoveRenderAll();
   }, 140);
 });
+
+/* ISSUE-18：pointermove 用缓存的视口偏移换算坐标，页面一滚缓存就偏了 → 滚动时重测。
+ * passive + 只在自由移动相位里干活，不阻塞滚动。 */
+window.addEventListener('scroll', () => {
+  if (!isFreeMovePhase()) return;
+  freeMoveMeasure();
+}, { passive: true });
 
 /* src: src/ui/board-fx.js */
 /* P0.1-4 拆分 · 20261028c 基线 2052-2340 行 · 棋盘几何与特效：findPath / getBoundingBox / getCellEl / cellCenter / unitCenter / facingIndicatorHtml / unitHtml / hasLineOfSight / canRangedAttack / playerAttackRangeCells / 敌人首步箭头 / floatText / ringFx / slashFx / animateBullet / hitFx / missFx / refreshUnits */
@@ -4016,6 +4094,7 @@ function initLevel() {
     });
     log(`规则：攻击检定 = d20 + 属性修正 + 熟练加值 ≥ 目标AC；自然20暴击；自然1必失。`);
     log(`朝向（ISSUE-15）：近战正对目标出手**必定命中**（连自然1也算中），且伤害 ×2（朝向暴击）；侧身、背后仍按上面掷骰。远程不受朝向影响。`);
+    log(`动作预算（ISSUE-25）：每回合可以做 ${BASE_ACTIONS_PER_TURN} 件事 —— 攻击 / 技能 / 闪避各占 1 件，所以「打一拳 + 闪一次」是允许的；但**攻击次数上限仍是每回合 1 次**（遗物可加）。`);
     if (level === 1) {
       log(`升级规则：通关得经验，本关掉血越少经验越多（满血开局时以「本关开始血量 × 40%」为失血基准，少掉 1 血 +${XP_PER_STEP} 经验，保底 ${XP_CLEAR_BASE}）。经验满即升级：HP 上限 + 体质加值并回满血，同时从奖励池 3 选 1 个 buff、获得 ${ABILITY_POINTS_PER_LEVELUP} 点属性点。`);
       log(`敌人成长：每关每个敌人随机 +1 项属性（只从当时最高的 4 项里选，相邻两次不重复），每 ${LEVELUP_EVERY_N_LEVELS} 关升级一次（HP 上限 + 体质加值）。`);
@@ -4236,7 +4315,8 @@ function buildBoardHtml() {
           const hasSkill = stepsAtCell.some(isSkillStep);
           if (hasAttack) cls += ' attack';
           if (hasSkill) cls += ' skill';
-          if (playerAttacksDone >= maxActionsThisTurn()) cls += ' used';
+          /* 攻击节点的「已用」要按攻击次数上限判，不是动作预算（ISSUE-20261029-25：2 动作但 1 攻击） */
+          if (playerAttacksDone >= maxAttacksThisTurn()) cls += ' used';
           /* 闪避节点：第一次等待 → 蓝色标记 */
           if (dodgeIdx >= 0 && stepsAtCell.includes(dodgeIdx)) cls += ' dodge';
         }
@@ -4467,7 +4547,7 @@ function updateStats() {
   /* 伤害格直接显示骰子文案（2d4+1 / 1d8+1），不再显示定值期望 —— 实际每次出手都要掷 */
   const dmgVal = isRanged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
   const dmgProf = isRanged ? player.rangedProf : player.meleeProf;
-  /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = 1（scout 奖励可 +1） */
+  /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = BASE_ACTIONS_PER_TURN(2)（scout 奖励可 +1） */
   const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
   const actionUsed = planInfo.actions;
   const actionMax = maxActionsThisTurn();
@@ -4758,6 +4838,9 @@ function handleKeyDown(e) {
 document.addEventListener('keydown', handleKeyDown);
 
 let dragging = false, dragDownCell = null, hasDragged = false, pressTimer = null;
+/* ISSUE-20261028-18：大厅「跟随指针」的按压状态。触屏必须按住 + 拖动才跟随（B1/B4），
+   桌面鼠标不需要按下（A1）。moved = 位移已超过 8px → 进入拖动跟随，pointerup 时不再当点击。 */
+let freeMovePress = null;
 /* 双击识别：记录上一次单击的路径下标、时间与当时的节点快照 */
 let lastClick = null;
 
@@ -4812,7 +4895,7 @@ function toggleAttack(idx) {
     return;
   }
   if (!nodeFitsBudget(playerPath, [...attackIndices, idx], skillIndices)) {
-    log(`动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过上限。`);
+    log(budgetRejectReason(playerPath, [...attackIndices, idx], skillIndices));
     return;
   }
   attackIndices.push(idx);
@@ -4832,7 +4915,7 @@ function toggleSkill(idx) {
   }
   const nextAtk = attackIndices.filter(i => i !== idx);
   if (!nodeFitsBudget(playerPath, nextAtk, [...skillIndices, idx])) {
-    log(`动作上限 ${maxActionsThisTurn()}：攻击节点 + 技能节点 + 闪避合计不能超过上限。`);
+    log(budgetRejectReason(playerPath, nextAtk, [...skillIndices, idx]));
     return;
   }
   attackIndices = nextAtk;
@@ -4892,6 +4975,8 @@ boardEl.addEventListener('pointerdown', (e) => {
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) return;
   if (phase === PHASE.CHAR_SELECT) {
+    /* 跟随指针（ISSUE-18）：先记按压起点，pointermove 拿它算位移判「拖动 vs 点击」（B4） */
+    freeMovePress = { x: e.clientX, y: e.clientY, t: Date.now(), moved: false, id: e.pointerId };
     /* 选中角色：按「与角色中心的距离」判定，角色停在格与格之间也能点中 */
     const cand = freeMoveCandidateAt(cell.x, cell.y);
     if (cand) { selectedCandidate = cand; render(); freeMoveRenderAll(); e.preventDefault(); return; }
@@ -4926,6 +5011,27 @@ boardEl.addEventListener('pointerdown', (e) => {
 }, { passive: false });
 
 boardEl.addEventListener('pointermove', (e) => {
+  /* ★ ISSUE-20261028-18：大厅（非战斗相位）跟随指针。
+   * 桌面（mouse）= 指针一动就跟，不需要按住（A1）；触屏 = 必须按住并拖动超过 8px（B1/B4）。
+   * ⚠️ 这里只写变量，绝不做布局计算 / DOM 重建 —— 120Hz 鼠标每秒 500+ 次事件（约束 1）。 */
+  if (isFreeMovePhase()) {
+    if (!selectedCandidate) return;
+    const isTouch = e.pointerType && e.pointerType !== 'mouse';
+    let lift = 0;
+    if (isTouch) {
+      if (!freeMovePress || freeMovePress.id !== e.pointerId) return;
+      if (!freeMovePress.moved) {
+        const dx = e.clientX - freeMovePress.x, dy = e.clientY - freeMovePress.y;
+        if (Math.hypot(dx, dy) < FREE_MOVE_DRAG_THRESHOLD) return;   /* 仍算点击，不跟随 */
+        freeMovePress.moved = true;
+      }
+      lift = FREE_MOVE_TOUCH_LIFT;   /* 触屏拖动：目标点上移，别让手指盖住角色（§待确认 2 推荐 B） */
+    }
+    const p = freeMoveClientToCell(e.clientX, e.clientY);
+    freeMoveSetTarget(p.fx, p.fy - lift, true);   /* follow=true → 用较大死区，不抖 */
+    e.preventDefault();
+    return;
+  }
   if (!dragging || phase !== PHASE.PLANNING) return;
   const cell = getCellFromEvent(e.clientX, e.clientY);
   if (!cell) return;
@@ -4938,6 +5044,13 @@ boardEl.addEventListener('pointermove', (e) => {
 
 boardEl.addEventListener('pointerup', (e) => {
   clearTimeout(pressTimer);
+  /* ISSUE-18：大厅里「拖动过」的松手 = 立即停（B2）；只点了一下（<8px）则保留点击补位行为（A5） */
+  if (isFreeMovePhase()) {
+    const dragged = !!(freeMovePress && freeMovePress.moved);
+    freeMovePress = null;
+    if (dragged) freeMoveClearTarget();
+    return;
+  }
   if (!dragging) return;
   dragging = false;
   if (!hasDragged && dragDownCell && phase === PHASE.PLANNING) {
@@ -4980,6 +5093,17 @@ boardEl.addEventListener('pointerup', (e) => {
 boardEl.addEventListener('pointercancel', () => {
   clearTimeout(pressTimer);
   dragging = false; dragDownCell = null; hasDragged = false;
+  /* ISSUE-18 约束 3：手指被系统手势打断（来电/下拉通知）必须清掉目标，
+     否则跟随会留下一个过期目标点，角色自己跑。 */
+  freeMovePress = null;
+  if (isFreeMovePhase()) freeMoveClearTarget();
+});
+
+/* ISSUE-18 A3：指针离开棋盘（移到设置/日志/抽屉/页面外）→ 立即停，不许「跟到最后一个位置继续走」 */
+boardEl.addEventListener('pointerleave', () => {
+  if (!isFreeMovePhase()) return;
+  freeMovePress = null;
+  freeMoveClearTarget();
 });
 
 /* =========================================================
@@ -5401,7 +5525,7 @@ function applyEnemyMoves(enemyMoves, eIdx, killedEnemyIds) {
 
 /* 攻击节点结算：近战范围攻击 / 远程射击。返回 true = 玩家阵亡。 */
 async function resolvePlayerAttack() {
-  const maxAttacks = 1 + player.extraAttacks;
+  const maxAttacks = maxAttacksThisTurn();
 
   if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
     log('冲锋状态禁止攻击节点，本次攻击取消。');
@@ -5550,8 +5674,9 @@ async function resolvePlayerAttack() {
     updateStats();
     if (player.hp <= 0) { endGame('不稳定血浆耗尽了生命。游戏结束。'); return true; }
   }
-  playerAttacksDone++;
-  playerActionsUsed++;   // 攻击占用一次动作（闪避与攻击二选一）
+  /* ISSUE-20261029-24：这里原本还有一对 playerAttacksDone++ / playerActionsUsed++，
+   * 与远程分支入口（上方「远程攻击占用一次动作」）重复计 → 探测先锋对远程角色失效。
+   * 近战分支在本函数更早处已 return，本行以下只有远程路径可达，故不再补计。 */
   refreshUnits();
   await sleep(220);
   return false;
@@ -5779,13 +5904,13 @@ async function resolveStep(pIdxIn, eIdx) {
         playerPath[pathIdx].y === playerPath[pathIdx - 1].y &&
         pathIdx === dodgeTriggerIndex) {
       if (playerActionsUsed >= maxActionsThisTurn()) {
-        // 本回合的动作已被攻击占用 → 闪避不成立（攻击与闪避二选一）
+        // 本回合动作已用完（ISSUE-20261029-25 起上限 2：打完一拳还能闪一次）
         log('本回合的动作已用于攻击，闪避不成立。');
         floatText(player.x, player.y, '无法闪避', '#bbb');
       } else {
         playerDodging = true;
         playerDodgeACBonus = DODGE_AC_BONUS;
-        playerActionsUsed += 1;   // 闪避占用本回合唯一的一次动作
+        playerActionsUsed += 1;   // 闪避占用 1 个动作
         log(`闪避！你选择驻足闪避，本回合 AC +${DODGE_AC_BONUS}（${player.ac} → ${playerEffectiveAC()}）。`);
         floatText(player.x, player.y, `闪避 +${DODGE_AC_BONUS}AC`, '#7dd3fc', true);
         ringFx(player.x, player.y, '#7dd3fc');

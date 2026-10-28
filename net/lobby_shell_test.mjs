@@ -72,29 +72,36 @@ console.log('[1] 打开即选角大厅（旧主页已删除）');
   check('没有 console.error / jsdomError', errors.length === 0, errors.slice(0, 2).join(' | '));
 }
 
-console.log('\n[2] 左侧抽屉');
+console.log('\n[2] 左侧抽屉（入口 = 游戏内 ♟ 角标的 postMessage，2026-10-29 起外壳不再挂左边缘把手）');
 {
-  const handle = doc.getElementById('lobbyHandle');
   const mask = doc.getElementById('lobbyMask');
   const drawer = doc.getElementById('lobbyDrawer');
   const frame = doc.getElementById('game');
-  check('把手 / 遮罩 / 抽屉都在', !!handle && !!mask && !!drawer);
+  check('旧把手 #lobbyHandle 已删除（入口只留 ♟ 角标）', doc.getElementById('lobbyHandle') === null);
+  check('遮罩 / 抽屉都在', !!mask && !!drawer);
   check('抽屉默认收起', !drawer.classList.contains('on') && !mask.classList.contains('on'));
 
-  handle.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  check('点把手 → 抽屉滑出', drawer.classList.contains('on'));
-  check("aria-expanded = 'true'", handle.getAttribute('aria-expanded') === 'true');
+  const openViaGame = () => window.dispatchEvent(
+    new window.MessageEvent('message', { data: { type: 'ark_open_lobby' } }));
+  openViaGame();
+  check("游戏发 'ark_open_lobby' → 抽屉滑出", drawer.classList.contains('on'));
+  check("aria-hidden 变为 'false'", drawer.getAttribute('aria-hidden') === 'false');
   check('遮罩出现', mask.classList.contains('on'));
   check('抽屉打开时游戏输入被暂停（iframe pointer-events:none）',
     frame.style.pointerEvents === 'none', frame.style.pointerEvents);
+  check('角标式关闭钮 #lobbyCornerClose 存在', !!doc.getElementById('lobbyCornerClose'));
 
   mask.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   check('点遮罩 → 关闭', !drawer.classList.contains('on'));
   check('关闭后游戏输入恢复', frame.style.pointerEvents === '', frame.style.pointerEvents);
 
-  handle.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  openViaGame();
   doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   check('Esc → 关闭', !drawer.classList.contains('on'));
+
+  openViaGame();
+  doc.getElementById('lobbyCornerClose').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('点左上角 ✕ → 关闭', !drawer.classList.contains('on'));
 }
 
 console.log('\n[3] 账号校验（拒绝要写清原因，不得静默截断）');

@@ -45,7 +45,8 @@ let playerDodging = false;
 let playerDodgeACBonus = 0;
 // 本回合闪避触发的路径下标（-1 = 本回合不闪避）
 let dodgeTriggerIndex = -1;
-// 本回合已使用的「动作」数：一回合只能进行一次动作（闪避 / 攻击 / 技能）
+// 本回合已使用的「动作」数：上限 = maxActionsThisTurn() = BASE_ACTIONS_PER_TURN(2) + extraAttacks，
+// 闪避 / 攻击 / 技能各占 1 个（ISSUE-20261029-25 起不再是「一回合只做一件事」）
 let playerActionsUsed = 0;
 let fencerCounterActive = false;
 let playerStats = {};

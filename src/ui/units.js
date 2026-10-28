@@ -1,9 +1,16 @@
 /* P0.1-4 拆分 · 20261028b 基线 1623-1768 行 · 动作预算与单位渲染 */
-/* ★ 动作预算：一回合只能进行一次动作。
- * 闪避节点与攻击节点互斥 —— 闪避后不能再攻击，攻击后也不能再闪避。
- * scout 奖励提供的额外攻击次数同样受动作预算限制。
+/* ★ 动作预算（ISSUE-20261029-25 起）：一回合可以做 BASE_ACTIONS_PER_TURN = 2 件事。
+ * 攻击 / 技能 / 闪避各算 1 件 —— 不再是「互斥二选一」，可以「打一拳 + 闪一次」。
+ * ★ 但「攻击次数」仍由 maxAttacks（templates 里 1 + extraAttacks）单独限制，动作预算放宽不等于攻击翻倍。
+ * scout（探测先锋）的 +1 加在动作预算上，所以拿到它就是 3 件事。
  * playerActionsUsed = 本回合已消耗的动作数（闪避占 1，攻击每执行一次占 1）。 */
 function maxActionsThisTurn() {
+  return BASE_ACTIONS_PER_TURN + (player ? player.extraAttacks : 0);
+}
+/* ★ 攻击次数上限（与动作预算分开）：每回合 1 次 + 探测先锋。
+ * ISSUE-20261029-25 把动作预算放宽到 2 之后，这两个数不再相等 ——
+ * 「2 件事」里最多只有 1 件是攻击。所有「攻击还能不能打」的判定都该用这个函数。 */
+function maxAttacksThisTurn() {
   return 1 + (player ? player.extraAttacks : 0);
 }
 function canPerformAttackAction() {
