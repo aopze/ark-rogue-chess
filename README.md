@@ -7,98 +7,89 @@
 |---|---|
 | 仓库 | `aopze/ark-rogue-chess`（GitHub Pages 静态托管，`main` / 根目录） |
 | 线上入口 | <https://aopze.github.io/ark-rogue-chess/>（DLC 外壳）· 游戏本体 `/game.html` |
-| 代码基线 | `game.html` @ `4cb46640`（261,228 B）· build `20261028b`（2026-10-28 02:22 玩法发版，**拆分基线已变更，见下方通告**） |
+| 代码基线 | `game.html` @ `9226b7bf`（288,100 B）· build `20261028e`（2026-10-28 17:40 玩法发版，**拆分基线已变更，见下方通告**）
 | 当前阶段 | **0.1 原型整理**（未启动，任务见 §5.1） |
-| 文档版本 | v3.0 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
+| 文档版本 | v3.10 · 2026-10-28（由 `ROADMAP.md` 升级而来） |
 | 参与方 | 人类维护者 + 多个 AI 协作代理（并行开发） |
 | **改动入口** | **`issues/` 目录 —— 想改游戏就写文件进去，不要直接改 `game.html`（见 §0.0）** |
 
 ---
 
-> ## 🚨 基线变更通告（2026-10-28 04:40，build `20261028d`）
+> ## 🚨 基线变更通告（2026-10-28 17:40，build `20261028e`）
 >
-> `game.html` 已由 **272,067 B / `959b59d2`** 变为 **281,705 B / `cdae8025`**（build `20261028c` → `20261028d`）。
-> 人类维护者说「版本更新」后，本轮批准的范围是 **ISSUE-05（精英与词缀）**；ISSUE-08 的拆分由协作者第七批**提前交付**、
-> 本轮核销关闭；ISSUE-02 归档删除；ISSUE-06 按维护者指示搁置（需求细节待补充）。
+> `game.html` 已由 **281,705 B / `cdae8025`** 变为 **288,100 B / `9226b7bf`**（build `20261028d` → `20261028e`）。
+> 人类维护者说「版本更新」后，本轮批准的范围是 **ISSUE-10（经验制升级）**；ISSUE-09（UI 重构：正方形地图 / 抽屉体系 /
+> 手机虚拟圆钮 / D20 掷骰动画）体量太大，按 issue 里的拆分建议**留到下一版**；ISSUE-06 仍搁置（需求细节待补）、
+> ISSUE-07 仍等像素素材。
 >
-> ### 05 做了什么（改动口径）
+> ### 10 做了什么（改动口径）
 >
-> 1. **4 个词缀**：护盾（挡下第一击，本次伤害归零并碎盾）/ 迅捷（移动 +2）/ 狂暴（HP **严格低于一半**时移动 +2、伤害 +1）/
->    荆棘（被近战命中后反弹 1 点；**这一击已把它打死则不反弹**）。
-> 2. **精英**：L5 起每关**恰好 1 只**，`HP 上限 ×1.5`（`ELITE_HP_MUL`，向上取整）、必带 2 个词缀、
->    击败后在死亡格留一个恢复道具 ❤️（只 push `rewardItems`，不新增单位）。
-> 3. **词缀池分档**：L5–9 只出护盾/迅捷（读得懂、不劝退），L10+ 四种全开；普通敌人按概率带 1 个（早期 30% / 后期 45%）。
-> 4. **随机源确定性**：`affixRng(level, idx, RUN_SEED, tag)` 由 `enemyGrowthRng` 派生，**绝不用全局 `rng()`**
->    —— 全局是滚动状态，拿它选词缀会让面板每次重绘都抖动。种子含 `level`，同 `RUN_SEED` 同关卡恒定。
-> 5. **AI 请读 `enemyMoveOf(e)`，不要再读 `e.move`**：迅捷 / 狂暴的加成都收在这一层。已改 4 处寻路调用。
-> 6. **玩家打敌人的统一入口是 `enemyTakeDamage(e, dmg)`**：护盾在里层吃掉第一击并**返回 0**。已接 7 处伤害入口
->    （泥岩反击 / 精神爆发 / 近战范围 / 远程 / 趁乱攻击 / 相杀 / 冲锋撞击）。新增伤害入口请一律走它，否则护盾会漏。
-> 7. **首轮明确不做「分裂」词缀**：它会在结算中途新增数组元素，破坏 `enemyPathOrder` 落位与 `enemies[i].id` 稳定性
->    （历史上「敌人永久罚站」就源于落位顺序）。
+> 1. **升级不再按关卡号**：删掉「每 3 关升 1 级」，改为经验制。`LEVELUP_EVERY_N_LEVELS` 常量**保留但玩家侧不再引用** ——
+>    它继续只服务敌人成长（`computeEnemyGrowth` 的 HP 加成与 `eLv` 显示），改它会让 22 关敌人同时变形。
+> 2. **失血口径**：`hpLoss = max(0, levelStartHp − endHp)`。`levelStartHp` 在 `initLevel` 里 `createPlayerUnit()` **之后**取
+>    `player.hp`（`playerStats.currentHp` 是跨关持久值，前面还有「>maxHp 夹取」「<=0 兜底成满血」两步）；
+>    `endHp` 在 `onLevelClear()` 里**华法琳吸完场上血迹之后**取（取早了等于每关白扣她一截血）。
+>    关内吃 ❤️ / 🩸 的净回血会让差值为负，**必须夹 0**：不夹不只是「负经验」，`eff = ref − hpLoss` 会超过 `ref`，
+>    经验突破 24 上限，保底/上限两条算术保证同时失效。
+> 3. **每关经验**：`ref = clamp(round(levelStartHp × 0.4), 2, 8)`，`eff = clamp(ref − hpLoss, 0, 6)`，
+>    `xpGain = 12 + 2 × eff`，恒在 **[12, 24]**。效率基准挂「本关开始血量」而不是 `maxHp`，
+>    否则「带 1 HP 进关 → 物理上掉不了血 → 每关都算零失血 → 永久满效率」，反而残血最赚。
+> 4. **关末不回血**（维护者明确要求）：不新增任何休整结算，血量原样带进下一关，与旧版一致。
+>    升级仍回满血，但它是 `setTimeout(…, 600)` 在**两关之间**执行的，经验在 `onLevelClear()` 里就已冻结 ——
+>    **禁止**为了「统一血量口径」把经验结算挪到升级之后，否则回满血会把 `endHp` 抬到上限、每关白送满效率。
+> 5. **升级计数**：`levelUpPending`（布尔）→ `pendingLevelUps`（次数）。一次通关最多连升 3 级，每次各弹一张奖励；
+>    选完若还有待升级就接着弹，全部选完才进加点闸门（布尔装不下「一次升 2 级」，`if (0)` / `if (2)` 都是坑）。
+> 6. **UI**：结算日志改成「行动 N 次 · 本关失血 X（开局 A → 结束 B，失血基准 R）→ 经验 +G（xp/阈值）」；
+>    角色卡 `Lv.N` 下加一条 4px 方形经验条（沿用「方形=信息」）；开局规则说明同步改写，敌人成长说明保持原样。
+>
+> ### 数值自洽性（可验算）
+>
+> - 保底 `12 × 3 = 36 = XP_TABLE[1]` → **第 3 关必升，与水平无关**；单关上限 `24 < 36` → 第 1 关永远升不了；
+>   两关零失血 ≥ 36（阿米娅类 10 血是 `20+20`，14 血是 `24+24`）→ 硬操作可提前到第 2 关。
+> - `XP_TABLE = [0, 36, 64, 98, 140, 190, 250, 320, 400, 500]`，下标 = 当前等级，超出表长按表尾 +100 递增。
+> - 行动数只进日志、**不进公式**（它已通过「打得快 → 少挨打 → 失血少」间接生效）。
+>   若要让「拖时间」被单独惩罚，见 issue 里的可选开关（同时得把 `XP_TABLE[1]` 提到 40）。
 >
 > ### ⚠️ 对 `P0.1-4` 机械拆分的影响（必读）
 >
-> 本轮**以协作者第七批（21 模块 / 模板 166,663 B）为基线重建**，只改 **2 个模块 + 模板后半段**：
+> 本轮以协作者第七批 **21 模块**（模板 169,610 B）为基线，只改 4 个文件，其余 18 个模块一字未动：
 >
 > | 文件 | 改了什么 |
 > |---|---|
-> | `src/data/enemies.js` | 新增 `AFFIX_DEFS` / `AFFIX_POOL_EARLY` / `AFFIX_POOL_LATE` / `ELITE_*` 常量，`affixRng` / `eliteIndexFor` / `rollEnemyAffixPlan` / `enemyHasAffix` / `enemyIsFrenzied` / `enemyMoveOf` / `enemyDamageBonus` / `enemyAffixLabel` / `enemyTakeDamage` / `enemyThornsReflect`；`rollEnemyDamage` 末尾叠狂暴 +1 |
-> | `src/ui/units.js` | `renderUnits()` 加 `.ua-elite` 金边类与 `.affix-tag` 右上角标签（敌人分支） |
-> | `templates/game.html` | 敌人生成（`rollEnemyAffixPlan` + 精英 HP）、面板日志（★精英 / `enemyMoveOf` / 词缀）、`killEnemy` 精英掉落、**7 处伤害入口**改走 `enemyTakeDamage`、AI 4 处 `e.move` → `enemyMoveOf(e)`。模板 **166,663 → 169,610 B** |
+> | `src/data/constants.js` | 新增 `XP_CLEAR_BASE` / `XP_DMG_REF_RATIO` / `XP_DMG_REF_MIN` / `XP_DMG_REF_MAX` / `XP_PER_STEP` / `XP_EFF_CAP` / `XP_MAX_LEVELUPS_PER_CLEAR` / `XP_TABLE`（文件末尾） |
+> | `src/rules/buffs.js` | 新增 `xp` / `pendingLevelUps` / `levelStartHp` / `levelActions` 与 `xpThresholdForLevel` / `xpDamageRef` / `computeLevelXp` / `queueLevelUps`；**删除 `levelUpPending`** |
+> | `src/rules/reset.js` | `resetRunProgress()` 补清 4 个新变量（漏一个就是「二周目带经验开局」） |
+> | `templates/game.html` | `initLevel` 记 `levelStartHp` 并清 `levelActions`；`confirmAction` 计 `levelActions`；`onLevelClear` 经验结算；`openLevelUp` 与奖励弹窗改按次数链式；`renderControls` 通关文案；角色卡经验条 + CSS；开局规则说明。模板 **169,610 → 172,130 B** |
 >
-> **没有改** `src/rules/mapgen.js` / `src/ui/layout.js` / `src/ui/chrome.js`（第七批刚搬走，本轮一字未动）。
+> ### 平衡与门禁
 >
-> #### 🩹 澄清：本轮一度与第七批撞车（已丢弃，未污染仓库）
+> - **80 局**（4 角色 × 4 玩法 × 5 局，同脚本同口径）：平均通关 **0.938 关**（`20261028d` 基线 0.96，红线 ≤1.35）、
+>   **L1 死亡率 43%**（红线 ≥35%）、`anom=0 / err=0 / stalled=0`、`pageErrors=0`。
+>   注意 80 局里绝大多数活不到第 3 关，均值的意义只是「没把难度打崩」，**不能**用它验证「第 3 关必升」——
+>   那条靠上面的算术与定点单测。
+> - **定点单测**：`levelup_test.js` **24/24**（已从「第 3 关升级」改成经验驱动）、
+>   `xp_system_test.js` **22/22** 新增（负失血夹零 / 残血基准 / 关末不回血 / 连升两级两张奖励 / 经验条不被 render 冲掉 /
+>   日志文案 / **2640 组敌人成长与 `20261028d` 逐项 diff = 0**）、`game_test.js` 跑通 `pageErrors=0`。
+> - 两套老套件里存在**与本轮无关的预存失败**，已按基线逐项对照确认（同一用例在 `20261028d` 上同样失败）：
+>   `v4_fixes.js` 5/11（冲锋撞墙 / 冲锋免疫 / 技法固定面板等，自伤害骰化后未同步）、
+>   `mobile_layout_check.js` 卡在 `#logToggle`（该 DOM 已被第七批 `chrome.js` 改名）。
+>   顺手修了三处**测试自身**的坑：`rng()` 是 mulberry32，改 `Math.random` 无效（老用例靠运气通过）；
+>   趁乱攻击要清掉敌人词缀（命中「护盾」时第一击被吞、日志只剩公告行）；急救药箱 ×2 存在落点冲突的预存缺陷（约 1/15）。
 >
-> 我按开工时拉到的 18 模块基线（模板 188,313 B）自己做了同一批纯移动拆分（mapgen / layout / chrome），
-> 命名与 `ISSUE-20261028-08` 一致。上传前复查远程，发现协作者第七批已在 04:2x 交付**同样的三组**（并额外做了
-> 「多点注入」支持跳段拆分，比我的方案更完整）。于是**整批丢弃**，改以远程 21 模块为基底重做 05。
-> 仓库里没有任何重复拆分产物；模板 `169,610 B` = 第七批 166,663 B + 本轮 05 的后半段改动。
->
-> ### 平衡数据（80 局/版本，4 角色 × 正解流/激进贴脸 × 10 局，同脚本同口径）
->
-> 通关均值 **0.82 → 0.96 关（+16.7%）**，L1 死亡率 **57% → 49%**，未超 40% 回调线；
-> 分角色 风笛 +2% / 华法琳 +25% / 泥岩 +50% / 阿米娅持平。**注意样本分辨力**：80 局里只有 **4 局**活到第 5 关
-> （精英从 L5 才出现），所以这 ±17% 主要是天赋骰运噪声，**不能用来评价 05 本身的强度**——
-> 05 的强度验证靠定点单测与跨关卡扫描（见 §10.3 v3.9），不靠试玩均值。
 
-> ### 📜 历史基线通告（2026-10-28 02:22，已于 03:30 解除）
+> ### 📜 历史基线通告（更早两次，细节见 §10.3）
 >
-> `game.html` 已由 **249,421 B / `1a86858d`** 变为 **261,228 B / `4cb46640`**（build `20261028a` → `20261028b`），
-> 人类维护者说「版本更新」后一次性实施了 `issues/` 中的 2 份需求（实施后已删除）：
->
-> 1. **属性成长重做**：玩家属性点不再每关给 1 点，改为**每 3 关升级时给 2 点**；敌人改为**每关随机 +1 项属性**
->    （只从当时最高的 4 项里选、相邻两次不重复、每关都涨）+ **每 3 关升级**（HP 加成同角色算法）；幽灵取消 `hpFixed: 2`（HP 2 → 6）。
->    新增 `computeEnemyGrowth()` / `enemyGrowthRng()` / `RUN_SEED`，`ENEMY_STATS` 降级为「L1 基础面板」。
-> 2. **风笛「高效冲击」**：冲锋距离与攻击次数都改为 **= 本回合剩余移动步数**（`player.move - countMoveSteps(...)`），
->    冲几格打几次；被没秒掉的敌人挡住后剩余次数**不作废**，改为追击**朝向前方 3 格内**的敌人。
->
-> ### ⚠️ 对 `P0.1-4` 机械拆分的影响（必读）
->
-> §0.5 看板里 `P0.1-4` 的拆分基线是**旧版** `game.html`（249,421 B / 第 1 区 487-620 行、第 2 区 622-751 行）。
-> 本次发版**改动了第 1、2 区的代码**，`src/data/*` 与 `src/rules/*` 已与根目录 `game.html` 不一致：
->
-> | 区域 | 本次改了什么 | 需要同步到 |
-> |---|---|---|
-> | 第 1 区·数据与常量 | `ABILITY_POINTS_PER_LEVEL` → `ABILITY_POINTS_PER_LEVELUP = 2`；`ENEMY_STATS` 去掉 `hpFixed`、注释改「L1 基础面板」；新增 `CHARGE_FINISH_RANGE` | `src/data/constants.js`、`src/data/enemies.js` |
-> | 第 2 区·运行时状态 | 新增 `RUN_SEED` / `playerChargeBudget` / `playerChargeHits` / `playerChargeDir` | `src/rules/state.js` |
-> | 第 3–15 区（仍在模板内） | `computeEnemyGrowth` 等新函数、`finishLevel` / `openLevelUp` 发点逻辑、冲锋额度与追击、日志面板按关卡动态打印 | `templates/game.html` |
->
-> **继续拆分前必须先「重新取区」或把上表改动同步进对应模块**，否则下一次 `build/bundle.mjs` 会把这批玩法改动整体回退成旧版。
-> `build/verify.mjs` 的等价性校验（产物 vs 根目录 `game.html`）应该会因此报错 —— **那是正确行为，请以根目录新文件为基准，不要把校验「修绿」。**
-> 拿不准就先问人类维护者，不要自行 `git checkout` 旧版本。
->
-> ✅ **2026-10-28 02:35（WorkBuddy）：本通告已执行完毕，基线条目解除。**
-> 6 个模块（`src/data/constants.js` / `characters.js` / `enemies.js`，`src/rules/state.js` / `buffs.js` / `sp.js`）
-> 与 `templates/game.html` 已全部基于**新版** `game.html`（261,228 B / `4cb46640`）重新取区；
-> 对照上表逐区核对：`ABILITY_POINTS_PER_LEVELUP` → `constants.js`，`ENEMY_STATS`（去 `hpFixed`、注 L1 基础面板）
-> + 新增 `enemyGrowthRng` / `computeEnemyGrowth` → `enemies.js`，`playerChargeBudget` / `Hits` / `Dir` → `state.js`，
-> `CHARGE_FINISH_RANGE` → `sp.js`，第 3–15 区新逻辑（含 `RUN_SEED`）随模板整体更新。
-> 验证：`node build/bundle.mjs --prev game.html` 归一化后**完全一致**（262,900 vs 261,228 B = +1,672 B / 0.64%），
-> e2e 六套件全绿。**后续批次请继续以根目录 `game.html` 为唯一基准取区。**
->
-> 平衡数据（20 局/组，`roguechess-autotest`，改动前后同脚本）：
-> 风笛正解流 平均关卡 **4.40 → 3.60**、纯风筝 **4.00 → 3.40**（−15%~−18%，未超 40% 回调线）；阿米娅 4 种玩法基本持平。
+> - **`20261028d`（2026-10-28 04:40）**：ISSUE-05 精英与词缀 —— 4 词缀（护盾吸第一击 / 迅捷 move+2 /
+>   狂暴 半血以下 move+2·伤害+1 / 荆棘 反伤 1 且被打死的不反弹），L5 起每关恰好 1 只精英（HP×1.5、必带 2 词缀、
+>   击败掉 ❤️），词缀池 L5–9 只开护盾/迅捷、L10+ 全开；随机源走 `affixRng` 派生（不用全局 `rng()`）。
+>   只改 `enemies.js` / `units.js` / 模板后半段。80 局通关均值 0.82 → 0.96 关、L1 死亡率 57% → 49%；
+>   但 80 局里只有 4 局活到 L5（精英从 L5 才出现），那 ±17% 主要是骰运噪声，**不能用来评价 05 强度**。
+>   同轮 ISSUE-08 由协作者第七批提前交付并核销、ISSUE-02 归档删除、ISSUE-06 按维护者指示搁置。
+> - **`20261028b`（2026-10-28 02:22）**：属性成长重做（玩家属性点改为绑升级发 2 点；敌人每关随机 +1 项属性、
+>   每 3 关升级；新增 `RUN_SEED` / `computeEnemyGrowth` / `enemyGrowthRng`，`ENEMY_STATS` 降级为 L1 基础面板）
+>   + 风笛「高效冲击」冲锋距离与攻击次数 = 本回合剩余移动步数。已于 v3.1 按新版 `game.html` 重新取区对齐。
+> - 更早的 `20261028a` 通告已并入 §10.3 变更记录，不再单列；`P0.1-4` 拆分进度请始终以 `build/manifest.json`
+>   的 `modules` 长度（当前 **21**）为准，**不要用模板字节数当路标**。
 
 ---
 
@@ -953,6 +944,7 @@ ark-rogue-chess/
 | v3.7 | 2026-10-28 | **`P0.1-4` 机械拆分第六批 + 新增「无重复定义」构建校验**：第 7 区「状态重置与棋盘特效」搬为 `src/rules/reset.js`（`freshBuffs`/`resetSkillState`/`resetRunProgress`/`resetTurnState`/`createPlayerStats`/`createPlayerUnit`/`syncPlayerFromStats`，20261028c 基线 1908-2003 行）、`src/ui/char-select.js`（`initCharSelect`/`selectCharacter`，2005-2050 行）、`src/ui/board-fx.js`（`findPath` BFS / 棋盘几何 / `hasLineOfSight`/`canRangedAttack`/`playerAttackRangeCells` / 敌人首步箭头 / `floatText`/`ringFx`/`slashFx`/`animateBullet`/`hitFx`/`missFx`/`refreshUnits`，2052-2340 行）；`modules` 增至 **18 个**。**防回归**：新增 `checkNoDuplicateDefinitions`（`build/verify.mjs`）——扫描 manifest 各模块的顶层定义名，要求产物中各只定义 1 次，专治 v3.6 那类「模板残留已拆代码 → 函数定义两遍」的静默事故；仅匹配行首无缩进的定义形式以免函数内同名局部变量误报，已做反向验证（把 `isWalkable` 塞回模板 → 打红 `isWalkable ×2`），并加 4 项单测（34 → 38 项）。**验证**：产物 271,481 vs 272,067 B = **−586 B**、归一化后与基线完全一致、e2e 六套件全绿。**根目录 `game.html` 未改动**（272,067 B / `959b59d2`） |
 | v3.8 | 2026-10-28 | **`P0.1-4` 机械拆分第七批（按热度分级首轮）+ 构建「多点注入」**：按 `ISSUE-20261028-08` 改「按行号顺序拆」为「按谁会改拆」，只搬低热度代码 —— `src/rules/mapgen.js`（`bfsReachable`/`growRegion`/`smoothRegion`/`clearSpawnArea`/`countWalkable`/`placeObstacles`/`generateMap`，模板 701-927 行）、`src/ui/layout.js`（竖版地图高度比例拖动 + 横竖切换，模板 **1078-1161** 与 **3382-3428** 两段）、`src/ui/chrome.js`（设置/日志面板外壳 + DLC 外壳接管，模板 **3268-3380** 与 **3893-3959** 两段）；`modules` 18 → **21**。**前置改造**：`layout`/`chrome` 各是两段不连续代码，而旧构建只有一个位于最前的占位符 —— 拼接会让第二段在模板 `const dragHandle` / `logRotateBtn` 声明之前执行（TDZ）。故 `build/bundle.mjs` 支持多槽位：模块内 `/* @slot:<id> */` 切段 → 落到模板 `<!-- @inject:scripts:<id> -->`，**每段回到原位、求值顺序不变**；`build/verify.mjs` 新增第 6 项校验「注入标记无残留」（标记未替换时 `<!--` 在 JS 里等同注释、**不会报错**，只会静默少代码）。**验证**：产物 272,787 vs 272,067 B = **+720 B / 0.26%**、归一化后完全一致；21 个关键函数在产物各 1 次、模板各 0 次；e2e 六套件（dom_load 23 / pvp_core 20 / pvp_e2e 16 / pvp_browser 16 / hook_integration 8 + 联机 client）全绿；`bundle_test` 38 → **48 项**、`push_guard` 10 项全绿；**新增 `net/layout_chrome_test.mjs`（38 项）** 覆盖横竖切换 / 竖版拖拽比例 / 设置面板开合 / DLC 外壳 iframe 接管。**根目录 `game.html` 未改动**（272,067 B / `959b59d2`） |
 | v3.9 | 2026-10-28 | **玩法发版 build `20261028d`（人类维护者授权「版本更新」，本轮范围 05）**：实施 `ISSUE-20261028-05` 精英与词缀 —— 4 词缀（护盾吸第一击 / 迅捷 move+2 / 狂暴 半血以下 move+2·伤害+1 / 荆棘 反伤 1 且被打死的不反弹），L5 起每关恰好 1 只精英（HP×1.5、必带 2 词缀、击败掉恢复道具 ❤️），词缀池 L5–9 只开护盾/迅捷、L10+ 全开。随机源走 `affixRng(level, idx, RUN_SEED)` 派生（不含全局 `rng()`，否则面板重绘会抖）。伤害统一走 `enemyTakeDamage`（护盾返回 0），AI 统一走 `enemyMoveOf`。**门禁**：定点单测 24/24（护盾两击 / 狂暴半血边界 / 迅捷+狂暴叠加 / 荆棘反伤与「已死不打」/ 精英 HP=ceil(基础×1.5) / 掉落 / DOM 金边与标签）、跨关卡扫描 20/20（L1–L16 精英唯一性、L5–9 池合法、同种子可复现、换种子精英位置会变）、布局 14/14、80 局 `anom=0 / pageErrors=0 / stalled=0`。**并发处理**：开工时基线 18 模块，上传前复查发现协作者第七批已交付同一批纯移动拆分（`ISSUE-08`），遂丢弃我方的重复拆分、以 21 模块为基底重做，仓库无重复产物。**ISSUE-05 已删除；ISSUE-08 随第七批核销；ISSUE-02 归档删除；ISSUE-06 按维护者指示搁置** |
+| v3.10 | 2026-10-28 | **玩法发版 build `20261028e`（人类维护者授权「版本更新」，本轮范围 10）**：实施 `ISSUE-20261028-10` 经验制升级 —— 取消「每 3 关升 1 级」，改为**本关失血越少经验越多**：`hpLoss = max(0, 关卡开始血量 − 关卡结束血量)`，`ref = clamp(round(开始血量×0.4), 2, 8)`，`eff = clamp(ref − hpLoss, 0, 6)`，`xpGain = 12 + 2×eff`（恒 [12,24]）；`XP_TABLE[1]=36` 使 `12×3=36` → **第 3 关必升是算术保证**，单关上限 24 < 36 → 第 1 关永不升，两关零失血可第 2 关升。**关末不回血**（维护者明确要求），升级仍回满血但发生在两关之间（经验在 `onLevelClear` 内冻结，禁止挪到升级之后）。`levelUpPending`（布尔）→ `pendingLevelUps`（次数），最多连升 3 级、逐次弹奖励。角色卡加 4px 方形经验条，结算日志输出失血/基准/经验。**★ 效率基准挂「本关开始血量」而非 maxHp** —— 否则「带 1 HP 进关掉不了血 → 永久满效率」。**门禁**：`levelup_test.js` 24/24（已改成经验驱动）、新增 `xp_system_test.js` 22/22（负失血夹零 / 残血基准 / 连升两级 / 经验条 / 2640 组敌人成长与 20261028d `diff=0`）、80 局平均通关 0.938 关（基线 0.96，红线 ≤1.35）、L1 死亡率 43%（红线 ≥35%）、`anom=0 / err=0 / stalled=0`。**ISSUE-10 已删除；ISSUE-09 留到下一版**（体量大，按 issue 拆分建议），ISSUE-06 仍搁置、ISSUE-07 仍等素材 |
 
 ---
 
