@@ -1939,7 +1939,7 @@ function prepareWheelchairCharge() {
   playerChargeHits = 0;
   playerChargeDir = trigger.dir;
   const stopText = stopReason === 'budget' ? `走满 ${budget} 步额度` : stopReason === 'wall' ? '撞墙提前停止' : '达到地图边界';
-  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（剩余移动步数 ${budget}，${stopText}），最多 ${budget} 次攻击（每次近战伤害 ×2）。冲锋期间免疫伤害，禁用攻击节点与贴身反击。`);
+  log(`风笛「高效冲击」已就绪：第 ${chargeIdx} 步发动后沿直线冲锋 ${chargePath.length} 步（剩余移动步数 ${budget}，${stopText}），最多 ${budget} 次攻击（每次近战伤害 ×2）。冲锋期间免疫伤害，禁用攻击节点。`);
   floatText(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '高效冲击', '#ffd700');
   ringFx(playerPath[chargeIdx].x, playerPath[chargeIdx].y, '#ffd700');
   return chargeIdx;
@@ -2457,64 +2457,6 @@ async function resolvePlayerAttack() {
   return false;
 }
 
-/* 贴身反击：本 tick 有动作时，对相邻敌人自动补刀（不消耗攻击次数）。
- * 【改名 · 2026-10-28 / ISSUE-20261028-15】玩家可见名原为「趁乱攻击」，现改为「贴身反击」。
- *   原因：「趁乱攻击」这个词已被 `ISSUE-20261028-10-opportunity-attack-colossus-boss` 征用，
- *   指「剩余步数 → 等待 → 额外一次主动攻击」。同词两义会让战报无法区分，故此处让位。
- *   函数名 `resolveScuffleAttacks` 保留（10 号的锚点要按这个名字找），只改玩家可见文案。 */
-async function resolveScuffleAttacks(playerActionThisTick) {
-  if (!playerActionThisTick || playerChargingThisTurn || !player.alive || player.hp <= 0) return;
-  const autoTargets = enemies.filter(e => e.alive && dist(e, player) === 1);
-  /* 远程角色没有近战输出手段：被贴身时的贴身反击固定 1 点保底伤害，
-     不吃暴击 / 冲锋倍率，也不读取近战伤害面板。 */
-  const scuffleFlatDmg = isRangedChar(selectedChar);
-  if (autoTargets.length > 0) {
-    log(`⚡ 贴身反击：对 ${autoTargets.length} 个相邻敌人发起攻击！${scuffleFlatDmg ? '（远程角色，1 点保底伤害）' : ''}`);
-  }
-  for (const target of autoTargets) {
-    if (!target.alive) continue;
-    const strMod = abilityMod(player.abilities.str);
-    const atk = attackRoll(strMod, player.meleeProf || 0, target.ac);
-    /* ISSUE-20261028-15 A1 / A4：近战角色的贴身反击同样吃「朝向必中」；
-       远程角色的 1 点保底伤害不是近战出手，**不**套用（验收：远程完全不受影响）。 */
-    if (!scuffleFlatDmg) applyFacingGuaranteedHit(atk, target);
-    /* 只要出手（即使 MISS）就能看到目标意图 */
-    if (selectedChar === 'amiya') amiyaMarkReveal(target);
-    if (!atk.hit) {
-      missFx(target.x, target.y);
-      log(`贴身反击未命中敌人${target.id+1} (${fmtRoll(atk, target.ac)})`);
-      refreshUnits();
-      await sleep(180);
-      continue;
-    }
-    let dmg = scuffleFlatDmg ? (1 + buffMeleeBonus()) : player.meleeDmg;
-    if (selectedChar === 'wheelchair' && playerChargingThisTurn) { dmg *= 2; log('玩家冲锋撞击，伤害翻倍！'); }
-    const critTag = scuffleFlatDmg ? '' : meleeCritTag(target, atk);
-    const isCrit = !!critTag;
-    const hitTag = atk.facingHit ? ' · 必定命中' : '';
-    if (isCrit) dmg *= 2;
-    const dealt = enemyTakeDamage(target, dmg);
-    if (selectedChar === 'wheelchair' && playerChargingThisTurn) playerChargeCausedDamage = true;
-    if (enemyThornsReflect(target)) return;
-    if (dealt === 0) { refreshUnits(); await sleep(120); continue; }
-    slashFx(target.x, target.y, isCrit ? '#ffd700' : '#ffb86b');
-    hitFlashCell(target.x, target.y);
-    if (isCrit) {
-      ringFx(target.x, target.y, '#ff4500');
-      floatText(target.x, target.y, critTag + hitTag + ' -' + dealt, '#ffd700', true);
-      log(`贴身反击${critTag}${hitTag}敌人${target.id+1}，造成${dealt}伤害 (${fmtRoll(atk, target.ac)})`);
-    } else {
-      ringFx(target.x, target.y, '#ffb86b');
-      floatText(target.x, target.y, hitTag ? '必定命中 -' + dealt : '-' + dealt, hitTag ? '#ffd700' : '#ff6b6b');
-      log(`贴身反击命中${hitTag}敌人${target.id+1}，造成${dealt}伤害${scuffleFlatDmg ? '（远程角色保底伤害）' : ''} (${fmtRoll(atk, target.ac)})`);
-    }
-    if (target.hp <= 0) killEnemy(target, { showRing: false });
-    refreshUnits();
-    await sleep(240);
-  }
-  /* 注：贴身打击不属于「正常攻击」，不触发不稳定血浆的任何效果（不暴击、不留血迹、不扣血） */
-}
-
 /* 冲锋结束时的撞墙伤害（只在没撞到敌人时结算）。返回 true = 玩家阵亡。 */
 function resolveChargeWallDamage(chargeWillEnd, playerBlocked) {
   if (!chargeWillEnd) return false;
@@ -2709,14 +2651,11 @@ async function resolveStep(pIdxIn, eIdx) {
   const killedEnemyIds = new Set();
   let playerBlocked = false;
   let didAttackThisTick = false;
-  let playerActionThisTick = false;
 
   if (pendingAttack) {
     pendingAttack = false;
     didAttackThisTick = true;
-    playerActionThisTick = true;
   } else if (pIdx < playerPath.length) {
-    playerActionThisTick = true;
     if (pendingChargeInfo && pIdx >= pendingChargeInfo.startIdx && !playerChargingThisTurn && player.alive) {
       playerChargingThisTurn = true;
       playerChargeCausedDamage = false;
@@ -2939,8 +2878,6 @@ async function resolveStep(pIdxIn, eIdx) {
   if (didAttackThisTick && player.alive) {
     if (await resolvePlayerAttack()) return;
   }
-
-  await resolveScuffleAttacks(playerActionThisTick);
 
   const chargeWillEnd = playerChargingThisTurn && (playerBlocked || pIdx >= playerPath.length);
   if (resolveChargeWallDamage(chargeWillEnd, playerBlocked)) return;
