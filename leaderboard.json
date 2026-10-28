@@ -1,5 +1,5 @@
 {
- "updated_at": 1793197789,
+ "updated_at": 1793197911,
  "entries": [
   {
    "id": "5648491503",
@@ -44,15 +44,15 @@
    "runs": 1
   },
   {
-   "id": "dev_d47fe9d430ec419a9d273eb2d997a78f",
-   "name": "何人",
-   "level": 0,
-   "kills": 0,
-   "runs": 0
-  },
-  {
    "id": "dev_a40de3f57ee44fd4b45ab73fbdbac7dd",
    "name": "starry",
+   "level": 1,
+   "kills": 0,
+   "runs": 1
+  },
+  {
+   "id": "dev_d47fe9d430ec419a9d273eb2d997a78f",
+   "name": "何人",
    "level": 0,
    "kills": 0,
    "runs": 0
