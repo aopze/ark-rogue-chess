@@ -1,9 +1,9 @@
 {
- "updated_at": 1793200732,
+ "updated_at": 1793200752,
  "entries": [
   {
    "id": "5648491503",
-   "name": "雨123",
+   "name": "雨1",
    "level": 6,
    "kills": 19,
    "runs": 7
@@ -30,18 +30,18 @@
    "runs": 5
   },
   {
+   "id": "dev_a837ab03c97a4ad8ae4393c200a06aa5",
+   "name": "可乐",
+   "level": 2,
+   "kills": 5,
+   "runs": 5
+  },
+  {
    "id": "dev_0a1b6da2105c4978b97262e61d7f357a",
    "name": "Coco",
    "level": 1,
    "kills": 3,
    "runs": 1
-  },
-  {
-   "id": "dev_a837ab03c97a4ad8ae4393c200a06aa5",
-   "name": "可乐",
-   "level": 1,
-   "kills": 3,
-   "runs": 4
   },
   {
    "id": "dev_a347c1a352f44b9ead745479fcfa0ac0",
