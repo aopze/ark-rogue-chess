@@ -29,7 +29,10 @@ export function readText(p) {
 export const BUILD_RE = /var\s+BUILD\s*=\s*['"]([^'"]+)['"]/;
 export const VER_OBJ_RE = /window\.__ARK_VERSION__\s*=\s*\{([\s\S]*?)\};/;
 export const BUILD_FIELD_RE = /\bbuild\s*:\s*['"]([^'"]*)['"]/;
-const BUILD_FMT_RE = /^(\d{4})(\d{2})(\d{2})([a-z])$/;
+/* build 号格式：MMDDHHmm（月日时分，分钟级）。
+ * 2026-10-28 起由 `YYYYMMDDx`（年月日 + 字母后缀）改为此格式，例：10282132 = 10 月 28 日 21:32。
+ * 改动理由：同日多版用字母后缀 a→b→c 区分不了到分钟，且不带时刻；MMDDHHmm 一眼能看出是哪天几点发的。 */
+const BUILD_FMT_RE = /^(\d{2})(\d{2})(\d{2})(\d{2})$/;
 
 /** 从 index.html 读出 var BUILD —— 双 BUILD 的唯一真值来源（§0.9）。 */
 export function readBuildFromIndex(indexPath = path.join(ROOT, 'index.html')) {
@@ -42,16 +45,22 @@ export function readBuildFromIndex(indexPath = path.join(ROOT, 'index.html')) {
   return { ok: true, build: m[1], raw: m[0] };
 }
 
-/** 校验 YYYYMMDDx 格式（§0.9）。 */
+/** 校验 MMDDHHmm 格式（§0.9）。 */
 export function validateBuild(build) {
   if (!build) return { ok: false, reason: 'build 为空' };
-  if (!BUILD_FMT_RE.test(build)) {
-    return { ok: false, reason: `build 格式应为 YYYYMMDDx（如 20261028a），实际为 '${build}'` };
+  const m = String(build).match(BUILD_FMT_RE);
+  if (!m) {
+    return { ok: false, reason: `build 格式应为 MMDDHHmm（月日时分，如 10282132 = 10月28日 21:32），实际为 '${build}'` };
   }
-  const [, y, mo, d] = build.match(BUILD_FMT_RE);
-  const dt = new Date(Date.UTC(+y, +mo - 1, +d));
-  if (Number.isNaN(dt.getTime()) || dt.getUTCMonth() !== +mo - 1 || dt.getUTCDate() !== +d) {
-    return { ok: false, reason: `build '${build}' 的日期部分不是合法日期` };
+  const [, mo, d, h, mi] = m;
+  if (+mo < 1 || +mo > 12) return { ok: false, reason: `build '${build}' 的月份部分超出 01–12` };
+  if (+d < 1 || +d > 31) return { ok: false, reason: `build '${build}' 的日部分超出 01–31` };
+  if (+h > 23) return { ok: false, reason: `build '${build}' 的小时部分超出 00–23` };
+  if (+mi > 59) return { ok: false, reason: `build '${build}' 的分钟部分超出 00–59` };
+  // 月日组合合法性（用闰年基准，允许 2/29）
+  const dt = new Date(Date.UTC(2000, +mo - 1, +d));
+  if (dt.getUTCMonth() !== +mo - 1 || dt.getUTCDate() !== +d) {
+    return { ok: false, reason: `build '${build}' 的月日组合不是合法日期` };
   }
   return { ok: true };
 }

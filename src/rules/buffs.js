@@ -1,14 +1,55 @@
 /* P0.1-4 拆分 · 20261028b 基线 730-777 行 · 升级与奖励池 buff / 统一受伤入口 */
 /* =========================================================
  * ★ 升级与奖励池（buff）
- * 每 3 关（通关第 3/6/9… 关）提升 1 级：HP 上限 + 体质加值、回满血，并从奖励池 3 选 1。
+ * 升级由经验驱动（ISSUE-20261028-10）：通关得经验，本关掉血越少经验越多，经验满即升级。
+ * 升级时：HP 上限 + 体质加值、回满血，并从奖励池 3 选 1。
+ * LEVELUP_EVERY_N_LEVELS 现在**只服务敌人成长**（enemies.js），玩家侧不再引用。
  * ========================================================= */
 const LEVELUP_EVERY_N_LEVELS = 3;
 let heroLevel = 1;
 let playerShield = 0;                 // 药枚：护盾层数（抵消一次任意伤害）
 let levelUpOpen = false;
-let levelUpPending = false;           // 已通关、等待升级结算（防止定时器丢失导致卡在通关界面）
 let lastLevelUpConMod = 0;
+/* ===== 玩家经验制（ISSUE-20261028-10） =====
+ * xp            当前等级已累积的经验（升级时按阈值扣减）
+ * pendingLevelUps 待结算的升级次数（通关时按 XP 一次算好，逐次弹奖励）
+ *                旧变量 levelUpPending（布尔）已废弃：布尔装不下「一次连升 2 级」。
+ * levelStartHp  本关开始时的血量（player.hp），失血口径的左端
+ * levelActions  本关点了几次「开始行动」——**只用于日志**，不参与经验计算 */
+let xp = 0;
+let pendingLevelUps = 0;
+let levelStartHp = 0;
+let levelActions = 0;
+
+/* 升到下一级所需经验（heroLevel 超出表长时按表尾 +100 递增） */
+function xpThresholdForLevel(lv) {
+  if (lv < XP_TABLE.length) return XP_TABLE[lv];
+  return XP_TABLE[XP_TABLE.length - 1] + (lv - (XP_TABLE.length - 1)) * 100;
+}
+/* 该关「允许失血」的基准：按本关开始血量缩放，而不是 maxHp。
+ * 挂 maxHp 会出现退化玩法：带 1 HP 进关 → 物理上掉不了血 → 每关都算零失血 → 永久满效率。 */
+function xpDamageRef(startHp) {
+  const raw = Math.round(startHp * XP_DMG_REF_RATIO);
+  return Math.max(XP_DMG_REF_MIN, Math.min(XP_DMG_REF_MAX, raw));
+}
+/* 单关经验：hpLoss 取 0 下限（关内吃 ❤️ / 🩸 净回血时会算成负数，
+ * 不夹会让 efficiency > ref，经验突破 24 上限，保底/上限两条算术保证同时失效）。 */
+function computeLevelXp(startHp, endHp) {
+  const hpLoss = Math.max(0, startHp - endHp);
+  const ref = xpDamageRef(startHp);
+  const eff = Math.max(0, Math.min(XP_EFF_CAP, ref - hpLoss));
+  return { hpLoss, ref, eff, gain: XP_CLEAR_BASE + eff * XP_PER_STEP };
+}
+/* 通关时按经验排队升级次数（heroLevel 由 openLevelUp 逐次推进，这里只扣经验） */
+function queueLevelUps() {
+  let n = 0;
+  while (n < XP_MAX_LEVELUPS_PER_CLEAR && xp >= xpThresholdForLevel(heroLevel + n)) {
+    xp -= xpThresholdForLevel(heroLevel + n);
+    n += 1;
+  }
+  pendingLevelUps = n;
+  return n;
+}
 // buff 层数统计（同一 buff 可重复获得，效果累加）
 let buffs = { kettle: 0, blade: 0, sass: 0, kit: 0, pill: 0, scout: 0 };
 

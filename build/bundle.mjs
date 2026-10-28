@@ -60,28 +60,44 @@ function parseArgs(argv) {
 
 /* ------------------------------------------------------------ build 号 */
 
-const BUILD_FMT_RE = /^(\d{4})(\d{2})(\d{2})([a-z])$/;
+/* build 号格式：MMDDHHmm（月日时分）。2026-10-28 起由 `YYYYMMDDx` 改为此格式，
+ * 例 10282132 = 10 月 28 日 21:32。沿用字母后缀 a→b→c 区分不了同一天的多次发版，且看不出时刻。 */
+const BUILD_FMT_RE = /^(\d{2})(\d{2})(\d{2})(\d{2})$/;
 
 /**
- * 今天的日期串。★ 用【本地日期】而非 UTC：
- * 人类维护 index.html 的 BUILD 时写的是本地日期（如北京时间 2026-10-28 凌晨写 20261028a，
- * 此时 UTC 仍是 10-27）。若这里用 UTC，会把同日发版误判为「跨日」甚至「未来日期」。
+ * 当前【本地时间】的 build 串 MMDDHHmm。★ 用本地钟而非 UTC：
+ * 人类维护 index.html 的 BUILD 时写的是自己电脑上的时间（如北京时间 10-28 00:30 写 10280030），
+ * 此时 UTC 还停在 10-27，用 UTC 会把「刚发的版」误判成未来/过去。
  */
-function todayStr(d = new Date()) {
+function nowStr(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`;
+  return `${p(d.getMonth() + 1)}${p(d.getDate())}${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
-/** 下一个 build 号：同日递增后缀（a→b），跨日重置为 'a'。 */
-export function bumpBuild(current, today = todayStr()) {
-  const m = String(current || '').match(BUILD_FMT_RE);
-  if (!m) return `${today}a`;
-  const [, y, mo, d, suffix] = m;
-  const date = `${y}${mo}${d}`;
-  if (date > today) return null;              // 未来日期，视为异常
-  if (date < today) return `${today}a`;
-  if (suffix >= 'z') return null;             // 一天发 26 版，明显异常
-  return date + String.fromCharCode(suffix.charCodeAt(0) + 1);
+/** MMDDHHmm 加 N 分钟（带进位）。基准年取闰年 2000，只用于月/日/时/分的进位。 */
+function addMinutes(build, mins) {
+  const m = String(build).match(BUILD_FMT_RE);
+  if (!m) return null;
+  const dt = new Date(2000, +m[1] - 1, +m[2], +m[3], +m[4] + mins);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(dt.getMonth() + 1)}${p(dt.getDate())}${p(dt.getHours())}${p(dt.getMinutes())}`;
+}
+
+/**
+ * 下一个 build 号：
+ *   - current 比 now 旧（跨天/跨小时）→ 直接取 now
+ *   - current 与 now 同一分钟（连发）→ 顺延 1 分钟，保证号不重复
+ *   - current 比 now 超前 10 分钟以上 → null（手写错号或系统时钟回拨，视为异常不推导）
+ * ⚠️ 已知边界：12/31 23:5x 跨年到 1/1 时字符串比较会失效，此时返回 null（放弃推导，人工写号）。
+ */
+export function bumpBuild(current, now = nowStr()) {
+  if (!String(now || '').match(BUILD_FMT_RE)) return null;
+  const cur = String(current || '');
+  if (!BUILD_FMT_RE.test(cur)) return now;
+  if (cur < now) return now;
+  const limit = addMinutes(now, 10);
+  if (limit && cur > limit) return null;
+  return addMinutes(cur, 1);
 }
 
 /* --------------------------------------------------------- 元信息注入 */

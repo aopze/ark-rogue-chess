@@ -19,14 +19,17 @@ function resetSkillState() {
   vampireSkillActive = false;
   amiyaBonusTargets = 0;
 }
-/* 整局成长：等级 / buff / 护盾 / 升级弹窗 */
+/* 整局成长：等级 / 经验 / buff / 护盾 / 升级弹窗 */
 function resetRunProgress() {
   levelHpBonus = 0;
   heroLevel = 1;
+  xp = 0;                       // 漏重置 → 二周目带经验开局
+  pendingLevelUps = 0;
+  levelStartHp = 0;
+  levelActions = 0;
   buffs = freshBuffs();
   playerShield = 0;
   levelUpOpen = false;
-  levelUpPending = false;
   lastLevelUpConMod = 0;
   clearLevelUpOverlay();
   resetSkillState();

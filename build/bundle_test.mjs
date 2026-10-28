@@ -20,28 +20,32 @@ function check(name, cond, extra = '') {
   else { failed.push(name); console.log(`  ❌ ${name}${extra ? ' — ' + extra : ''}`); }
 }
 
-console.log('[单测] bumpBuild —— build 号推导（★ 本地日期，非 UTC）');
-check('同日递增：20261028a → 20261028b', bumpBuild('20261028a', '20261028') === '20261028b',
-  bumpBuild('20261028a', '20261028'));
-check('同日递增：20261028b → 20261028c', bumpBuild('20261028b', '20261028') === '20261028c');
-check('跨日重置：20261027c (today=20261028) → 20261028a', bumpBuild('20261027c', '20261028') === '20261028a',
-  bumpBuild('20261027c', '20261028'));
-check('跨日重置：20261001z (today=20261028) → 20261028a', bumpBuild('20261001z', '20261028') === '20261028a');
-check('非法输入 → 当天 a', bumpBuild('garbage', '20261028') === '20261028a');
-check('空输入 → 当天 a', bumpBuild('', '20261028') === '20261028a');
-check('未来日期 → null（视为异常，不推导）', bumpBuild('20261231a', '20261028') === null,
-  String(bumpBuild('20261231a', '20261028')));
-check('后缀到 z 再加 → null（一天 26 版属异常）', bumpBuild('20261028z', '20261028') === null);
+console.log('[单测] bumpBuild —— build 号推导（MMDDHHmm 月日时分，★ 本地时间）');
+check('号比现在旧 → 直接取现在', bumpBuild('10282000', '10282132') === '10282132',
+  bumpBuild('10282000', '10282132'));
+check('跨日：昨天 2359 → 今天 now', bumpBuild('10272359', '10282132') === '10282132');
+check('同分钟连发 → 顺延 1 分钟', bumpBuild('10282132', '10282132') === '10282133',
+  bumpBuild('10282132', '10282132'));
+check('顺延跨小时：10282159 → 10282200', bumpBuild('10282159', '10282159') === '10282200',
+  bumpBuild('10282159', '10282159'));
+check('顺延跨日：10282359 → 10290000', bumpBuild('10282359', '10282359') === '10290000',
+  bumpBuild('10282359', '10282359'));
+check('非法当前号 → 取现在', bumpBuild('garbage', '10282132') === '10282132');
+check('空当前号 → 取现在', bumpBuild('', '10282132') === '10282132');
+check('超前过多（手写错号）→ null', bumpBuild('11011000', '10282132') === null,
+  String(bumpBuild('11011000', '10282132')));
+check('now 本身非法 → null', bumpBuild('10282132', 'xx') === null);
 
-console.log('\n[单测] 时区回归 —— 曾因用 UTC 把「同日发版」误判为未来日期');
+console.log('\n[单测] 时间基准 —— 必须用本地钟，不能偷偷用 UTC');
 {
-  // 北京时间 2026-10-28 凌晨，UTC 仍是 10-27；人类写的是 20261028a
-  const utcDay = '20261027';
-  const localDay = '20261028';
-  const byUtc = bumpBuild('20261028a', utcDay);           // 旧实现：null（错误）
-  const byLocal = bumpBuild('20261028a', localDay);        // 正确：20261028b
-  check('UTC 日期会误判（回归哨兵：确认该场景确实会被旧逻辑判死）', byUtc === null);
-  check('本地日期推导正确', byLocal === '20261028b');
+  // 旧实现用 UTC 日期串，北京时间 10-28 00:30 会被算成 10-27 → 跨日误判
+  const now = new Date(2026, 9, 28, 0, 30, 0);            // 本地 10-28 00:30
+  const p = (n) => String(n).padStart(2, '0');
+  const nowLocal = `${p(now.getMonth() + 1)}${p(now.getDate())}${p(now.getHours())}${p(now.getMinutes())}`;
+  const nowUtc = `${p(now.getUTCMonth() + 1)}${p(now.getUTCDate())}${p(now.getUTCHours())}${p(now.getUTCMinutes())}`;
+  check('本地串 = 10280030', nowLocal === '10280030', nowLocal);
+  check('UTC 串会少 8 小时（回归哨兵：确认该坑真实存在）', nowLocal !== nowUtc, nowUtc);
+  check('按本地钟推导不落到前一天', bumpBuild('10272350', nowLocal) === '10280030', bumpBuild('10272350', nowLocal));
 }
 
 console.log('\n[单测] stripModuleSyntax —— ESM 语法剥离');
@@ -105,12 +109,20 @@ console.log('\n[单测] injectVersion —— 版本注入幂等性');
   check('无锚点 → skipped（不破坏文件）', r.mode === 'skipped' && r.html === none);
 }
 
-console.log('\n[单测] validateBuild —— 格式校验');
-check('合法 20261028a', validateBuild('20261028a').ok);
-check('合法 20261231z', validateBuild('20261231z').ok);
-check('非法：小写日期缺失后缀', !validateBuild('20261028').ok);
-check('非法：后缀为数字', !validateBuild('202610281').ok);
-check('非法：月份 13', !validateBuild('20261328a').ok);
+console.log('\n[单测] validateBuild —— MMDDHHmm 格式校验');
+check('合法 10282132', validateBuild('10282132').ok);
+check('合法 01010000（跨年首分钟）', validateBuild('01010000').ok);
+check('合法 12312359（年末最后一分钟）', validateBuild('12312359').ok);
+check('合法 02290000（闰日）', validateBuild('02290000').ok);
+check('非法：旧格式 20261028e（已废弃）', !validateBuild('20261028e').ok);
+check('非法：五位', !validateBuild('1028213').ok);
+check('非法：八位旧格式 20261028', !validateBuild('20261028').ok);
+check('非法：月份 13', !validateBuild('13282132').ok);
+check('非法：月份 00', !validateBuild('00282132').ok);
+check('非法：日 32', !validateBuild('10322132').ok);
+check('非法：2/30 不存在的日期', !validateBuild('02300000').ok);
+check('非法：小时 24', !validateBuild('10282400').ok);
+check('非法：分钟 60', !validateBuild('10282160').ok);
 check('非法：空', !validateBuild('').ok);
 
 console.log('\n[单测] normalize —— 一致性比对的归一化');
