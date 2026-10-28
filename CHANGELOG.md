@@ -4,6 +4,49 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
+## [10290058] — 2026-10-29 · 起始格（原地）攻击修复（ISSUE-17）
+
+> **已发版**：根目录 `game.html` **332,257 B / sha256 `d8d5c7fd`** / build `10290058`，
+> `index.html` 的 `var BUILD` 同步为 `10290058`（双 BUILD 一致）。
+> 派发：人类维护者「17 号重新落盘并提交 main」——上一版 `10282343` 漏带了这份修复。
+
+### 修复
+
+- **`templates/game.html#toggleAttack()`**：越界判断 `if (idx < 1) return;` →
+  `if (idx < 0 || idx >= playerPath.length) return;`。旧判断把「路径起点（idx 0）」和非法下标
+  一起挡死，于是**点自己脚下那格毫无反应**，而 `confirmAction()` 里
+  `attackIndices.includes(0) → pendingAttack` 的「原地攻击」支持**永远是死分支**。
+- **`src/rules/actions.js#plannedActionInfo()`**：攻击节点过滤 `i > 0` → `i >= 0`。
+  只改前一处不改这里，会出现「起点攻击 + 第二个攻击节点」规划期不报超限、结算时第二下莫名打空。
+- 起点节点专属战报「🎯 原地攻击：不移动，进入本回合后先在起始格出手（占一次动作）。」
+- `pointerup` 双击分支加 `idx > 0`：起点格没有技能节点可设，双击按「再点一次」处理，
+  否则会还原快照把刚设上的原地攻击悄悄抹掉。
+- 底部操作提示补「点脚下那格=原地攻击」（PC 与手机两套文案）。
+
+### 未包含（重要）
+
+- **ISSUE-20261028-10 A 条「趁乱攻击收窄」未上线**。代码已实现并自测通过
+  （`cdp_scuffle_test` 8/8：剩步数触发 / 一次一个 / 每回合一次），但 80 局平衡回归**断崖**：
+  风笛 3.00 → 1.00 关、泥岩 2.80 → 1.20 关、均杀 6.4 → 0.2。原因：现有「贴身反击」是
+  **每个 tick 对全部相邻各补一刀**，约占玩家总输出八成，收窄等于删掉主力输出。
+  代码留在 `SD工作空间/游戏demo/_build_ws6/`，等人类拍板（原样收窄 / 收窄+补偿 / 只做 Boss B）。
+- **ISSUE-10 B 条 Boss 圆岩巨像**未开始（不在本次授权范围）。
+
+### 门禁（全部在发版产物上跑）
+
+| 套件 | 结果 |
+|---|---|
+| `node build/bundle_test.mjs` | 58/58 |
+| `net/dom_load_test.mjs` | 23/23（`commit` 字段 = `488aa06f…`，40 位 sha） |
+| `net/layout_chrome_test.mjs` | 53/53 |
+| `net/lobby_shell_test.mjs` | 39/39 |
+| `net/battle_ui_test.mjs` | 24/24 |
+| `cdp_startcell_attack_test.cjs` | **14/14**（真实 pointerdown/up 打到格子中心） |
+| `cdp_facing_test.cjs` | 22/22 |
+| `cdp_lobby_test.cjs` | 30/30 |
+
+合计 **197 项 + 66 项 CDP** 全绿，`jsdomError` / `console.error` / `pageErrors` 全 0。
+
 ## [10290007] — 2026-10-29 · 删掉泥岩隐藏的 +42% 近战暴击（ISSUE-20）
 
 > **已发版**：根目录 `game.html` **330,937 B / sha256 `38aeec3c`** / build `10290007`，

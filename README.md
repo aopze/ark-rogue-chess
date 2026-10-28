@@ -7,15 +7,47 @@
 |---|---|
 | 仓库 | `aopze/ark-rogue-chess`（GitHub Pages 静态托管，`main` / 根目录） |
 | 线上入口 | <https://aopze.github.io/ark-rogue-chess/>（DLC 外壳）· 游戏本体 `/game.html` |
-| 代码基线 | `game.html` @ `7c95c380d5`（330,937 B）· build `10290007`（2026-10-29 00:07，ISSUE-20 删泥岩隐藏 +42% 暴击，**其余零改动**） |
+| 代码基线 | `game.html` @ `10290058`（332,257 B / `d8d5c7fd`）· build `10290058`（2026-10-29 00:58，**ISSUE-17 起始格原地攻击修复**，玩法数值其余零改动） |
 | 当前阶段 | **0.1 原型整理**（未启动，任务见 §5.1） |
-| 文档版本 | v3.13 · 2026-10-29（由 `ROADMAP.md` 升级而来） |
+| 文档版本 | v3.14 · 2026-10-29（由 `ROADMAP.md` 升级而来） |
 | 参与方 | 人类维护者 + 多个 AI 协作代理（并行开发） |
 | **改动入口** | **`issues/` 目录 —— 想改游戏就写文件进去，不要直接改 `game.html`（见 §0.0）** |
 
 ---
 
-> ## 🚨 基线变更通告（2026-10-29 00:07，build `10290007`）
+> ## 🚨 基线变更通告（2026-10-29 00:58，build `10290058`）
+>
+> `game.html` 已由 **330,937 B / `38aeec3c`**（build `10290007`）变为 **332,257 B / `d8d5c7fd`**（build `10290058`）。
+> 人类维护者派发「17 号重新落盘并提交 main」，本轮范围 = **ISSUE-20261028-17：起始格（原地）攻击修复**。
+>
+> ### 唯一改动（玩法数值零改动）
+>
+> ① `templates/game.html#toggleAttack()` 的越界判断 `if (idx < 1) return;` → `if (idx < 0 || idx >= playerPath.length) return;`
+> —— 旧判断把「路径起点 idx 0」和非法下标一起挡死，于是「点自己脚下那格」毫无反应，而 `confirmAction()`
+> 里 `attackIndices.includes(0) → pendingAttack` 的原地攻击支持**永远是死分支**。
+> ② `src/rules/actions.js#plannedActionInfo()` 的攻击节点过滤 `i > 0` → `i >= 0`
+> —— 只改 ① 不改 ② 会出现「起点攻击 + 第二个攻击节点」规划期不报超限、结算时第二下莫名打空。
+> ③ 起点节点专属战报「🎯 原地攻击…」、`pointerup` 双击分支加 `idx > 0`（起点格不设技能节点，
+> 否则双击还原快照会把刚设的节点抹掉）、底部提示补「点脚下那格=原地攻击」。
+>
+> ### 门禁
+>
+> `bundle_test` **58/58** · `dom_load_test` **23/23** · `layout_chrome_test` **53/53** ·
+> `lobby_shell_test` **39/39** · `battle_ui_test` **24/24**（合计 **197 项全绿**）· CDP 实测
+> `cdp_startcell_attack_test` **14/14**（真实 `pointerdown/pointerup` 打到格子中心）、
+> `cdp_facing_test` **22/22**、`cdp_lobby_test` **30/30**。
+>
+> ### ⚠️ 同轮「10 号趁乱攻击收窄」已实施但**未发版**
+>
+> 按人类 00:29 授权实现（剩步数触发 / 一次一个 / `scuffleUsed` 每回合一次），
+> 自测 `cdp_scuffle_test` 8/8 全绿，但 **80 局平衡回归断崖**：风笛 3.00 → 1.00 关、泥岩 2.80 → 1.20 关、
+> 阿米娅 1.00 → 1.20 关，均杀 6.4 → 0.2。原因是现有「贴身反击」实际是**每个 tick 对全部相邻各补一刀**，
+> 它是当前玩家输出的主要来源（约占八成），收窄后等于删掉主力输出。**已暂缓上线**，代码留在
+> `SD工作空间/游戏demo/_build_ws6/`，待人类在「按原样收窄 / 收窄+补偿 / 只做 Boss B」之间拍板。
+>
+> ---
+>
+> ## 📜 历史基线通告（2026-10-29 00:07，build `10290007`）
 >
 > `game.html` 已由 **330,899 B / `56898b1b`**（build `10282343`）变为 **330,937 B / `38aeec3c`**（build `10290007`）。
 > 人类维护者授权「发版」，本轮范围 = **ISSUE-20261028-20：删掉泥岩隐藏的 +42% 近战暴击**。
@@ -974,6 +1006,7 @@ ark-rogue-chess/
 | v3.11 | 2026-10-28 | **构建号格式改为 `MMDDHHmm`（月日时分）+ 修复远程源码树漂移**：① `window.__ARK_VERSION__.build` 与 `index.html` 的 `var BUILD` 由 `YYYYMMDDx`（年月日 + 字母后缀）改为 8 位「月日时分」，例 `10282137` = 10 月 28 日 21:37；改动 `build/verify.mjs`（`BUILD_FMT_RE` 与 `validateBuild` 增月/日/时/分范围校验、拒旧格式）、`build/bundle.mjs`（`bumpBuild` 改为取本地时刻、同分钟连发顺延 1 分钟、超前 10 分钟以上判异常）、`templates/game.html` 字段说明，单测 48 → **58 项**（跨小时/跨日进位、闰日、月份 00/13、2-30 等）。② **远程源码树漂移修复**：`20261028e` 发版只传了产物 `game.html`，`templates/game.html` / `src/data/constants.js` / `src/rules/buffs.js` / `src/rules/reset.js` 四个文件仍停在 `20261028d`（远程 `constants.js` 仅 44 行、无任何 `XP_*` 常量）→ 任何人从远程 `templates/` 重新构建都会**静默回退经验制**。本轮补齐 4 文件，远程树恢复可重建（本地构建复现 `20261028e` 产物，仅 `builtAt` 差）。产物 **288,144 B**，相对 `20261028e`(288,100 B) 只差版本号与一行注释共 3 行，**玩法零改动**。 |
 | v3.12 | 2026-10-28 | **玩法发版 build `10282343`（人类维护者授权「版本更新」，本轮范围 09 + 10，两份合并一版）**：详见顶部「基线变更通告」。**玩法规则与数值零改动** —— 本轮只动 UI 与外壳。① **09 UI 重构**：正方形棋盘（`boardAvailSize()` 取短边、`.cell` 去掉 `×1.12`、`#game` 贴左）、**废除竖版拖高度与 `ark_map_v_ratio`**；新增 `src/ui/drawer.js`（settings/stats/levelup 三段右侧滑入，互斥 + 遮罩 + Esc 捕获阶段 + `aria-expanded`）、`src/ui/panels.js`（六维说明卡，公式照代码实际口径抄写，可原地 +1）、`src/ui/mobile-pad.js`（**只在 `(pointer:coarse) and (not (any-pointer:fine))` 建 DOM**，4 方向 + 等待/攻击/技能，攻击键长按切攻击范围、技能键按 `spMax` 画等分环）；仪表格降级为纯展示、键盘补 `V`、右键路径节点设技能节点；`initLevel()` 在 `setTimeout(…, 50)` 之前补一次 `syncVirtualPad()` —— 进关那 50ms 里 `phase` 已是 planning 但圆钮还是旧值（纯触屏玩家可见）。② **10 外壳**：删 `#home`/`#btnStart` 打开即选角大厅；左把手 + 抽屉（账号卡 + Top10 + 完整榜，拉出时 iframe `pointer-events:none`）；账号 = `显示名(1-12 汉字/字母) + 数字口令(4-8)`，`parseAccount()` 逐条给原因、首次自动生成 `玩家<4位>`、公开处一律 `publicName()` 剥数字、同名加 `·2`。**拆分基线失效**：新增 3 模块（21 → **24 模块**）、`chrome.js`/`layout.js` 重写、`dom-refs.js` 改点击语义，旧「第 N 区 = 第 X 行」不可再用。**门禁 193 项全绿**：`bundle_test` 58、`dom_load_test` 23、`layout_chrome_test` 53、`lobby_shell_test` 39、**新增 `battle_ui_test` 20**（4 角色 × 3 回合实操 + 抽屉开着结算 + 通关→加点闸门→下一关），`jsdomError`/`console.error` 全 0。顺带修两个测试自身缺陷：`dom_load_test` 的 build 正则只认旧格式 `^\d{8}[a-z]$`、`lobby_shell_test` 把 BUILD 写死成 `10282321`（改为读 `index.html` 的 `var BUILD` 再比 iframe `?v=`）。产物 **330,899 B / sha256 `56898b1b`**。**ISSUE-09、ISSUE-10 均已核销** |
 | v3.13 | 2026-10-29 | **数值发版 build `10290007`（人类维护者授权「发版」，本轮范围 20）**：删掉 `meleeCritTag()` 里泥岩（`fencer`）隐藏的 **+42%** 近战暴击（`0.08 + 0.42 = 50%`，是风笛的 6.25 倍，README / CHANGELOG / issue 全目录零记载、角色 `tips` 也没写，属纯隐藏强度）。改为所有角色同一条 `player.critChance`，暴击只剩「自然20 → 朝向 → 面板暴击率」三条公开途径；**`rng()` 调用次数不变**（原本两条都不中时也要调一次），整局随机序列不受影响；泥岩反击的必定暴击是 `meleeCritTag` 之外的独立机制，未动。`battle_ui_test` 新增 `[4] 近战暴击率` 组：构造「正面近战 + 非朝向 + 非自然20」单一路径抽样 2000 次，得泥岩 7.6% vs 风笛 7.5%；把旧逻辑临时植回产物立刻红成 48.3%，确认不是空判。门禁 **197 项全绿**，产物 330,937 B / `38aeec3c`。同轮人类拍板 **`art-preview/` 阿米娅 SVG 维持现状不修改**（A/B 选型作废，不再讨论） |
+| v3.14 | 2026-10-29 | **BUG 发版 build `10290058`（人类派发「17 号重新落盘并提交 main」，本轮范围 17）**：`toggleAttack()` 越界判断 `idx < 1` → `idx < 0 \|\| idx >= playerPath.length`（旧判断把路径起点 idx 0 和非法下标一起挡死 → 点自己脚下那格无反应、`confirmAction()` 里 `attackIndices.includes(0) → pendingAttack` 成死分支）；`plannedActionInfo()` 攻击节点过滤 `i > 0` → `i >= 0`（否则「起点攻击 + 第二节点」规划期不报超限、结算时第二下打空）；起点节点专属战报、`pointerup` 双击分支加 `idx > 0`（起点格不设技能节点，双击否则会还原快照抹掉刚设节点）、底部提示补「点脚下那格=原地攻击」。**玩法数值零改动**。门禁 **197 项全绿** + `cdp_startcell_attack_test` **14/14**（真实 pointerdown/up）、`cdp_facing_test` **22/22**、`cdp_lobby_test` **30/30**；产物 **332,257 B / `d8d5c7fd`**。**同轮 ISSUE-10 A 条（趁乱攻击收窄）已实现并自测 8/8，但 80 局平衡回归断崖（风笛 3.00→1.00 关、均杀 6.4→0.2）→ 暂缓上线待人类拍板** |
 
 ---
 

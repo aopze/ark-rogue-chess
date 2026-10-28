@@ -600,9 +600,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290007',
-  commit:  '7c95c380d5138a8f734305230c15c3baf93fa100',
-  builtAt: '2026-10-28T16:08:14Z'
+  build:   '10290058',
+  commit:  '488aa06fc15f183a0d1fe3b2ba0fea52f1b2752f',
+  builtAt: '2026-10-28T16:58:09Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -2294,7 +2294,11 @@ function plannedActionInfo(path, atkIdxs, skillIdxs) {
   const skSet = new Set(skOnPath);
   /* 技能节点占了第一个等待步：技能就绪时技能优先（这一步不闪避）；技能没就绪时仍可闪避 */
   const dodge = wIdx >= 0 && !(skSet.has(wIdx) && skillReadyInfo(p).ready);
-  const atkOnPath = [...new Set(atk.filter(i => i > 0 && i < p.length))];
+  /* ★ 起点格（idx 0）的攻击节点也要算一个动作 —— 它是「原地攻击」，
+   * 结算时走 pendingAttack 分支、同样消耗 playerActionsUsed。
+   * 旧版用 `i > 0` 把它漏掉，导致「起点攻击 + 另一个攻击节点」规划期不报超限、
+   * 结算时才莫名其妙打空（ISSUE-20261028-17 / BUG-STARTCELL-ATTACK）。 */
+  const atkOnPath = [...new Set(atk.filter(i => i >= 0 && i < p.length))];
   return {
     dodge,
     dodgeIndex: (dodge ? wIdx : -1),
@@ -4523,8 +4527,8 @@ function renderControls() {
     tip.style.cssText = 'font-size:12px; color:#888; text-align:center; padding:2px; line-height:1.35; white-space:pre-wrap;';
     // 手机端不显示键盘快捷键（ISSUE-20261028-09 D），换成一行触摸说明
     tip.textContent = (typeof vpadMounted !== 'undefined' && vpadMounted)
-      ? '点棋盘移动 · 单击路径节点=攻击 · 双击=技能\n左下方向键移动 · 右下三键 = 等待 / 攻击 / 技能\n长按攻击键 = 看攻击范围'
-      : 'WASD/点击移动 · 单击路径节点=攻击 · 双击=技能 · 长按地块=等待\nE=攻击 · R=技能 · Q=等待 · V=攻击范围 · 空格确认 · X 重置路径\n右键路径格=技能节点 · 主动行动三选一：攻击 / 技能 / 闪避（第一个等待）';
+      ? '点棋盘移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能\n左下方向键移动 · 右下三键 = 等待 / 攻击 / 技能\n长按攻击键 = 看攻击范围'
+      : 'WASD/点击移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能 · 长按地块=等待\nE=攻击 · R=技能 · Q=等待 · V=攻击范围 · 空格确认 · X 重置路径\n右键路径格=技能节点 · 主动行动三选一：攻击 / 技能 / 闪避（第一个等待）';
     controlsEl.appendChild(tip);
   } else if (phase === PHASE.GAMEOVER) {
     const btn = document.createElement('button');
@@ -4688,7 +4692,12 @@ boardEl.addEventListener('contextmenu', (e) => {
 });
 
 function toggleAttack(idx) {
-  if (idx < 1) return;
+  /* ★ idx 0 = 玩家脚下那一格（路径起点）= 「原地攻击」：不移动，本回合先在起始格出手。
+   * 旧版这里写成 `if (idx < 1) return;`，把起点格和非法下标一起挡掉了 ——
+   * 于是「点自己脚下的格子」完全没反应，而 confirmAction() 里 `attackIndices.includes(0)`
+   * 那段「原地攻击」的支持代码永远是死分支（ISSUE-20261028-17 / BUG-STARTCELL-ATTACK）。
+   * 越界仍然要挡：idx 必须落在当前路径范围内。 */
+  if (idx < 0 || idx >= playerPath.length) return;
   if (selectedChar === 'fencer' && fencerCounterActive) {
     log('反击状态不能设置攻击节点。');
     return;
@@ -4711,7 +4720,9 @@ function toggleAttack(idx) {
     return;
   }
   attackIndices.push(idx);
-  log(`🎯 攻击节点：第 ${idx} 步（占一次动作）。`);
+  log(idx === 0
+    ? '🎯 原地攻击：不移动，进入本回合后先在起始格出手（占一次动作）。'
+    : `🎯 攻击节点：第 ${idx} 步（占一次动作）。`);
 }
 
 /* ★ 技能节点：双击路径节点设置 / 取消（与攻击节点互斥，同一格只能有一种） */
@@ -4838,9 +4849,11 @@ boardEl.addEventListener('pointerup', (e) => {
     const idx = findLastIndex(playerPath, p => p.x === x && p.y === y);
     if (idx >= 0) {
       /* ★ 单击 = 攻击节点；双击（340ms 内点同一格）= 技能节点。
-       * 双击时第一次点击可能已经把攻击节点切换掉，所以先还原快照再设技能。 */
+       * 双击时第一次点击可能已经把攻击节点切换掉，所以先还原快照再设技能。
+       * 起点格（idx 0）没有技能节点可设（技能必须落在移动步上），双击按「再点一次」处理，
+       * 否则会还原快照把刚设上的原地攻击悄悄抹掉。 */
       const now = Date.now();
-      if (lastClick && lastClick.idx === idx && now - lastClick.time <= 340) {
+      if (idx > 0 && lastClick && lastClick.idx === idx && now - lastClick.time <= 340) {
         attackIndices = [...lastClick.atk];
         skillIndices = [...lastClick.sk];
         lastClick = null;

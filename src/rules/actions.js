@@ -34,7 +34,11 @@ function plannedActionInfo(path, atkIdxs, skillIdxs) {
   const skSet = new Set(skOnPath);
   /* 技能节点占了第一个等待步：技能就绪时技能优先（这一步不闪避）；技能没就绪时仍可闪避 */
   const dodge = wIdx >= 0 && !(skSet.has(wIdx) && skillReadyInfo(p).ready);
-  const atkOnPath = [...new Set(atk.filter(i => i > 0 && i < p.length))];
+  /* ★ 起点格（idx 0）的攻击节点也要算一个动作 —— 它是「原地攻击」，
+   * 结算时走 pendingAttack 分支、同样消耗 playerActionsUsed。
+   * 旧版用 `i > 0` 把它漏掉，导致「起点攻击 + 另一个攻击节点」规划期不报超限、
+   * 结算时才莫名其妙打空（ISSUE-20261028-17 / BUG-STARTCELL-ATTACK）。 */
+  const atkOnPath = [...new Set(atk.filter(i => i >= 0 && i < p.length))];
   return {
     dodge,
     dodgeIndex: (dodge ? wIdx : -1),
