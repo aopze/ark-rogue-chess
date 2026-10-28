@@ -278,5 +278,42 @@ console.log('\n[3] 通关链路：onLevelClear → 属性闸门 → 下一关（
   try { dom.window.close(); } catch (e) {}
 }
 
+console.log('\n[4] 近战暴击率：泥岩与风笛同一条 critChance（ISSUE-20 删掉隐藏 +42%）');
+
+{
+  const { dom, w, d, errors } = makeWindow();
+  await sleep(300);
+  w.eval("selectCharacter('fencer')");
+  await waitPhase(w, ['planning']);
+
+  /* 只构造「正面近战 + 非朝向 + 非自然20」这一种情况：
+   * meleeCritTag 要先过完 自然20 / 朝向 两条才轮到 critChance，所以这两条必须都不成立，
+   * 否则抽样测的就不是暴击率了。2000 次抽样，真值 8% 时 σ≈0.6%，判定阈值留得很宽。 */
+  const r = w.eval(`(() => {
+    const N = 2000;
+    const saved = { x: player.x, y: player.y, facing: player.facing, ch: selectedChar };
+    player.x = 8; player.y = 8; player.facing = { dx: 1, dy: 0 };
+    const target = { x: 8, y: 7 };          /* 正上方，与朝向(1,0)不同 → isFacingTarget=false */
+    function sample(id) {
+      selectedChar = id;
+      let hit = 0;
+      for (let i = 0; i < N; i++) if (meleeCritTag(target, { nat20: false }) === '暴击') hit++;
+      return hit / N;
+    }
+    const fencerRate = sample('fencer');
+    const wheelRate = sample('wheelchair');
+    player.x = saved.x; player.y = saved.y; player.facing = saved.facing; selectedChar = saved.ch;
+    return { fencer: fencerRate, wheel: wheelRate, crit: player.critChance };
+  })()`);
+
+  check('泥岩暴击率回到面板值（不再是 50%）', r.fencer < 0.20, (r.fencer * 100).toFixed(1) + '%');
+  check('泥岩确实还在掷暴击（不是恒不暴）', r.fencer > 0.02, (r.fencer * 100).toFixed(1) + '%');
+  check('泥岩与风笛同口径（差值 < 6%）', Math.abs(r.fencer - r.wheel) < 0.06,
+    `${(r.fencer * 100).toFixed(1)}% vs ${(r.wheel * 100).toFixed(1)}%`);
+  check('暴击抽样无异常', errors.length === 0, errors.slice(0, 2).join(' | ') || '0');
+
+  try { dom.window.close(); } catch (e) {}
+}
+
 console.log(`\n${bad.length === 0 ? `全部通过（${ok.length} 项）` : `失败 ${bad.length} 项：${bad.join('、')}`}`);
 process.exit(bad.length === 0 ? 0 : 1);

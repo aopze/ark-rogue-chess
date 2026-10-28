@@ -600,9 +600,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10282343',
-  commit:  '63a63fc6234cc36264669896a4b1050ec745d917',
-  builtAt: '2026-10-28T15:43:11Z'
+  build:   '10290007',
+  commit:  '7c95c380d5138a8f734305230c15c3baf93fa100',
+  builtAt: '2026-10-28T16:08:14Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -3408,15 +3408,15 @@ function showPlayerDamage(res, normalText, opts = {}) {
   floatText(x, y, res.shielded ? '护盾抵消' : normalText, res.shielded ? '#ffffff' : color, !res.shielded && crit);
 }
 
-/* 近战暴击判定：自然20 → 朝向 → 角色暴击率（泥岩额外 +42%）。
+/* 近战暴击判定：自然20 → 朝向 → 角色暴击率（所有角色同一条 critChance，无角色特例）。
+ * 2026-10-28 ISSUE-20：删掉泥岩隐藏的 +42%（原为 0.08 + 0.42 = 50%）。
  * facingMode：'cone' 用于攻击节点范围攻击（面向的 3 格扇形），'target' 用于趁乱打击（正对目标）。
  * 注意 Math.random 的调用顺序：与旧版一致，改动会影响整局随机序列。 */
 function meleeCritTag(target, atk, facingMode = 'target') {
   if (atk.nat20) return '自然20暴击';
   const facing = facingMode === 'cone' ? isInFacingCone(player, target) : isFacingTarget(player, target);
   if (facing) return '朝向暴击';
-  const chance = selectedChar === 'fencer' ? player.critChance + 0.42 : player.critChance;
-  return rng() < chance ? '暴击' : '';
+  return rng() < player.critChance ? '暴击' : '';
 }
 
 /* 玩家当前是否处于「免疫本次伤害」的状态（风笛冲锋 / 泥岩满技力反击）。 */
