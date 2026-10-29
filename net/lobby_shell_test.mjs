@@ -184,7 +184,54 @@ console.log('\n[6] 完整排行榜仍复用原浮层');
   check('closeRank 关闭浮层', !p.classList.contains('open'));
 }
 
-console.log('\n[7] 全程无报错');
+console.log('\n[7] 关闭角标与游戏内 👤 角标像素级对齐（ISSUE-20261029-44 补丁①）');
+{
+  /* 为什么测：外壳的 ✕ 必须「原地变成」游戏里那颗 👤 —— 同尺寸、同左上角位置。
+     尺寸随 --cell（16~80px）变，写死 36px 必然对不上，所以要抄 iframe 内 #lobbyOpenBtn 的 rect。
+     jsdom 不做布局（rect 全 0），这里直接打桩验证换算与写入，真浏览器对齐靠肉眼 + 线上回归。 */
+  const corner = doc.getElementById('lobbyCornerClose');
+  const fr = doc.getElementById('game');
+  const dr = doc.getElementById('lobbyDrawer');
+  check('syncCornerToGame 已导出', typeof window.syncCornerToGame === 'function');
+
+  const fdoc = fr.contentDocument || (fr.contentWindow && fr.contentWindow.document);
+  /* jsdom 不加载 iframe 资源（contentDocument 常为 null），且不做布局 —— 这里打桩：
+     一个只有 getElementById('lobbyOpenBtn') 的最小文档 + 带 rect 的假角标。
+     syncCornerToGame 只依赖这一处读 DOM，桩掉它就能精确验证换算与写入。 */
+  let fakeRect = { left: 120, top: 40, width: 64, height: 64, right: 184, bottom: 104 };
+  const fakeBtn = { id: 'lobbyOpenBtn', getBoundingClientRect: () => fakeRect };
+  Object.defineProperty(fr, 'contentDocument', {
+    configurable: true,
+    get: () => ({ getElementById: (id) => (id === 'lobbyOpenBtn' ? fakeBtn : null) }),
+  });
+  void fdoc;
+  // 游戏内：👤 在 iframe 内 (120,40)，边长 64（--cell=64 时的典型值）
+  fr.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 800, right: 800, bottom: 800 });
+  // 抽屉被贴在棋盘的 (100,30) 上（placeLobbyOverBoard 的产物）
+  dr.getBoundingClientRect = () => ({ left: 100, top: 30, width: 420, height: 420, right: 520, bottom: 450 });
+
+  window.lobbyOpen = true;
+  window.syncCornerToGame();
+  check('宽度 = 👤 角标宽度（不再是写死的 36px）', corner.style.width === '64px', corner.style.width);
+  check('左对齐 👤（120-100=20）', corner.style.left === '20px', corner.style.left);
+  check('上对齐 👤（40-30=10）', corner.style.top === '10px', corner.style.top);
+  check('✕ 字号随格子缩放（width × 0.5）', corner.style.fontSize === '32.00px', corner.style.fontSize);
+
+  // 角标被游戏隐藏（rect 为 0，如直开 game.html）时不得写出 0 尺寸 / NaN
+  fakeRect = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
+  window.syncCornerToGame();
+  check('量不到时不改写（保留上一次的 64px）', corner.style.width === '64px', corner.style.width);
+  check('量不到时 left 保持上一次的 20px（不写 NaN / 0）',
+    corner.style.left === '20px' && !/NaN/.test(corner.style.left), corner.style.left);
+
+  // 样式层面：白圈 + 绿光晕必须与游戏 `.on` 角标一字不差，否则一眼看出不是同一颗
+  const css = Array.from(doc.querySelectorAll('style')).map((s) => s.textContent).join('\n');
+  check('角标带白圈（与游戏 .on 态同款 inset）', /0 0 0 2px #fff inset/.test(css));
+  check('角标带绿色光晕 + 同款过渡', /0 2px 8px rgba\(46,204,113,\.5\)/.test(css) && /transition:filter \.15s/.test(css));
+  window.lobbyOpen = false;
+}
+
+console.log('\n[8] 全程无报错');
 check('无 console.error / jsdomError', errors.length === 0, errors.slice(0, 3).join(' | '));
 
 console.log(`\n通过 ${ok.length} 项，失败 ${bad.length} 项`);
