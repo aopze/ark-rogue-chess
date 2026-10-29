@@ -6,8 +6,8 @@ const fxLayer = document.getElementById('fxLayer');
 const logEl = document.getElementById('log');
 const statsEl = document.getElementById('stats');
 const footEl = document.getElementById('footBar');
-const heroInfoEl = document.getElementById('heroInfo');
-const heroKvEl = document.getElementById('heroKv');
+/* #heroInfo / #heroKv 已随侧栏角色卡删除（ISSUE-20261029-38）：
+   角色信息改由 heroInnerHtml() 生成、renderHeroCard() 写入 #hud 与 #charTop。 */
 const controlsEl = document.getElementById('controls');
 const actionSlotEl = document.getElementById('actionSlot');   // 竖屏时「开始行动」按钮的槽位
 const radarCanvas = document.getElementById('radarCanvas');

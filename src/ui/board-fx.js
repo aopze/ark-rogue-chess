@@ -26,6 +26,26 @@ function findPath(startX, startY, targetX, targetY, maxSteps = 99) {
   return null;
 }
 
+/* =========================================================================
+ * ISSUE-20261029-43 · 棋盘必须是正方形（人类 2026-10-29 16:2x）
+ *
+ * 「包围盒」是渲染真源：render() 用它写 gridTemplateColumns/Rows，
+ * buildBoardHtml() 只遍历这个范围 —— 所以包围盒不方，棋盘就不方，
+ * 覆盖棋盘的弹窗（设置 / 角色）也跟着变成竖条。
+ *
+ * 实测：地图本体 11×11，但包围盒被裁成 10 列 × 11 行 → 棋盘 794×874。
+ * 这里把它补成 side×side 的正方形窗口：
+ *   1. side = max(列数, 行数)；
+ *   2. **优先向右下扩展**（左上角不动 —— 玩家相对位置不跳），
+ *      扩展格落在原有墙区，所以只是「多露出一圈石头」，不会凭空造出可走格；
+ *   3. 右侧/下方越界 → 整体左移/上移这个窗口，仍保持正方形；
+ *   4. 只有「地图本身 ROWS≠COLS 且 side 放不下」这一种情况才会退回非正方形
+ *      （当前所有关卡与联机竞技场都是方图，走不到这里）。
+ *
+ * ★ 改这个函数等于改所有渲染路径：不要在这里读 DOM / 量尺寸（每帧多次调用）。
+ * ★ 里面是纯计算，扩展出来的坐标一定在 0..ROWS-1 / 0..COLS-1 内，
+ *   所以 buildBoardHtml 照常读 m[y][x] 即可，不需要额外判空。
+ * ========================================================================= */
 function getBoundingBox() {
   let minX = COLS, maxX = -1, minY = ROWS, maxY = -1;
   const m = phase === PHASE.CHAR_SELECT ? selMap : map;
@@ -41,7 +61,20 @@ function getBoundingBox() {
     if (v) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
   }
   if (minX === COLS) return { minX: 0, maxX: COLS - 1, minY: 0, maxY: ROWS - 1 };
-  return { minX, maxX, minY, maxY };
+  return squareifyBox(minX, maxX, minY, maxY);
+}
+
+/** 把紧包围盒撑成正方形（见上方长注释）。纯函数，不碰 DOM。 */
+function squareifyBox(minX, maxX, minY, maxY) {
+  const bc = maxX - minX + 1, br = maxY - minY + 1;
+  if (bc === br) return { minX, maxX, minY, maxY };   // 已经是正方形，一行都不改
+  const side = Math.max(bc, br);
+  const sx = Math.min(side, COLS), sy = Math.min(side, ROWS);
+  let x0 = Math.min(minX, COLS - sx);
+  let y0 = Math.min(minY, ROWS - sy);
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  return { minX: x0, maxX: x0 + sx - 1, minY: y0, maxY: y0 + sy - 1 };
 }
 
 function getCellEl(x, y) { return boardEl.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`); }

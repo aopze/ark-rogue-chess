@@ -114,6 +114,24 @@ console.log('\n[2] 正方形棋盘（updateCellSize / boardAvailSize）');
     boardWrap.style.width + ' × ' + boardWrap.style.height);
   check('棋盘是正方形（宽 == 高，±2px）', Math.abs(w - h) <= 2, w + ' vs ' + h);
 
+  /* ISSUE-20261029-43：上面那条量的是 #boardWrap 的 inline style —— 那是 JS 写的同一个
+   * 像素数，恒等，所以 53 项全绿也一直没发现「棋盘本体不方」。真正渲染出来的 #board
+   * 用 getBoundingBox() 的行列数，box 不方棋盘就不方，这里直接比行列次数。 */
+  const boardForShape = doc.getElementById('board');
+  const gCols = ((boardForShape && boardForShape.style.gridTemplateColumns) || '').match(/repeat\((\d+)/);
+  const gRows = ((boardForShape && boardForShape.style.gridTemplateRows) || '').match(/repeat\((\d+)/);
+  check('渲染出来的棋盘是正方形（#board 列数 == 行数）',
+    !!gCols && !!gRows && gCols[1] === gRows[1],
+    (gCols ? gCols[1] : '?') + ' 列 × ' + (gRows ? gRows[1] : '?') + ' 行');
+
+  /* 上面两条都依赖「这一局的包围盒恰好不方才走到正方形化分支」—— 把逻辑本身直接测一遍：
+   * 10 列 × 11 行的紧包围盒必须被撑成 11×11（扩展优先、越界平移）。 */
+  const sqA = window.eval('JSON.stringify(squareifyBox(1, 10, 0, 10))');
+  const sqB = window.eval('JSON.stringify(squareifyBox(0, 10, 0, 9))');
+  const okSq = o => (o.maxX - o.minX) === (o.maxY - o.minY) && o.minX >= 0 && o.minY >= 0;
+  check('squareifyBox：10×11 与 11×10 都被撑成正方形', okSq(JSON.parse(sqA)) && okSq(JSON.parse(sqB)),
+    sqA + ' / ' + sqB);
+
   // 竖版高度比例拖动已废除（ISSUE-20261028-09 硬约束 5）
   window.eval('applyMapVHeight(120, true)');
   check('竖版高度比例已废弃（不再写 ark_map_v_ratio）',
@@ -149,11 +167,20 @@ console.log('\n[3] 抽屉体系（drawerOpen / drawerClose / 互斥 / Esc / ♟�
   check('互斥：打开角色面板时设置自动收起', !settings.classList.contains('on') && char.classList.contains('on'));
   check('角色面板打开时遮罩仍在', mask.classList.contains('on'));
   check('角色面板含六维图画布', !!doc.getElementById('charRadarCanvas'));
+  /* ISSUE-20261029-42：删掉「角色」标题栏与 ✕，右下改成 BUFF 奖励池 */
+  check('角色面板没有标题栏与 ✕（只靠点外部 / Esc 关）',
+    !char.querySelector('.drawer-head') && !char.querySelector('.drawer-corner-x') && !char.querySelector('.drawer-title'));
+  check('角色面板右下是 BUFF 池容器', !!doc.getElementById('charBuffs'));
   check('分配入口 allocateAbilityPoint 是全局函数', typeof window.allocateAbilityPoint === 'function');
 
   doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   check('Esc 关闭当前抽屉', !char.classList.contains('on'));
   check('Esc 关闭后遮罩收起', !mask.classList.contains('on'));
+
+  /* ISSUE-20261029-42：✕ 删掉之后，「点面板外部」就是唯一的鼠标关闭方式，必须验到。 */
+  window.eval("drawerOpen('char')");
+  mask.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('点面板外部（遮罩）关闭角色面板', !char.classList.contains('on') && !mask.classList.contains('on'));
 
   window.eval("drawerOpen('char')");
   let clickThrew = false;

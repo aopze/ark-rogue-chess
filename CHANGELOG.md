@@ -4,6 +4,65 @@
 > 与 README §10.3 分工：**本文件记「产物发了什么」，README §10.3 记「文档结构怎么变」**。
 > 每次打 tag 追加一节。
 
+## [10291647] — 2026-10-29 · 棋盘正方形化 + 角色面板重做 + 角色信息卡并入行动按钮上方 HUD + 大厅按下才跟随
+
+> **已发版**：根目录 `game.html`（体积/sha256 见本节末尾）· build `10291647`，
+> `index.html` 的 `var BUILD` 同步为 `10291647`（双 BUILD 一致）。**26 模块不变**。
+> 四件一批：`ISSUE-20261029-43`（布局）+ `ISSUE-20261029-38`（UI）+ `ISSUE-20261029-42`（UI）+ `ISSUE-20261029-39`（交互）。
+
+### 43（棋盘正方形化 · DSQ）
+
+- **根因是行列数不等，不是格子不方**：渲染只取 `getBoundingBox()` 的可视包围盒
+  （`render()` 用它写 `gridTemplateColumns/Rows`，`buildBoardHtml()` 只遍历它），
+  地图本体 11×11 但包围盒被裁成 **10 列 × 11 行 = 794×874**，所以棋盘是竖条。
+- `getBoundingBox()` 尾部新增 `squareifyBox()`：`side = max(列,行)`，**优先向右下扩展**
+  （扩展格落在原有墙区，只是多露一圈石头，不会凭空造出可走格），右侧/下方越界就整体
+  平移这个正方形窗口。纯计算、不读 DOM。
+- 格子（`.cell` 宽高都是 `var(--cell)`）与单位（`units.js` 直接取格子 rect）**本来就方，未改**。
+- **补门禁**：`layout_chrome` 原来只量 `#boardWrap` 的 inline style（那是 JS 写的同一个
+  像素数，恒等）→ 53 项全绿也没发现棋盘是歪的；新增「`#board` 列数 == 行数」与
+  「`squareifyBox` 把 10×11 / 11×10 都撑成正方形」两条断言。
+
+### 38（角色信息卡并入 HUD · DSQ）
+
+- 侧栏 `#hero` 卡**整块删除**，全屏只留「开始行动按钮正上方」那一块（`.action-wrap > .hud`）；
+  选角、规划、通关、战死**所有相位都有**（原来只有 PLANNING/LEVELCLEAR/GAMEOVER）。
+- 外观换成 `#hero` 那套：卡底 `linear-gradient(135deg,#26263f,#1c1c2d)` / 青名字 14px /
+  金 Lv / 4px 方形金经验条 / 13px 三态血条 / 10px 蓝技力条（满技力发光）。
+- **单份 HTML**：新增 `heroInnerHtml(opt)` + `heroOptCharSelect()` / `heroOptBattle()` /
+  `heroCardOpt()` / `renderHeroCard()`，`#hud` 与角色面板顶部 `#charTop` 共用同一份，
+  不再有两套模板。`renderHero` / `renderKvGrid` / `#heroKv` 仪表盘、`.kv-*` `.badge*`
+  `.chip.buff` 样式全部删除。
+- **SP 条下整排胶囊删除**（人类 15:52 拍板，一个都不留）：技力数值 / 闪避中 / 闪避节点 /
+  技力满提示 / 护盾 / 小队 / 技能节点 / 动作超限 / 技能未就绪 / buff 药丸。
+  兜底：buff → 角色面板右下 BUFF 池（42）；动作计数 / 节点 → 行动按钮文案；护盾 → 血条白条。
+
+### 42（角色面板重做 · DSQ）
+
+- 面板形状跟棋盘走（棋盘已正方形化）→ **天然正方形且仍盖满棋盘**；另加
+  `|w-h|>2` 时的 `min()` 居中兜底（不写 console 噪声，只在几何异常时生效）。
+- 顶部 = 与 HUD **完全同源**的角色信息（`#charTop`）；左下 = 六维图（保留原
+  `#charRadarCanvas`，命中区 `charRadarLabelHits` 与点击加点全复用）+ 剩余点数提示；
+  右下 = `.char-buffs` **升级奖励池**（`BUFF_POOL × buffs` 层数，零 buff 显示灰色占位
+  「暂无升级奖励」）。
+- **删掉「角色」标题栏与 ✕**；关闭只剩三条路：点面板外部（遮罩）、Esc、被别的抽屉抢占。
+  `layout_chrome` 新增断言：面板内无 `.drawer-head/.drawer-corner-x/.drawer-title`、
+  有 `#charBuffs`、点遮罩能关。
+
+### 39（大厅自由移动按下才跟随 · DSQ）
+
+- 桌面鼠标从「指针一动就跟」改成**必须按住左键**才跟随（推翻 `ISSUE-18` 的 A1 口径，
+  注释同步改写，防止下次被按旧注释「修」回去）；**触屏 8px 死区一行未动**（人类 16:18 确认）。
+- 松手即停、单击补位、点角色展开说明层全部沿用原逻辑。
+
+### 门禁
+
+- `bundle_test` 58 ✅ / `dom_load` 24 ✅ / `layout_chrome` **57**（+4）✅ / `battle_ui` 24 ✅ / `lobby_shell` 42 ✅
+- 另做 12 项面板自检（HUD 单块且带 SP 条、无徽章、`#charTop` 与 HUD 文字一致、
+  零 buff 占位、buff 层数与条目数一致）与 3 项大厅跟随自检（不按下不跟随 / 按下跟随 / 无异常），全 PASS。
+
+---
+
 ## [10290257] — 2026-10-29 · 承伤侧补偿（每回合 2 个动作 + HP+5）+ 修远程动作重复计数 + 删金色旧侧边栏
 
 > **已发版**：根目录 `game.html` **346,229 B / sha256 `9a6a36fc`** / build `10290257`，

@@ -125,15 +125,10 @@
   #dragHandle .grip::before { top: 16px; }
   #dragHandle .grip::after { bottom: 16px; }
   #dragHandle:hover .grip, #dragHandle.dragging .grip { background: linear-gradient(180deg, #3f3e5c, #353552); box-shadow: 0 0 0 1px rgba(150,160,210,.45), 0 2px 8px rgba(0,0,0,.5); }
-  /* ---- 角色卡：左侧六维图 / 右上 HP+技力 / 右下 2×2 仪表 ---- */
-  /* 角色卡：六维图已移入右侧抽屉（ISSUE-20261028-09 G），这里只剩单列信息 */
-  #hero { flex-shrink:0; display:grid; grid-template-columns:minmax(0,1fr); align-items:stretch; gap:6px; padding:8px 10px 8px 8px; border-radius:10px; background:linear-gradient(135deg,#26263f,#1c1c2d); border:1px solid #33334f; }
+  /* 侧栏角色卡 #hero 已整块删除（ISSUE-20261029-38）：信息并入「行动按钮上方 HUD」 */
   #radarWrap { display: flex; align-items: center; justify-content: center; }
   /* 六维图搬进抽屉后可以画大一点：抽屉宽 min(360px,86vw)，减 padding 后仍有余量 */
   #radarCanvas { display: block; width: min(268px, 74vw); height: min(268px, 74vw); touch-action: manipulation; }
-  #heroRight { display:flex; flex-direction:column; justify-content:space-between; gap:5px; min-width:0; }
-  #heroInfo { min-width:0; display:flex; flex-direction:column; gap:4px; }
-  #heroKv { min-width:0; }
   .hero-top { display:flex; align-items:baseline; gap:5px; flex-wrap:wrap; }
   .hero-name { font-size:14px; font-weight:900; color:#4ecdc4; letter-spacing:1px; white-space:nowrap; }
   /* 等级：紧贴名字右侧（金色），用于替代原先画在六维图中心的 Lv */
@@ -329,16 +324,27 @@
     transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
   }
   #drawerChar.on { opacity: 1; visibility: visible; transform: none; }
-  #drawerChar .drawer-corner-x { top: 0; right: 0; }
-  #drawerChar .drawer-corner-x:active { transform: scale(.92); }
-  /* 角色面板内部布局：上 = 名字 + 血条；下 = 左六维图 / 右空栏（2 列） */
-  .char-body { gap: 12px; }
-  .char-head { display: flex; flex-direction: column; gap: 8px; }
-  .char-name { font-size: 20px; font-weight: 900; color: #4ecdc4; letter-spacing: 1px; }
-  .char-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; flex: 1 1 auto; min-height: 0; }
-  .char-radar { display: flex; align-items: center; justify-content: center; }
-  .char-radar canvas { width: min(46vw, 240px); height: min(46vw, 240px); touch-action: manipulation; }
-  .char-empty { /* 右下空出一栏，仅占位 */ }
+  /* ✕ 已删除（ISSUE-20261029-42）：点面板外部或 Esc 关闭 */
+  /* 角色面板内部：上 = 角色信息（与 HUD 同源）／下 = 左六维 · 右 BUFF 池 */
+  .char-body { gap: 10px; padding: 10px; }
+  .char-top { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px;
+    padding: 8px 10px 8px 8px; border-radius: 10px;
+    background: linear-gradient(135deg,#26263f,#1c1c2d); border: 1px solid #33334f; }
+  .char-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+  .char-radar { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 0; }
+  .char-radar canvas { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 1 / 1; touch-action: manipulation; }
+  .char-alloc { font-size: 11px; font-weight: 800; color: #ffd700; text-align: center; min-height: 14px; line-height: 14px; }
+  /* 右下：升级 BUFF 奖励池（层数常驻可见） */
+  .char-buffs { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .char-buffs-title { font-size: 11px; font-weight: 900; color: #8a8aa5; letter-spacing: 1px; flex: 0 0 auto; }
+  .char-buff { display: flex; align-items: center; gap: 6px; padding: 4px 7px; border-radius: 6px;
+    background: #20202f; box-shadow: inset 0 0 0 1px #33334d; flex: 0 0 auto; }
+  .char-buff .ico { font-size: 15px; line-height: 1; flex: 0 0 auto; }
+  .char-buff .nm { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 800; color: #cdd3e2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .char-buff .ct { flex: 0 0 auto; font-size: 12px; font-weight: 900; color: #ffd700; }
+  .char-buffs-empty { padding: 10px 8px; border-radius: 6px; border: 1px dashed #33334d;
+    font-size: 11.5px; color: #6f6f8a; text-align: center; }
   /* 标题靠右：右侧要给那个格子大小的关闭按钮让出位置（不然会压在标题上） */
   .drawer-head.head-end { justify-content: flex-end; padding-right: calc(var(--corner-x) + var(--cell) + 8px); }
   .drawer-body {
@@ -389,7 +395,6 @@
   /* 竖版顺序：角色卡 → 属性入口 → 状态 → 底栏 → 开始行动（胶囊）→ 方向键/三键 → 其它按钮。
      「开始行动」要落在拇指区（就在方向键上方），不能留在侧栏顶部够不着。 */
   body.layout-v #sidebar { display: flex; flex-direction: column; }
-  body.layout-v #hero        { order: 1; }
   body.layout-v #statsOpenBtn{ order: 2; }
   body.layout-v #stats       { order: 3; }
   body.layout-v #footBar     { order: 4; }
@@ -437,28 +442,8 @@
   button { padding:10px 12px; font-size:14px; cursor:pointer; border:none; border-radius:4px; background:#4ecdc4; color:#111; font-weight:bold; touch-action: manipulation; }
   button:disabled { background:#555; color:#999; cursor:not-allowed; }
   .stat { font-size:13px; line-height:1.45; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  /* ---- 仪表小格 ---- */
-  .kv-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:5px; }
-  /* 奇数个格子时，最后一格（动作）横跨整行 */
-  .kv-grid .kv:last-child:nth-child(odd) { grid-column: span 2; }
-  .kv { display:flex; flex-direction:column; align-items:center; background:#232338; border-radius:6px; padding:4px 3px; }
-  .kv b { font-size:10px; font-weight:600; color:#82829c; letter-spacing:.5px; }
-  .kv span { font-size:15px; font-weight:900; color:#eaeaf5; line-height:1.2; }
-  .kv.hi span { color:#ffd700; }
-  .kv.on span { color:#4ecdc4; }
-  .kv.dim span { color:#7e7e97; }
-  .kv.prof span { color:#8fe28a; }
-  .kv.kv-empty { background:transparent; border:1px dashed #2b2b42; }
-  /* 仪表格已降级为纯展示（ISSUE-20261028-09 E）：不再有 .click 可点样式，只保留高亮态。
-     等待 / 攻击 / 技能在手机上由圆钮承担、在 PC 上由键盘承担，两条路都不经过这里。 */
-  .kv.lit { background:#1f3350; box-shadow: inset 0 0 0 1px rgba(120,180,255,.75); }
-  /* ---- 状态徽章 ---- */
-  .badge { font-size:11px; font-weight:800; padding:1px 8px; border-radius:9px; background:#2c2c47; color:#c3c3da; white-space:nowrap; }
-  .badge.gold { background:#453609; color:#ffd700; }
-  .badge.teal { background:#0f3a38; color:#4ecdc4; }
-  .badge.gray { background:#26263a; color:#8a8aa0; }
-  .badge.white { background:#3a3a4d; color:#ffffff; box-shadow:inset 0 0 0 1px rgba(255,255,255,.45); }
-  .chip.buff { background:#20202f; color:#cdd3e2; box-shadow:inset 0 0 0 1px #33334d; }
+  /* 仪表小格 .kv-* / 状态徽章 .badge* / .chip.buff 已全部作废：
+     ISSUE-20261029-38 把 SP 条下那排徽章整排删掉，ISSUE-20261029-42 的 BUFF 池改用 .char-buff。 */
   .mini { font-size:11px; color:#7e7e97; line-height:1.5; }
   /* ---- 技能卡（选角色） ---- */
   .card { background:#26263c; border:1px solid #34344f; border-radius:8px; padding:9px 11px; }
@@ -475,16 +460,18 @@
    * 框沿用 .start-btn 的绿色胶囊配色，内部文字更紧凑（动作标签含 ×N / 计数，2px 字距会太散）。 */
   .action-start-btn { letter-spacing: .5px; font-size: 15px; padding: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   /* ★ ISSUE-20261029-37：行动按钮上方 HUD（姓名/等级/经验条/血条）。不显示技力条。 */
+  /* =========================================================================
+   * ISSUE-20261029-38（人类 15:41 / 15:52）：全屏只留**一块**角色面板。
+   * 位置沿用「行动按钮正上方」，外观逐项照抄原侧栏 #hero 卡（不再是半透明黑底 + 白字）：
+   *   卡底 linear-gradient(135deg,#26263f,#1c1c2d) / 1px #33334f / 圆角 10px
+   *   名字 14px 900 #4ecdc4 · 等级 12px 900 #ffd700 · 经验 4px 方形金色
+   *   HP 13px 圆角三态 · SP 10px 圆角蓝渐变（满技力发光）
+   * ★ 内部标记全部复用 .hero-* / .xp-* / .hp-* / .sp-*，所以角色面板（♟️）顶部
+   *   （ISSUE-20261029-42）能直接复用同一份 HTML —— 禁止为面板另写一套标记。
+   * ========================================================================= */
   .action-wrap { width: 100%; max-width: 380px; margin: 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
-  .hud { display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: rgba(10,12,24,.55); border: 1px solid rgba(255,255,255,.10); border-radius: 8px; box-sizing: border-box; }
-  .hud-line { display: flex; justify-content: space-between; align-items: center; }
-  .hud-name { font-weight: 800; color: #fff; font-size: 12px; }
-  .hud-lv { color: #ffd700; font-weight: 800; font-size: 12px; }
-  .hud-bar { position: relative; height: 9px; background: rgba(0,0,0,.5); border-radius: 5px; overflow: hidden; }
-  .hud-xp-fill { height: 100%; width: 0; background: linear-gradient(90deg, #4ea0ff, #7dd3fc); transition: width .25s ease; }
-  .hud-hp { height: 13px; }
-  .hud-hp-fill { height: 100%; width: 0; background: linear-gradient(90deg, #e74c3c, #f1c40f); transition: width .25s ease; }
-  .hud-hp-txt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
+  .hud { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px 8px 8px; background: linear-gradient(135deg,#26263f,#1c1c2d); border: 1px solid #33334f; border-radius: 10px; box-sizing: border-box; }
+  .hud:empty { display: none; }
   .start-btn:active:not(:disabled) { transform: scale(0.97); }
   .start-btn:disabled { background: #444; box-shadow: none; color: #777; letter-spacing: normal; }
   @media (max-width: 760px) {
@@ -529,7 +516,6 @@
     }
     #hero { padding: 5px 8px 5px 6px; gap: 4px; border-radius: 8px; }
     #radarCanvas { width: 150px; height: 150px; }
-    #heroRight { gap: 3px; }
     #heroInfo { gap: 3px; }
     #heroKv .kv { padding: 3px 2px; }
     #heroKv .kv b { font-size: 9px; }
@@ -692,12 +678,7 @@
   <div id="dragHandle" title="拖动调整地图与右侧UI的比例"><span class="grip"></span></div>
   <div id="sidebar">
     <div id="actionSlot"></div>
-    <div id="hero">
-      <div id="heroRight">
-        <div id="heroInfo"></div>
-        <div id="heroKv"></div>
-      </div>
-    </div>
+    <!-- 角色信息卡已并入「行动按钮上方 HUD」（ISSUE-20261029-38）：全屏只有一块面板 -->
     <!-- 六维图 / 加点入口已并入 ♟️ 角色面板弹窗与升级奖励抽屉（ISSUE-20261029-36），侧栏不再单独留「属性」按钮 -->
     <div id="stats"></div>
     <div id="footBar" class="mini"></div>
@@ -738,23 +719,21 @@
   <div class="drawer-body" id="drawerLevelUpBody"></div>
 </section>
 
-<!-- ④ 角色面板抽屉（ISSUE-20261029-36 奠基，2026-10-29 扩展为升级加点入口）：与设置面板同款覆盖棋盘弹窗。
-     内容：顶部名字 + 血条 + 剩余点数提示；左下六维图（可直接点属性名加点）；右下空出一栏。
-     属性抽屉（drawerStats）已移除（ISSUE-20261029-37）：升级时自动弹出本面板，用六维图加点。 -->
+<!-- ④ 角色面板（ISSUE-20261029-36 奠基 / 20261029-42 重做）：与设置面板同款「覆盖棋盘」弹窗。
+     形状 = 棋盘本身（棋盘已正方形化，ISSUE-20261029-43），所以面板就是正方形。
+     内容：顶部 = 与「行动按钮上方 HUD」**完全同源**的角色信息（#charTop 由 renderHeroCard 写入）；
+           左下 = 六维图（点属性名直接加点，下挂剩余点数提示）；
+           右下 = 升级获得的 BUFF 奖励池（代替被删掉的那排徽章）。
+     ★ 没有标题栏、没有 ✕：点面板外面（遮罩）或按 Esc 关闭 —— 人类 2026-10-29 16:18 要求。 -->
 <section class="drawer" id="drawerChar" data-drawer="char" aria-hidden="true">
-  <header class="drawer-head head-end">
-    <span class="drawer-title">角色</span>
-  </header>
-  <button class="drawer-corner-x" data-drawer-close title="关闭角色面板">✕</button>
   <div class="drawer-body char-body">
-    <div class="char-head">
-      <div class="char-name" id="charPanelName">—</div>
-      <div class="char-hp" id="charPanelHp"></div>
-      <div class="char-alloc" id="charAllocHint"></div>
-    </div>
+    <div class="char-top" id="charTop"></div>
     <div class="char-grid">
-      <div class="char-radar"><canvas id="charRadarCanvas"></canvas></div>
-      <div class="char-empty"></div>
+      <div class="char-radar">
+        <canvas id="charRadarCanvas"></canvas>
+        <div class="char-alloc" id="charAllocHint"></div>
+      </div>
+      <div class="char-buffs" id="charBuffs"></div>
     </div>
   </div>
 </section>
@@ -773,9 +752,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10291359',
-  commit:  '18bbf837d1f6ecf006a7c5c435b7a39bb0c04dfd',
-  builtAt: '2026-10-29T06:06:49Z'
+  build:   '10291647',
+  commit:  '127537614d7d688f4a11f6eb35fc6b0244c9efe2',
+  builtAt: '2026-10-29T08:48:23Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -1942,8 +1921,8 @@ const fxLayer = document.getElementById('fxLayer');
 const logEl = document.getElementById('log');
 const statsEl = document.getElementById('stats');
 const footEl = document.getElementById('footBar');
-const heroInfoEl = document.getElementById('heroInfo');
-const heroKvEl = document.getElementById('heroKv');
+/* #heroInfo / #heroKv 已随侧栏角色卡删除（ISSUE-20261029-38）：
+   角色信息改由 heroInnerHtml() 生成、renderHeroCard() 写入 #hud 与 #charTop。 */
 const controlsEl = document.getElementById('controls');
 const actionSlotEl = document.getElementById('actionSlot');   // 竖屏时「开始行动」按钮的槽位
 const radarCanvas = document.getElementById('radarCanvas');
@@ -4012,6 +3991,26 @@ function findPath(startX, startY, targetX, targetY, maxSteps = 99) {
   return null;
 }
 
+/* =========================================================================
+ * ISSUE-20261029-43 · 棋盘必须是正方形（人类 2026-10-29 16:2x）
+ *
+ * 「包围盒」是渲染真源：render() 用它写 gridTemplateColumns/Rows，
+ * buildBoardHtml() 只遍历这个范围 —— 所以包围盒不方，棋盘就不方，
+ * 覆盖棋盘的弹窗（设置 / 角色）也跟着变成竖条。
+ *
+ * 实测：地图本体 11×11，但包围盒被裁成 10 列 × 11 行 → 棋盘 794×874。
+ * 这里把它补成 side×side 的正方形窗口：
+ *   1. side = max(列数, 行数)；
+ *   2. **优先向右下扩展**（左上角不动 —— 玩家相对位置不跳），
+ *      扩展格落在原有墙区，所以只是「多露出一圈石头」，不会凭空造出可走格；
+ *   3. 右侧/下方越界 → 整体左移/上移这个窗口，仍保持正方形；
+ *   4. 只有「地图本身 ROWS≠COLS 且 side 放不下」这一种情况才会退回非正方形
+ *      （当前所有关卡与联机竞技场都是方图，走不到这里）。
+ *
+ * ★ 改这个函数等于改所有渲染路径：不要在这里读 DOM / 量尺寸（每帧多次调用）。
+ * ★ 里面是纯计算，扩展出来的坐标一定在 0..ROWS-1 / 0..COLS-1 内，
+ *   所以 buildBoardHtml 照常读 m[y][x] 即可，不需要额外判空。
+ * ========================================================================= */
 function getBoundingBox() {
   let minX = COLS, maxX = -1, minY = ROWS, maxY = -1;
   const m = phase === PHASE.CHAR_SELECT ? selMap : map;
@@ -4027,7 +4026,20 @@ function getBoundingBox() {
     if (v) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
   }
   if (minX === COLS) return { minX: 0, maxX: COLS - 1, minY: 0, maxY: ROWS - 1 };
-  return { minX, maxX, minY, maxY };
+  return squareifyBox(minX, maxX, minY, maxY);
+}
+
+/** 把紧包围盒撑成正方形（见上方长注释）。纯函数，不碰 DOM。 */
+function squareifyBox(minX, maxX, minY, maxY) {
+  const bc = maxX - minX + 1, br = maxY - minY + 1;
+  if (bc === br) return { minX, maxX, minY, maxY };   // 已经是正方形，一行都不改
+  const side = Math.max(bc, br);
+  const sx = Math.min(side, COLS), sy = Math.min(side, ROWS);
+  let x0 = Math.min(minX, COLS - sx);
+  let y0 = Math.min(minY, ROWS - sy);
+  x0 = Math.max(0, x0);
+  y0 = Math.max(0, y0);
+  return { minX: x0, maxX: x0 + sx - 1, minY: y0, maxY: y0 + sy - 1 };
 }
 
 function getCellEl(x, y) { return boardEl.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`); }
@@ -5419,7 +5431,19 @@ function buildBoardHtml() {
   return html;
 }
 
-/* ===== 角色卡（六维图 + 关键数值） ===== */
+/* =========================================================================
+ * 角色信息面板 —— 全屏唯一的「一份 HTML」
+ *
+ * ISSUE-20261029-38（人类 15:41 / 15:52）：两块重复面板合并成一块。
+ *   · 位置 = 「开始行动」按钮正上方（.action-wrap > .hud，#hud）；
+ *   · 外观逐项照抄原侧栏 #hero 卡；旧 .hud-line/.hud-* 那套半透明黑底作废；
+ *   · 侧栏 #hero 整块删除；SP 条下整排胶囊（技力数值 / 闪避 / 技能节点 / 护盾 /
+ *     小队 / buff 药丸 …）按人类 15:52 拍板**一个都不留**。
+ *
+ * ISSUE-20261029-42：角色面板（♟️ #drawerChar）顶部要「和操作界面一样的 UI」——
+ *   直接吃这里的 heroInnerHtml()，**不允许再写第二套标记**。
+ *   想改面板长相只改这一个函数，两个调用点自动跟着变。
+ * ========================================================================= */
 function hpStateClass(hp, maxHp) {
   const r = maxHp > 0 ? hp / maxHp : 0;
   if (r <= 0.3) return 'danger';
@@ -5427,8 +5451,8 @@ function hpStateClass(hp, maxHp) {
   return '';
 }
 
-function renderHero(opt) {
-  if (!heroInfoEl) return;
+/* 面板 HTML（纯函数：只吃 opt 与相位，不吃别的 UI 状态） */
+function heroInnerHtml(opt) {
   const maxHp = opt.maxHp || 0;
   const pct = maxHp > 0 ? Math.max(0, Math.min(100, (opt.hp / maxHp) * 100)) : 0;
   const hpText = opt.hpText || (maxHp > 0 ? `${Math.max(0, opt.hp)} / ${maxHp}` : '—');
@@ -5455,7 +5479,7 @@ function renderHero(opt) {
     const xpPct = xpNeed > 0 ? Math.max(0, Math.min(100, (xp / xpNeed) * 100)) : 0;
     xpBar = `<div class="xp-track" title="经验 ${xp}/${xpNeed}（升到 Lv.${(heroLevel || 1) + 1}）"><div class="xp-fill" style="width:${xpPct}%"></div></div>`;
   }
-  heroInfoEl.innerHTML = `
+  return `
     <div class="hero-top">
       <span class="hero-name">${opt.name}</span>${lvBadge}
       <span class="hero-lv">${opt.tag || ''}</span>
@@ -5464,23 +5488,69 @@ function renderHero(opt) {
     ${hpBar}
     ${spBar}
   `;
-  if (heroKvEl) {
-    heroKvEl.innerHTML = opt.kvHtml || '';
-    heroKvEl.querySelectorAll('[data-kv-action]').forEach(el => {
-      el.onclick = (ev) => { ev.stopPropagation(); handleKvAction(el.dataset.kvAction); };
-    });
-  }
 }
 
-/* 2×2 仪表：把 [[标题, 数值, 样式类, 保留位, 是否高亮?], ...] 渲染成格子（传 null 占位 = 空格子）。
- * ISSUE-20261028-09 E：仪表格已降级为纯展示，点击语义取消（PC 走键盘、手机走圆钮），
- * 因此不再输出 data-kv-action / .click；第 4 位参数保留只为不改所有调用点。 */
-function renderKvGrid(rows) {
-  return `<div class="kv-grid">${rows.map(row => {
-    if (!row || row[0] == null) return '<div class="kv kv-empty"></div>';
-    const lit = row[4] ? ' lit' : '';
-    return `<div class="kv ${row[2] || ''}${lit}"><b>${row[0]}</b><span>${row[1]}</span></div>`;
-  }).join('')}</div>`;
+/* 选角相位的数据源（未选角色时也给一份占位，面板不会空着） */
+function heroOptCharSelect() {
+  if (!selectedCandidate) return { name: '选择角色', tag: '', hp: 0, maxHp: 0, hpText: '—' };
+  const char = CHARACTERS[selectedCandidate.id] || null;
+  /* ISSUE-20261028-19：动态角色读「候选副本」（加点后立刻反映），静态角色仍读常量对象 */
+  const a = candidateAbilitiesOf(selectedCandidate.id);
+  const selRanged = isRangedCharOf(selectedCandidate.id, a);
+  /* 选角阶段预览技力槽：泥岩/风笛/华法琳 5、阿米娅上限 = 感知，其余角色无技力机制 */
+  const spPreview = (selectedCandidate.id === 'fencer' || selectedCandidate.id === 'wheelchair' || selectedCandidate.id === 'vampire')
+    ? { cur: 0, max: FENCER_SP_MAX }
+    : (selectedCandidate.id === 'amiya' ? { cur: 0, max: Math.max(1, a.wis) } : null);
+  const hp = a.con + BASE_HP_BONUS;
+  return {
+    name: `${char ? char.name : '?'} ${char ? char.icon : ''}`,
+    /* 预备干员把「熟练 / 攻击方式」直接写在 tag 上：加点会实时翻转，玩家不用自己推 */
+    tag: charIsDynamic(selectedCandidate.id)
+      ? (selRanged ? '待选择 · 远程熟练' : '待选择 · 近战熟练')
+      : '待选择',
+    hp: hp, maxHp: hp, sp: spPreview,
+  };
+}
+
+/* 对局相位的数据源 */
+function heroOptBattle() {
+  if (!player) return null;
+  const charInfo = CHARACTERS[selectedChar] || null;
+  /* 技力槽：泥岩固定上限 5；阿米娅上限 = 感知；风笛上限 5（沿直线移动积累，规划时预览增量）；华法琳上限 5（捡血迹） */
+  let spInfo = null;
+  if (selectedChar === 'fencer') spInfo = { cur: fencerSp, max: FENCER_SP_MAX };
+  else if (selectedChar === 'amiya') spInfo = { cur: amiyaBonusTargets, max: amiyaSpMax() };
+  else if (selectedChar === 'wheelchair') spInfo = { cur: wheelchairPreviewSp(), max: WHEELCHAIR_SP_MAX };
+  else if (selectedChar === 'vampire') spInfo = { cur: vampireSp, max: VAMPIRE_SP_MAX };
+  else if (selectedChar === 'rookie') spInfo = { cur: rookieSp, max: ROOKIE_SP_MAX };
+  return {
+    name: `${charInfo ? charInfo.name : '未知'} ${charInfo ? charInfo.icon : ''}`,
+    tag: `第 ${level} 关 · AC ${playerEffectiveAC()}${playerDodging ? ` (+${playerDodgeACBonus})` : ''}`,
+    hp: player.hp, maxHp: player.maxHp,
+    shield: playerShield,
+    sp: spInfo,
+  };
+}
+
+/** 当前相位的面板数据 */
+function heroCardOpt() {
+  return phase === PHASE.CHAR_SELECT ? heroOptCharSelect() : heroOptBattle();
+}
+
+/* 唯一写入点：#hud（行动按钮正上方）+ #charTop（角色面板顶部，ISSUE-20261029-42）。
+ * 两处内容完全同源 —— 这就是「面板 HTML 只留一份」的落点。 */
+function renderHeroCard(opt) {
+  let html = '';
+  if (opt === undefined) {
+    const o = heroCardOpt();
+    html = o ? heroInnerHtml(o) : '';
+  } else if (opt) {
+    html = heroInnerHtml(opt);
+  }
+  const hud = document.getElementById('hud');
+  if (hud) hud.innerHTML = html;
+  const top = document.getElementById('charTop');
+  if (top) top.innerHTML = html;
 }
 
 /* 技能说明列表：「技力/技能/被动/」前缀和「[技能名]」上色，其余保持普通文本 */
@@ -5559,55 +5629,14 @@ function stepPathByDir(k) {
   }
 }
 
-/* 选角阶段的右侧面板：角色六维 + 技能说明 */
+/* 选角阶段的侧栏：只剩「行为提示 + 未分配点数」。
+ * 角色信息本体已并入共用面板（heroInnerHtml），这里不再各画一套（ISSUE-20261029-38）。 */
 function renderCharSelectStats() {
+  renderHeroCard();
   if (!selectedCandidate) {
-    renderHero({
-      name: '选择角色', tag: '', hp: 0, maxHp: 0, hpText: '—',
-      kvHtml: renderKvGrid([
-        ['移动', '—', 'dim'], ['AC', '—', 'dim'],
-        ['伤害', '—', 'dim'], null,
-      ]),
-    });
     statsEl.innerHTML = `<div class="mini">点击地图上的角色，然后移动至 🚪 出口。六维图中<b style="color:#8fe28a">绿色</b> = 熟练项与最高属性。</div>`;
     return;
   }
-  const char = CHARACTERS[selectedCandidate.id];
-  /* ISSUE-20261028-19：动态角色读"候选副本"（加点后立刻反映），静态角色仍读常量对象 */
-  const a = candidateAbilitiesOf(selectedCandidate.id);
-  const mv = Math.max(1, Math.floor(a.dex / 2));
-  /* 每个角色只有一种伤害方式（攻击节点类型决定），四格只显示对应的那一个伤害。
-   * 攻击类型一律走 charAttackTypeOf（带六维），预备干员加智力后会翻成远程。 */
-  const selRanged = isRangedCharOf(selectedCandidate.id, a);
-  /* 伤害格与对局内一致，显示骰子文案（2d4±修正 / 1d8±修正），不再显示定值期望。
-   * 选角阶段没有遗物，所以近战只算力量修正（锈蚀刀片层数恒为 0）。 */
-  const selDmg = selRanged
-    ? fmtDmgDice(PLAYER_RANGED_DICE, abilityMod(a.int))
-    : fmtDmgDice(PLAYER_MELEE_DICE, abilityMod(a.str));
-  /* 熟练标记：动态角色的熟练项由六维现算（选远程 ⇔ 远程熟练），静态角色沿用角色表旗标 */
-  const selDmgProf = charIsDynamic(selectedCandidate.id)
-    ? true
-    : (selRanged ? !!char.profRanged : !!char.profMelee);
-  /* 选角阶段预览技力槽：泥岩/风笛/华法琳 5、阿米娅上限 = 感知，其余角色无技力机制 */
-  const spPreview = selectedCandidate.id === 'fencer' || selectedCandidate.id === 'wheelchair' || selectedCandidate.id === 'vampire'
-    ? { cur: 0, max: FENCER_SP_MAX }
-    : (selectedCandidate.id === 'amiya' ? { cur: 0, max: Math.max(1, a.wis) } : null);
-  renderHero({
-    name: `${char.name} ${char.icon}`,
-    /* 预备干员把「熟练 / 攻击方式」直接写在 tag 上：加点会实时翻转，玩家不用自己推 */
-    tag: charIsDynamic(selectedCandidate.id)
-      ? (selRanged ? '待选择 · 远程熟练' : '待选择 · 近战熟练')
-      : '待选择',
-    /* 与对局内一致：开局 HP = 体质 + BASE_HP_BONUS（旧版这里只显示体质，等于少报 9 点） */
-    hp: a.con + BASE_HP_BONUS, maxHp: a.con + BASE_HP_BONUS,
-    sp: spPreview,
-    kvHtml: renderKvGrid([
-      ['移动', `${mv}`, ''],
-      ['AC', `${computeAC(a)}`, ''],
-      [charDmgLabelOf(selectedCandidate.id, a), `${selDmg}`, selDmgProf ? 'prof' : ''],
-      null,   // 角色只有一种伤害方式 → 另一格留空，保持 2×2
-    ]),
-  });
   /* ISSUE-20261028-19：动态角色在选角阶段显示剩余点数（没加完也能直接出门，点数带进第 1 关） */
   const ptsLeft = candidatePointsLeft();
   const ptsLine = (charIsDynamic(selectedCandidate.id) && ptsLeft > 0)
@@ -5618,7 +5647,6 @@ function renderCharSelectStats() {
    * ——「点击角色之后，角色这一行以上的部分展开角色技能说明文字，可以滚轮滑动查看，
    * 删掉之前的技能说明面板」。侧栏只留点数提醒，避免同一份文字两处各写一遍。 */
   statsEl.innerHTML = ptsLine;
-  return;
 }
 
 function updateStats() {
@@ -5639,111 +5667,16 @@ function updateStats() {
   /* ---------- 对局中 ---------- */
   if (!player) return;
   if (player.hp > 0 && player.alive) playerStats.currentHp = player.hp;
-  const charInfo = CHARACTERS[selectedChar] || null;
-  const a = player.abilities;
   const isRanged = playerIsRanged();   /* ISSUE-20261028-19：动态角色按六维现算，别读静态表 */
-  const isFencer = selectedChar === 'fencer';
 
-  /* ★ ISSUE-20261029-36：对局内「步数 / 攻击 / 技能 / 远程伤害」4 UI 与「动作」整块移除 ——
-   * 4 UI 不再常驻侧栏；动作 UI 合并进「开始行动」按钮（见 renderControls / buildActionLabel）。
-   * 侧栏角色卡只保留名字 + 血条 + 技力，关键数值改由 ♟️ 角色面板弹窗查看。 */
-  const kvGrid = '';
-  /* 技力槽：泥岩固定上限 5；阿米娅上限 = 感知；风笛上限 5（沿直线移动积累，规划时预览增量）；华法琳上限 5（捡血迹） */
-  let spInfo = null;
-  if (isFencer) spInfo = { cur: fencerSp, max: FENCER_SP_MAX };
-  else if (selectedChar === 'amiya') spInfo = { cur: amiyaBonusTargets, max: amiyaSpMax() };
-  else if (selectedChar === 'wheelchair') spInfo = { cur: wheelchairPreviewSp(), max: WHEELCHAIR_SP_MAX };
-  else if (selectedChar === 'vampire') spInfo = { cur: vampireSp, max: VAMPIRE_SP_MAX };
-  else if (selectedChar === 'rookie') spInfo = { cur: rookieSp, max: ROOKIE_SP_MAX };
-  renderHero({
-    name: `${charInfo ? charInfo.name : '未知'} ${charInfo ? charInfo.icon : ''}`,
-    tag: `第 ${level} 关 · AC ${playerEffectiveAC()}${playerDodging ? ` (+${playerDodgeACBonus})` : ''}`,
-    hp: player.hp, maxHp: player.maxHp,
-    shield: playerShield,
-    sp: spInfo,
-    kvHtml: kvGrid,
-  });
-
-  /* 状态徽章 */
-  const badges = [];
-  const skillInfo = skillReadyInfo(playerPath);
-  if (selectedChar === 'fencer' && fencerCounterActive) {
-    badges.push('<span class="badge gold">反击状态 · 禁攻击节点</span>');
-  } else if (selectedChar === 'fencer' && fencerSp >= FENCER_SP_MAX) {
-    badges.push('<span class="badge gold">⚙️ 岩崩锤就绪 · 双击路径节点发动</span>');
-  }
-  if (selectedChar === 'wheelchair' && playerChargingThisTurn) {
-    badges.push('<span class="badge gold">冲锋中 · 禁攻击</span>');
-  } else if (selectedChar === 'wheelchair') {
-    if (pathHasCharge(playerPath)) {
-      /* 额度 = 剩余移动步数（ISSUE-20261028-01）：顺带在规划期就把「冲几格 / 打几次」显示出来 */
-      const pb = previewChargeBudget(playerPath);
-      if (pb === null) {
-        badges.push('<span class="badge gold">冲锋就绪 · 技能节点已变冲锋</span>');
-      } else if (pb <= 0) {
-        badges.push('<span class="badge">冲锋额度 0 · 技能节点放太晚了，本回合发不动</span>');
-      } else {
-        badges.push(`<span class="badge gold">冲锋就绪 · 冲 ${pb} 格 / 打 ${pb} 次</span>`);
-      }
-    } else if (wheelchairPreviewSp() >= WHEELCHAIR_SP_MAX) {
-      badges.push('<span class="badge gold">技力满 · 双击移动节点发动「高效冲击」</span>');
-    }
-  }
-  if (selectedChar === 'amiya') {
-    if (amiyaBonusTargets >= amiyaSpMax()) {
-      badges.push('<span class="badge gold">技力满 · 双击路径节点发动「精神爆发」</span>');
-    } else if (amiyaBonusTargets > 0) {
-      badges.push(`<span class="badge gold">技力 ${amiyaBonusTargets}/${amiyaSpMax()} · 双击路径节点发动精神爆发</span>`);
-    }
-  }
-  if (selectedChar === 'vampire') {
-    if (vampireSkillActive) {
-      badges.push('<span class="badge gold">不稳定血浆 · 必定命中/暴击/留血迹（每次 -1 HP）</span>');
-    } else if (vampireSp >= VAMPIRE_SP_MAX) {
-      badges.push('<span class="badge gold">技力满 · 双击路径节点发动「不稳定血浆」</span>');
-    }
-  }
-  /* ISSUE-20261029-28：预备干员技力 / 小队编制 */
-  if (selectedChar === 'rookie') {
-    if (rookieSp >= ROOKIE_SP_MAX) {
-      badges.push('<span class="badge gold">😶 技力满 · 双击路径节点发动「增援召唤」</span>');
-    } else {
-      badges.push(`<span class="badge ${rookieSp > 0 ? 'white' : 'dim'}">😶 技力 ${rookieSp}/${ROOKIE_SP_MAX} · 造成攻击 +1</span>`);
-    }
-    if (squadUnits.length > 0) {
-      const list = squadUnits.map(u => u.icon).join('');
-      badges.push(`<span class="badge teal">小队 ${list} ×${squadUnits.length}</span>`);
-    }
-  }
-  if (playerShield > 0) badges.push(`<span class="badge white">🛡 护盾 ×${playerShield}</span>`);
-  if (levelHpBonus > 0) badges.push(`<span class="badge teal">升级 +${levelHpBonus} HP</span>`);
-  /* 闪避 / 技能节点 / 动作冲突 提示（与 buildActionLabel 同源；4 UI 已移除，但节点/冲突提示仍有用） */
-  const planInfo = (phase === PHASE.PLANNING) ? plannedActionInfo(playerPath, attackIndices, skillIndices) : null;
-  const actionUsed = planInfo ? planInfo.actions : 0;
-  const actionMax = maxActionsThisTurn();
-  const skillNodes = skillIndices.length;
-  if (phase === PHASE.PLANNING && planInfo) {
-    if (planInfo.skillCount > 0) {
-      badges.push(`<span class="badge teal">✦ 技能节点 ×${planInfo.skillCount} · 到达才发动</span>`);
-    }
-    if (planInfo.dodge) {
-      badges.push(`<span class="badge teal">💨 闪避节点 · AC +${DODGE_AC_BONUS}</span>`);
-    }
-    if (actionUsed > actionMax) {
-      badges.push(`<span class="badge red">⚠️ 动作 ${actionUsed}/${actionMax} · 超出部分不执行</span>`);
-    }
-    if (skillNodes > 0 && !skillInfo.ready) {
-      badges.push(`<span class="badge white">技能未就绪（${skillInfo.spNow}/${skillInfo.spMax}）</span>`);
-    }
-  }
-  if (playerDodging) {
-    badges.push(`<span class="badge teal">💨 闪避中 · AC ${playerEffectiveAC()}</span>`);
-  }
-  const buffChips = BUFF_POOL.filter(b => buffs[b.id] > 0)
-    .map(b => `<span class="chip buff" title="${b.name}：${b.desc}">${b.icon} ${b.name}${buffs[b.id] > 1 ? ' ×' + buffs[b.id] : ''}</span>`)
-    .join('');
-  const badgeRow = (badges.length || buffChips)
-    ? `<div class="stat">${badges.join('')}${buffChips}</div>` : '';
+  /* ★ ISSUE-20261029-38：角色信息全屏只有一份（heroInnerHtml），renderHeroCard() 同时写
+   * #hud（行动按钮正上方）与角色面板顶部 #charTop。
+   * SP 条下那排徽章按人类 15:52 拍板**整排删除**（技力数值 / 闪避中 / 闪避节点 /
+   * 技力满提示 / 护盾 / 小队 / 技能节点 / 动作超限 / 技能未就绪 / buff 药丸 全不留）：
+   *   · buff 改在 ♟️ 角色面板右下角常驻显示（ISSUE-20261029-42）；
+   *   · 动作计数与节点提示由「开始行动」按钮文案承担（buildActionLabel）；
+   *   · 护盾在血条右侧还有一道白条（.hp-shield）。 */
+  renderHeroCard();
 
   /* 底部信息 */
   const phaseText = phase === PHASE.PLANNING ? '规划' : phase === PHASE.RESOLVING ? '结算' : phase === PHASE.LEVELCLEAR ? '通关' : '结束';
@@ -5751,49 +5684,45 @@ function updateStats() {
   if (isRanged) footParts.push(`射程 ${player.range}`);
   const foot = `<div class="mini">${footParts.join(' · ')}</div>`;
 
-  statsEl.innerHTML = `${badgeRow}`;
+  statsEl.innerHTML = '';   // 徽章行已随 ISSUE-20261029-38 整排删除，侧栏此处不再有内容
   if (footEl) footEl.innerHTML = foot;
-  // 手机圆钮的数值 / 技力环跟随状态刷新；属性抽屉开着时同步第一层文案
+  // 手机圆钮的数值 / 技力环跟随状态刷新；角色面板开着时同步六维图与 BUFF 池
   if (typeof syncVirtualPad === 'function') syncVirtualPad();
   if (typeof drawerIsOpen === 'function' && drawerIsOpen('char')) renderCharPanel();
-  try { renderHud(); } catch (_) {}   // 行动按钮上方 HUD：姓名/等级/经验/血条（ISSUE-20261029-37）
 }
 
-/* ★ ISSUE-20261029-36：角色面板弹窗内容（名字 + 血条 + 六维图）。
- * 选角阶段显示当前选中的候选角色；对局中显示当前玩家。六维图直接画到 #charRadarCanvas，
- * 不污染 stats 抽屉的 #radarCanvas 命中区（drawRadar 的 forceCanvas 路径不记录 radarLabelHits）。 */
+/* ★ ISSUE-20261029-42：角色面板内容。
+ *   顶部 #charTop —— 由 renderHeroCard() 写入，和「行动按钮上方 HUD」同一份 HTML；
+ *   左下 #charRadarCanvas —— 六维图，点属性名直接加点（drawRadar 记 charRadarLabelHits）；
+ *   右下 #charBuffs —— 升级获得的 BUFF 奖励池（33 号之前它是 #stats 里的胶囊，已被 38 号删掉）。
+ * 选角相位显示当前候选角色，对局中显示当前玩家：两者都由 heroCardOpt() 统一给出。 */
 function renderCharPanel() {
-  const nameEl = document.getElementById('charPanelName');
-  const hpEl = document.getElementById('charPanelHp');
+  renderHeroCard();
   const canvas = document.getElementById('charRadarCanvas');
-  if (!nameEl || !hpEl) return;
-  let name = '—', hp = 0, maxHp = 0, shield = 0, abilities = null;
-  if (phase === PHASE.CHAR_SELECT && selectedCandidate) {
-    const char = CHARACTERS[selectedCandidate.id];
-    const a = candidateAbilitiesOf(selectedCandidate.id);
-    name = `${char ? char.name : '?'} ${char ? char.icon : ''}`;
-    hp = a.con + BASE_HP_BONUS; maxHp = hp; abilities = a;
-  } else if (player) {
-    const charInfo = CHARACTERS[selectedChar] || null;
-    name = `${charInfo ? charInfo.name : '未知'} ${charInfo ? charInfo.icon : ''}`;
-    hp = player.hp; maxHp = player.maxHp; shield = playerShield; abilities = player.abilities;
-  }
-  nameEl.textContent = name;
-  const pct = maxHp > 0 ? Math.max(0, Math.min(100, hp / maxHp * 100)) : 0;
-  const shieldBar = shield > 0 ? `<div class="hp-shield" style="width:${Math.min(100, shield * 12)}%" title="护盾 ${shield} 层"></div>` : '';
-  hpEl.innerHTML = maxHp > 0
-    ? `<div class="hp-track ${hpStateClass(hp, maxHp)}"><div class="hp-fill-lg" style="width:${pct}%"></div>${shieldBar}<span class="hp-text"><i class="bar-lbl">HP</i>${hp} / ${maxHp}</span></div>`
-    : '';
   if (canvas) {
-    try { drawRadar(canvas); } catch (_) {}   // 不传 forceAbilities → canAlloc 按 phase 自动判定，六维图标金色「可加点」方框
+    /* 不传 forceAbilities → canAlloc 按 phase 自动判定，六维顶点金框 = 可加点 */
+    try { drawRadar(canvas); } catch (_) {}
   }
   const hint = document.getElementById('charAllocHint');
   if (hint) {
-    /* ★ 选角相位时 playerStats 还没建好，必须用 candidatePointsLeft()（pointsLeftNow() 已分相位）
-     * 否则预备干员在大厅那 5 点「剩余 N 点」提示永远为空，雷达也点不动。 */
+    /* ★ 选角相位时 playerStats 还没建好，必须用 pointsLeftNow()（已分相位），
+     * 否则预备干员在大厅那 5 点「剩余 N 点」提示永远为空、雷达也点不动。 */
     const pts = pointsLeftNow();
     hint.textContent = pts > 0 ? `剩余 ${pts} 点属性 · 点六维图上的属性名加点` : '';
   }
+  const box = document.getElementById('charBuffs');
+  if (box) box.innerHTML = charBuffPoolHtml();
+}
+
+/* 右下 BUFF 池：数据源与升级奖励同一个 BUFF_POOL × buffs 层数。
+ * 一层都没有时给灰色占位（人类 2026-10-29 16:2x 拍板），不留半块空白。 */
+function charBuffPoolHtml() {
+  const owned = BUFF_POOL.filter(b => (buffs[b.id] || 0) > 0);
+  const head = '<div class="char-buffs-title">升级奖励</div>';
+  if (!owned.length) return head + '<div class="char-buffs-empty">暂无升级奖励</div>';
+  return head + owned.map(b =>
+    `<div class="char-buff" title="${b.name}：${b.desc}"><span class="ico">${b.icon}</span><span class="nm">${b.name}</span><span class="ct">×${buffs[b.id]}</span></div>`
+  ).join('');
 }
 
 function allocateAbilityPoint(abilityKey) {
@@ -5853,33 +5782,16 @@ function updateStartBtn() {
   if (btn) { btn.disabled = playerPath.length === 0; btn.textContent = buildActionLabel(); }
 }
 
-/* ★ ISSUE-20261029-37：行动按钮上方 HUD（姓名 / 等级 / 经验条 / 血条；不显示技力条）。
- * HUD 与行动控件一起包进 .action-wrap，纵向堆叠 —— HUD 永远紧贴在行动按钮正上方。 */
+/* ★ ISSUE-20261029-37 / 38：行动按钮上方 HUD。
+ * 现在它只是「共用角色面板」的一个容器：内容由 heroInnerHtml() 生成（与 ♟️ 角色面板
+ * 顶部同一份），这里只负责建壳。旧 .hud-line/.hud-* 那套白色小字标记已删除。 */
 function buildHud() {
   const hud = document.createElement('div');
   hud.className = 'hud';
   hud.id = 'hud';
-  hud.innerHTML =
-    '<div class="hud-line"><span class="hud-name">—</span><span class="hud-lv">Lv.1</span></div>' +
-    '<div class="hud-bar hud-xp"><div class="hud-xp-fill"></div></div>' +
-    '<div class="hud-bar hud-hp"><div class="hud-hp-fill"></div><span class="hud-hp-txt">0 / 0</span></div>';
+  const opt = heroCardOpt();
+  if (opt) hud.innerHTML = heroInnerHtml(opt);
   return hud;
-}
-function renderHud() {
-  const hud = document.getElementById('hud');
-  if (!hud) return;
-  if (!player) { hud.style.display = 'none'; return; }
-  hud.style.display = '';
-  const charInfo = CHARACTERS[selectedChar] || null;
-  hud.querySelector('.hud-name').textContent = charInfo ? (charInfo.icon + ' ' + charInfo.name) : '未知';
-  hud.querySelector('.hud-lv').textContent = 'Lv.' + (heroLevel || 1);
-  const need = xpThresholdForLevel(heroLevel || 1);
-  const xpPct = need > 0 ? Math.max(0, Math.min(100, (xp / need) * 100)) : 0;
-  hud.querySelector('.hud-xp-fill').style.width = xpPct + '%';
-  const hp = player.hp, maxHp = player.maxHp;
-  const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, hp / maxHp * 100)) : 0;
-  hud.querySelector('.hud-hp-fill').style.width = hpPct + '%';
-  hud.querySelector('.hud-hp-txt').textContent = hp + ' / ' + maxHp;
 }
 
 function renderControls() {
@@ -5891,12 +5803,12 @@ function renderControls() {
   if (vpadSlot) vpadSlot.innerHTML = '';
   const vertical = document.body.classList.contains('layout-v');
   const btnHost = vpadSlot || ((vertical && actionSlotEl) ? actionSlotEl : controlsEl);
-  // 行动区外层：HUD（姓名/等级/经验/血条）紧贴行动按钮上方，纵向堆叠
+  // 行动区外层：HUD 紧贴行动按钮上方，纵向堆叠
+  // ★ ISSUE-20261029-38：原来只在 PLANNING/LEVELCLEAR/GAMEOVER 建 HUD，选角相位没有面板；
+  //   现在所有相位都建 —— 大厅显示候选角色（未选则「选择角色」），战死/通关显示玩家。
   const wrap = document.createElement('div');
   wrap.className = 'action-wrap';
-  if (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR || phase === PHASE.GAMEOVER) {
-    wrap.appendChild(buildHud());
-  }
+  wrap.appendChild(buildHud());
   if (phase === PHASE.PLANNING) {
     const confirm = document.createElement('button');
     /* ★ ISSUE-20261029-36：去掉「开始行动」四字，按钮内部显示动作 UI，框沿用 .start-btn 配色 */
@@ -5955,7 +5867,7 @@ function renderControls() {
   controlsEl.dataset.phase = phase;
   /* 底栏面板里塞进 / 拿掉「开始行动」后高度会变，重新补一次让位高度 */
   try { if (typeof syncVpadInset === 'function') syncVpadInset(); } catch (_) {}
-  renderHud();
+  renderHeroCard();
 }
 
 function syncControlsIfNeeded() {
@@ -6252,15 +6164,20 @@ boardEl.addEventListener('pointerdown', (e) => {
 }, { passive: false });
 
 boardEl.addEventListener('pointermove', (e) => {
-  /* ★ ISSUE-20261028-18：大厅（非战斗相位）跟随指针。
-   * 桌面（mouse）= 指针一动就跟，不需要按住（A1）；触屏 = 必须按住并拖动超过 8px（B1/B4）。
+  /* ★ ISSUE-20261029-39（人类 16:02 / 16:18「1 是」，**推翻** ISSUE-20261028-18 的 A1 口径）：
+   * 「非战斗关卡自由移动改成鼠标按下才会跟随」——
+   *   · 桌面（mouse）：**必须按住左键**才跟随。旧口径是「指针一动就跟」，导致想点某处时
+   *     角色早被鼠标扫过去带偏了；松手立刻停（pointerup 里 freeMoveClearTarget，未改）；
+   *   · 触屏：仍是「按住 + 拖过 8px 才跟随」（8px 死区用来区分「点击选角色」和「拖动移动」，
+   *     人类 16:18 确认**只改鼠标**，触屏这一支一行未动）。
    * ⚠️ 这里只写变量，绝不做布局计算 / DOM 重建 —— 120Hz 鼠标每秒 500+ 次事件（约束 1）。 */
   if (isFreeMovePhase()) {
     if (!selectedCandidate) return;
     const isTouch = e.pointerType && e.pointerType !== 'mouse';
+    /* 两种指针都必须「按下」才跟随：freeMovePress 由 pointerdown 对全部指针类型记录 */
+    if (!freeMovePress || freeMovePress.id !== e.pointerId) return;
     let lift = 0;
     if (isTouch) {
-      if (!freeMovePress || freeMovePress.id !== e.pointerId) return;
       if (!freeMovePress.moved) {
         const dx = e.clientX - freeMovePress.x, dy = e.clientY - freeMovePress.y;
         if (Math.hypot(dx, dy) < FREE_MOVE_DRAG_THRESHOLD) return;   /* 仍算点击，不跟随 */
