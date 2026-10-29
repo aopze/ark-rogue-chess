@@ -1,5 +1,5 @@
 {
- "updated_at": 1793292966,
+ "updated_at": 1793293121,
  "entries": [
   {
    "id": "dev_0942218a0663a6c2007ac515c4189a08",
@@ -37,18 +37,18 @@
    "runs": 1
   },
   {
+   "id": "dev_a40de3f57ee44fd4b45ab73fbdbac7dd",
+   "name": "玩家",
+   "level": 4,
+   "kills": 14,
+   "runs": 6
+  },
+  {
    "id": "7283974274",
    "name": "bxia",
    "level": 3,
    "kills": 6,
    "runs": 1
-  },
-  {
-   "id": "dev_a40de3f57ee44fd4b45ab73fbdbac7dd",
-   "name": "starry",
-   "level": 2,
-   "kills": 6,
-   "runs": 5
   },
   {
    "id": "dev_a837ab03c97a4ad8ae4393c200a06aa5",
