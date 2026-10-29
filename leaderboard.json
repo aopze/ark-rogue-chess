@@ -1,5 +1,5 @@
 {
- "updated_at": 1793287795,
+ "updated_at": 1793290572,
  "entries": [
   {
    "id": "dev_0942218a0663a6c2007ac515c4189a08",
@@ -81,6 +81,13 @@
   {
    "id": "dev_d47fe9d430ec419a9d273eb2d997a78f",
    "name": "何人",
+   "level": 0,
+   "kills": 0,
+   "runs": 0
+  },
+  {
+   "id": "dev_b1de4f5346284181a56b0f1ce597ebae",
+   "name": "bxia",
    "level": 0,
    "kills": 0,
    "runs": 0
