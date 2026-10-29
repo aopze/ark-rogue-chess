@@ -4021,6 +4021,9 @@ let pvpSlot = 0;              // 我是哪个座位
 let pvpTurn = 0;
 let pvpChars = ['', ''];
 let pvpNames = ['', ''];
+/* ISSUE-20261029-26：双方六维加点（服务端 start 事件里的 `abilities`，形如 [[6,8,8,12,10,10],[...]]）。
+ * 任一为 null 表示那一端没传（老客户端/老服务端）→ 回退静态 CHARACTERS 值。 */
+let pvpAbilities = [null, null];
 let pvpWaiting = false;       // 已交计划，等对手
 let pvpOver = false;
 let pvpPick = 'vampire';      // 面板里选的角色
@@ -4083,13 +4086,13 @@ const PVP_NET = (function () {
     },
     room: function () { return room; },
     slot: function () { return slot; },
-    create: function (name, charId) {
-      return req('/api/create', { name: name, charId: charId }).then(function (j) {
+    create: function (name, charId, abilities) {
+      return req('/api/create', { name: name, charId: charId, abilities: abilities || null }).then(function (j) {
         room = j.room; token = j.token; slot = j.slot; seq = 0; start(); return j;
       });
     },
-    join: function (r, name, charId) {
-      return req('/api/join', { room: r, name: name, charId: charId }).then(function (j) {
+    join: function (r, name, charId, abilities) {
+      return req('/api/join', { room: r, name: name, charId: charId, abilities: abilities || null }).then(function (j) {
         room = String(r).toUpperCase(); token = j.token; slot = j.slot; seq = 0; start(); return j;
       });
     },
@@ -4123,13 +4126,19 @@ function pvpStartMatch() {
   selectedChar = pvpChars[pvpSlot] || 'fencer';
 
   playerStats = createPlayerStats(selectedChar);
-  /* ISSUE-20261028-19：预备干员的自由加点**不进联机**。
-   * pvpMakeUnit() 用的是 CHARACTERS 静态值重建双方单位（快照只传 charId，不传六维），
-   * 本地点数若真能加，面板会变、结算却不变（联机结算只读 pvpUnits），是「假加点」。
-   * 因此联机里预备干员一律按全 8 静态值打，双方对称、公平性不变；
-   * 真同步需要 bot 侧在 create/join 里转发 abilities 字段（本机无 bot 源码），已单开 issue 跟踪。 */
+  /* ISSUE-20261029-26（2026-10-29 收尾）：联机现在**真同步**六维加点了。
+   * 链路：建房/加入时把 `playerStats.abilities` 压成 [str,dex,con,int,wis,cha] 传上去
+   *   → 房间服务 `_norm_abilities` 归一 → 满员时 start 事件回带双方 `abilities`
+   *   → 这里按自己那份重建 playerStats，`pvpMakeUnit` 也吃同一份构单位。
+   * 兼容：老服务端不回带 abilities（或某端没传）→ 走原来的兜底
+   *   （预备干员强制全 8，面板与结算一致，不会出现「假加点」）。 */
+  const mineAb = pvpAbilities[pvpSlot];
   const rookieInPvp = charIsDynamic(selectedChar);
-  if (rookieInPvp) {
+  if (Array.isArray(mineAb) && mineAb.length === 6) {
+    playerStats.abilities = { str: mineAb[0], dex: mineAb[1], con: mineAb[2],
+                              int: mineAb[3], wis: mineAb[4], cha: mineAb[5] };
+    playerStats.abilityPoints = 0;
+  } else if (rookieInPvp) {
     playerStats.abilities = { ...CHARACTERS[selectedChar].abilities };
     playerStats.abilityPoints = 0;
   }
@@ -4138,8 +4147,8 @@ function pvpStartMatch() {
   player = createPlayerUnit(PVP_SPAWNS[pvpSlot]);
 
   pvpUnits = [
-    pvpMakeUnit(CHARACTERS, pvpChars[0] || 'fencer', 0, PVP_SPAWNS[0].x, PVP_SPAWNS[0].y),
-    pvpMakeUnit(CHARACTERS, pvpChars[1] || 'fencer', 1, PVP_SPAWNS[1].x, PVP_SPAWNS[1].y)
+    pvpMakeUnit(CHARACTERS, pvpChars[0] || 'fencer', 0, PVP_SPAWNS[0].x, PVP_SPAWNS[0].y, pvpAbilities[0]),
+    pvpMakeUnit(CHARACTERS, pvpChars[1] || 'fencer', 1, PVP_SPAWNS[1].x, PVP_SPAWNS[1].y, pvpAbilities[1])
   ];
   const foeUnit = pvpUnits[1 - pvpSlot];
   peer = {
@@ -4319,6 +4328,8 @@ function pvpShowResult(result) {
 PVP_NET.on('start', function (ev) {
   pvpNames = ev.slots || ['房主', '挑战者'];
   pvpChars = ev.chars || ['', ''];
+  // ISSUE-20261029-26：服务端回带的双方六维（[房主, 挑战者]，任一可能为 null）
+  pvpAbilities = Array.isArray(ev.abilities) ? ev.abilities : [null, null];
   pvpSlot = PVP_NET.slot();
   pvpClosePanel();
   pvpStartMatch();
@@ -4419,7 +4430,7 @@ function pvpInjectUI() {
   mask.innerHTML =
     '<div class="pvp-card">' +
       '<h3>⚔️ 联机对战</h3>' +
-      '<label>房间服务地址（https 隧道域名，末尾不要斜杠）</label>' +
+      '<label>房间服务地址（已默认填好本站，一般不用改）</label>' +
       '<input id="pvpBase" placeholder="https://xxx.trycloudflare.com">' +
       '<label>昵称</label>' +
       '<input id="pvpName" value="玩家">' +
@@ -4451,10 +4462,21 @@ function pvpInjectUI() {
 
   try {
     const saved = localStorage.getItem('ark_pvp_base');
-    if (saved) mask.querySelector('#pvpBase').value = saved;
+    const inp = mask.querySelector('#pvpBase');
+    // ISSUE-20261029-26 收尾：默认填同源地址。房间服务已由 bot 的 8088 反代到同域，
+    // 玩家不用再去别处复制隧道地址；本地 file:// 打开时 origin 为 null，就不填。
+    if (saved) inp.value = saved;
+    else if (/^https?:/i.test(location.origin || '')) inp.value = location.origin;
   } catch (e) {}
 
   function status(t) { mask.querySelector('#pvpStatus').innerHTML = t; }
+  /* 自己这一份六维，压成传输格式 [str,dex,con,int,wis,cha]。
+   * 服务端 `_norm_abilities` 只认「6 个 int 的数组」，顺序不能变。 */
+  function myAbilities() {
+    const a = playerStats && playerStats.abilities;
+    if (!a) return null;
+    return [a.str, a.dex, a.con, a.int, a.wis, a.cha];
+  }
   function base() {
     const b = mask.querySelector('#pvpBase').value.trim();
     if (!b) { status('⚠️ 先填房间服务地址'); return null; }
@@ -4471,7 +4493,7 @@ function pvpInjectUI() {
   mask.querySelector('#pvpCreate').onclick = function () {
     if (!base()) return;
     status('建房中…');
-    PVP_NET.create(mask.querySelector('#pvpName').value.trim() || '房主', pvpPick)
+    PVP_NET.create(mask.querySelector('#pvpName').value.trim() || '房主', pvpPick, myAbilities())
       .then(function (j) {
         status('房间已创建，把房间号发给对手：<br><span id="pvpRoom">' + j.room + '</span><br>等他加入…');
       })
@@ -4482,7 +4504,7 @@ function pvpInjectUI() {
     const r = mask.querySelector('#pvpRoomIn').value.trim().toUpperCase();
     if (!r) { status('⚠️ 先填房间号'); return; }
     status('加入中…');
-    PVP_NET.join(r, mask.querySelector('#pvpName').value.trim() || '挑战者', pvpPick)
+    PVP_NET.join(r, mask.querySelector('#pvpName').value.trim() || '挑战者', pvpPick, myAbilities())
       .catch(function (e) { status('⚠️ 加入失败：' + e.message); });
   };
 }
