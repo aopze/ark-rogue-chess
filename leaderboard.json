@@ -1,6 +1,13 @@
 {
- "updated_at": 1793293121,
+ "updated_at": 1793293529,
  "entries": [
+  {
+   "id": "dev_b1de4f5346284181a56b0f1ce597ebae",
+   "name": "bxia",
+   "level": 7,
+   "kills": 28,
+   "runs": 8
+  },
   {
    "id": "dev_0942218a0663a6c2007ac515c4189a08",
    "name": "小雨",
@@ -21,13 +28,6 @@
    "level": 6,
    "kills": 19,
    "runs": 13
-  },
-  {
-   "id": "dev_b1de4f5346284181a56b0f1ce597ebae",
-   "name": "bxia",
-   "level": 6,
-   "kills": 19,
-   "runs": 7
   },
   {
    "id": "dev_d808eef015604867a0022eef2b7c248e",
