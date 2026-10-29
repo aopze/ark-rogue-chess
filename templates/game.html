@@ -1406,7 +1406,7 @@ function renderHero(opt) {
   if (!heroInfoEl) return;
   const maxHp = opt.maxHp || 0;
   const pct = maxHp > 0 ? Math.max(0, Math.min(100, (opt.hp / maxHp) * 100)) : 0;
-  const hpText = opt.hpText || (maxHp > 0 ? `${opt.hp} / ${maxHp}` : '—');
+  const hpText = opt.hpText || (maxHp > 0 ? `${Math.max(0, opt.hp)} / ${maxHp}` : '—');
   const shieldN = opt.shield || 0;
   const shieldBar = shieldN > 0
     ? `<div class="hp-shield" style="width:${Math.min(100, shieldN * 12)}%" title="护盾 ${shieldN} 层"></div>`

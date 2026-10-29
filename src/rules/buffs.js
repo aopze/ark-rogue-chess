@@ -85,6 +85,6 @@ function damagePlayer(amount, label = '') {
     updateStats();
     return { dmg: 0, shielded: true, immune: false };
   }
-  player.hp -= amount;
+  player.hp = Math.max(0, player.hp - amount);
   return { dmg: amount, shielded: false, immune: false };
 }

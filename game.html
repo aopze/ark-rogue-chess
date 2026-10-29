@@ -773,9 +773,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290745',
-  commit:  'c27cd896b343a39ae3b34823a4bdce7798b0f388',
-  builtAt: '2026-10-29T05:35:28Z'
+  build:   '10291359',
+  commit:  '18bbf837d1f6ecf006a7c5c435b7a39bb0c04dfd',
+  builtAt: '2026-10-29T06:06:49Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -1584,7 +1584,7 @@ function damagePlayer(amount, label = '') {
     updateStats();
     return { dmg: 0, shielded: true, immune: false };
   }
-  player.hp -= amount;
+  player.hp = Math.max(0, player.hp - amount);
   return { dmg: amount, shielded: false, immune: false };
 }
 
@@ -5431,7 +5431,7 @@ function renderHero(opt) {
   if (!heroInfoEl) return;
   const maxHp = opt.maxHp || 0;
   const pct = maxHp > 0 ? Math.max(0, Math.min(100, (opt.hp / maxHp) * 100)) : 0;
-  const hpText = opt.hpText || (maxHp > 0 ? `${opt.hp} / ${maxHp}` : '—');
+  const hpText = opt.hpText || (maxHp > 0 ? `${Math.max(0, opt.hp)} / ${maxHp}` : '—');
   const shieldN = opt.shield || 0;
   const shieldBar = shieldN > 0
     ? `<div class="hp-shield" style="width:${Math.min(100, shieldN * 12)}%" title="护盾 ${shieldN} 层"></div>`
