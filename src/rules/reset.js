@@ -48,6 +48,7 @@ function resetTurnState({ clearCounter = false } = {}) {
   playerDodging = false;
   playerDodgeACBonus = 0;
   dodgeTriggerIndex = -1;
+  dodgeResolved = false;   // ISSUE-20261029-40：闪避已结算标记，每回合重来
   pendingAttack = false;
   pendingStartSkill = false;
   pendingChargeInfo = null;

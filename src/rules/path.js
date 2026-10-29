@@ -30,16 +30,49 @@ function isInFacingCone(unit, target) {
     return dy === unit.facing.dy && Math.abs(dx) <= 1;
   }
 }
-function previewFacing(path, startX, startY) {
-  let face = null;
-  let px = startX, py = startY;
-  for (const p of path) {
-    const dx = Math.sign(p.x - px);
-    const dy = Math.sign(p.y - py);
-    if (dx !== 0 || dy !== 0) face = { dx, dy };
-    px = p.x; py = p.y;
+/* =========================================================================
+ * ISSUE-20261029-41 · 朝向 = 「下一步要去的方向」（人类 2026-10-29 16:18「3 是」）
+ *
+ * 旧语义是「来向」：落地时写 sign(目标格 - 起点格)，即**进入**方向。
+ * 于是「朝上站着 → 原地攻击 → 下一步往左走」这一拳仍按朝上判，左边的敌人吃不到朝向必中。
+ *
+ * facingAt(path, i) = 从路径第 i 格出发、走向下一个**移动步**的方向：
+ *   · path[i+1] 与 path[i] 同格（等待步）→ 继续往后找，即「等待步不转身」；
+ *   · 没有下一步移动（终点 / 整条路径都在等）→ 用「进入该格」的方向兜底
+ *     （起点格没有来向，才用调用方传进来的 fallback）。
+ *
+ * ★ 纯函数，不读全局、不碰 DOM：结算（移动落地 / 原地攻击）与渲染（previewFacing /
+ *   路径格箭头）必须用同一个它，否则「屏幕上朝哪」和「按哪判」又会分成两套。
+ * ========================================================================= */
+function facingAt(path, i, fallback) {
+  const fb = fallback || { dx: 0, dy: 0 };
+  if (!path || !path.length) return fb;
+  const start = Math.max(0, Math.min(i | 0, path.length - 1));
+  for (let j = start; j < path.length - 1; j++) {
+    const dx = Math.sign(path[j + 1].x - path[j].x);
+    const dy = Math.sign(path[j + 1].y - path[j].y);
+    if (dx !== 0 || dy !== 0) return { dx, dy };
   }
-  return face;
+  if (start > 0) {
+    const dx = Math.sign(path[start].x - path[start - 1].x);
+    const dy = Math.sign(path[start].y - path[start - 1].y);
+    if (dx !== 0 || dy !== 0) return { dx, dy };
+  }
+  return fb;
+}
+/* 规划期的渲染朝向 = facingAt(0)，即**第一个移动步**的方向。
+ * 旧实现返回「整条路径最后一步」的方向（路径尽头），与结算用的 player.facing 不是同一套；
+ * 改完「屏幕上朝哪就按哪判」（ISSUE-20261029-33 的口径）。
+ * startX/startY 只为兼容旧调用签名保留：path[0] 与玩家位置不一致（异常态）时，
+ * 用它补一个「玩家 → path[0]」的方向。 */
+function previewFacing(path, startX, startY) {
+  if (!path || !path.length) return null;
+  const f = facingAt(path, 0, null);
+  if (f && (f.dx || f.dy)) return f;
+  const dx = Math.sign(path[0].x - startX);
+  const dy = Math.sign(path[0].y - startY);
+  if (dx !== 0 || dy !== 0) return { dx, dy };
+  return null;
 }
 function calcPathSignature() {
   if (!player || !enemies) return '';

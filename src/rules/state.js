@@ -51,6 +51,10 @@ let playerDodging = false;
 let playerDodgeACBonus = 0;
 // 本回合闪避触发的路径下标（-1 = 本回合不闪避）
 let dodgeTriggerIndex = -1;
+/* ISSUE-20261029-40：闪避的「到达闪避格即生效」改在落地 tick 判定后，等待步不再负责触发。
+ * 这个标记表示本回合的闪避已经**结算过**（成功或动作不足被否决都算），
+ * 防止后续等待步 tick 重复扣动作 / 重复刷日志。 */
+let dodgeResolved = false;
 // 本回合已使用的「动作」数：上限 = maxActionsThisTurn() = BASE_ACTIONS_PER_TURN(2) + extraAttacks，
 // 闪避 / 攻击 / 技能各占 1 个（ISSUE-20261029-25 起不再是「一回合只做一件事」）
 let playerActionsUsed = 0;

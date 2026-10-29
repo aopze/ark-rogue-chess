@@ -37,6 +37,16 @@
   /* 闪避节点：第一次等待（蓝色描边 + 内部蓝调） */
   .cell.dodge { box-shadow: inset 0 0 0 2px #7dd3fc; background:#2f5578; }
   .cell.dodge.attack { box-shadow: inset 0 0 0 2px #7dd3fc, inset 0 0 0 999px rgba(192,57,43,.35); }
+  /* ISSUE-20261029-41：路径格朝向箭头 —— 指向「从这一格出发」的下一步方向。
+     放右上角（右下角是单位朝向指示、格中央是节点/图标），0.3 格大小、30% 不透明，不抢注意力。
+     四个方向靠旋转同一个向上三角实现，避免四套 border 组合写错。 */
+  .cell-dir { position:absolute; top:9%; right:9%; width:0; height:0; opacity:.3; pointer-events:none;
+    border-left: calc(var(--cell) * 0.13) solid transparent;
+    border-right: calc(var(--cell) * 0.13) solid transparent;
+    border-bottom: calc(var(--cell) * 0.22) solid #dbe4ff; }
+  .cell-dir.l { transform: rotate(-90deg); }
+  .cell-dir.r { transform: rotate(90deg); }
+  .cell-dir.d { transform: rotate(180deg); }
   .cell.attack { background:#c0392b; }
   .cell.attack.used { background:#5c2b29; }
   /* 技能节点（双击设置）：紫色底 + 紫描边 + ✦ */
@@ -1305,6 +1315,7 @@ function buildBoardHtml() {
     for (let x = bbox.minX; x <= bbox.maxX; x++) {
       let cls = 'cell';
       let content = '';
+      let dirHtml = '';
       if (m[y][x] === 1) {
         const hw = DIR4.some(([dx,dy]) => isWalkable(x+dx, y+dy));
         if (hw) cls += ' wall'; else cls += ' void';
@@ -1337,6 +1348,17 @@ function buildBoardHtml() {
           if (playerAttacksDone >= maxAttacksThisTurn()) cls += ' used';
           /* 闪避节点：第一次等待 → 蓝色标记 */
           if (dodgeIdx >= 0 && stepsAtCell.includes(dodgeIdx)) cls += ' dodge';
+          /* ISSUE-20261029-41：朝向箭头（起点格不画 —— 单位自身的朝向指示已经够了）。
+           * 取该格**最小**步号：等待步会返回同一格里重复的下标，facingAt 内部已跳过等待步，
+           * 所以「落地格 + 之后的等待」得到的是同一个方向。终点格 = 进入方向。 */
+          const dirIdx = stepsAtCell[0];
+          if (dirIdx > 0) {
+            const f = facingAt(playerPath, dirIdx, null);
+            if (f.dx || f.dy) {
+              const dCls = f.dy < 0 ? 'u' : f.dy > 0 ? 'd' : f.dx > 0 ? 'r' : 'l';
+              dirHtml = `<i class="cell-dir ${dCls}"></i>`;
+            }
+          }
         }
         const playerHere = player.alive && player.x === x && player.y === y;
         const enemyHere = enemies.find(e => e.alive && e.x === x && e.y === y);
@@ -1367,7 +1389,7 @@ function buildBoardHtml() {
           else content = '';
         }
       }
-      html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}</div>`;
+      html += `<div class="${cls}" data-x="${x}" data-y="${y}">${content}${dirHtml}</div>`;
     }
   }
   return html;
@@ -3275,7 +3297,10 @@ async function triggerSkillNode(pathIdx) {
     return false;
   }
   if (playerActionsUsed >= maxActionsThisTurn()) {
-    const spentOnDodge = pathIdx === dodgeTriggerIndex && playerDodging;
+    /* ISSUE-20261029-40 起闪避在「到达闪避格」那一步就扣动作了，
+     * 所以要同时认「到达步」与「等待步」两个下标，否则同一步会报成「动作已用完」。 */
+    const spentOnDodge = playerDodging && dodgeTriggerIndex > 0 &&
+      (pathIdx === dodgeTriggerIndex || pathIdx === dodgeTriggerIndex - 1);
     log(spentOnDodge
       ? `✦ 技能节点（第 ${pathIdx} 步）：这一步已经用于闪避，动作已用完，「${info.name}」未能发动。`
       : `✦ 技能节点（第 ${pathIdx} 步）：本回合动作已用完（${playerActionsUsed}/${maxActionsThisTurn()}），「${info.name}」未能发动。`);
@@ -3364,6 +3389,14 @@ async function resolveStep(pIdxIn, eIdx) {
   if (pendingAttack) {
     pendingAttack = false;
     didAttackThisTick = true;
+    /* ISSUE-20261029-41：原地攻击（路径第 0 格）没有落地动作，也就没人给它写朝向。
+     * 出手前先转向「下一步要去的方向」——「朝上站、下一步往左走」时这一拳打左边那个敌人，
+     * 与人类 16:18「3 是」的口径一致（先决定往哪走，再打那边）。
+     * pIdx === 1 只可能是起点攻击；路径中途的攻击节点由上面的落位代码写好朝向。 */
+    if (pIdx <= 1) {
+      const f0 = facingAt(playerPath, 0, null);
+      if (f0.dx || f0.dy) player.facing = f0;
+    }
   } else if (pIdx < playerPath.length) {
     if (pendingChargeInfo && pIdx >= pendingChargeInfo.startIdx && !playerChargingThisTurn && player.alive) {
       playerChargingThisTurn = true;
@@ -3381,25 +3414,13 @@ async function resolveStep(pIdxIn, eIdx) {
     const pathIdx = pIdx;
     const targetPos = playerPath[pathIdx];
     const playerFrom = { x: player.x, y: player.y };
+    /* ISSUE-20261029-40：本 tick 是否是玩家**主动走进**某格的落位（正常落位 / 冲锋撞死落位）。
+     * 闪避的「到达即生效」只认这两条 —— 相杀与被 Boss 推开不算（人类 16:18 拍板）。 */
+    let arrivedByMove = false;
 
-    /* ★ 闪避：回合内第一次「等待」步 → 闪避动作，AC +N，持续到本回合结束 */
-    if (!playerDodging && pathIdx > 0 &&
-        playerPath[pathIdx].x === playerPath[pathIdx - 1].x &&
-        playerPath[pathIdx].y === playerPath[pathIdx - 1].y &&
-        pathIdx === dodgeTriggerIndex) {
-      if (playerActionsUsed >= maxActionsThisTurn()) {
-        // 本回合动作已用完（ISSUE-20261029-25 起上限 2：打完一拳还能闪一次）
-        log('本回合的动作已用于攻击，闪避不成立。');
-        floatText(player.x, player.y, '无法闪避', '#bbb');
-      } else {
-        playerDodging = true;
-        playerDodgeACBonus = DODGE_AC_BONUS;
-        playerActionsUsed += 1;   // 闪避占用 1 个动作
-        log(`闪避！你选择驻足闪避，本回合 AC +${DODGE_AC_BONUS}（${player.ac} → ${playerEffectiveAC()}）。`);
-        floatText(player.x, player.y, `闪避 +${DODGE_AC_BONUS}AC`, '#7dd3fc', true);
-        ringFx(player.x, player.y, '#7dd3fc');
-      }
-    }
+    /* ★ 闪避的触发已挪到「落地之后」（见本轮落位代码尾部）——
+     * ISSUE-20261029-40：原来在这里要求「本步是等待步」，导致玩家走进闪避格的同一 tick
+     * 敌人攻击吃不到 +3 AC。现在按「站上闪避格」判定，同一 tick 的敌人攻击就用含 +3 的 AC。 */
 
     const shootouts = [];
     for (const em of enemyMoves) {
@@ -3472,7 +3493,9 @@ async function resolveStep(pIdxIn, eIdx) {
         const dx = Math.sign(targetPos.x - playerFrom.x);
         const dy = Math.sign(targetPos.y - playerFrom.y);
         player.x = targetPos.x; player.y = targetPos.y;
-        if (dx || dy) player.facing = { dx, dy };
+        /* ISSUE-20261029-41：落地朝向 = 下一步方向（终点则沿用进入方向）。 */
+        const f = facingAt(playerPath, pathIdx, { dx, dy });
+        if (f.dx || f.dy) player.facing = f;
         if (attackIndices.includes(pathIdx)) {
           if (playerChargingThisTurn) didAttackThisTick = true;
           else pendingAttack = true;
@@ -3520,7 +3543,10 @@ async function resolveStep(pIdxIn, eIdx) {
             const dx = Math.sign(targetPos.x - playerFrom.x);
             const dy = Math.sign(targetPos.y - playerFrom.y);
             player.x = targetPos.x; player.y = targetPos.y;
-            if (dx || dy) player.facing = { dx, dy };
+            /* ISSUE-20261029-41：落地朝向 = 下一步方向；ISSUE-20261029-40：这条落位算「走进来了」。 */
+            const f = facingAt(playerPath, pathIdx, { dx, dy });
+            if (f.dx || f.dy) player.facing = f;
+            arrivedByMove = true;
             if (attackIndices.includes(pathIdx)) didAttackThisTick = true;
             tryPickup();
           } else {
@@ -3543,12 +3569,45 @@ async function resolveStep(pIdxIn, eIdx) {
         const dx = Math.sign(targetPos.x - playerFrom.x);
         const dy = Math.sign(targetPos.y - playerFrom.y);
         player.x = targetPos.x; player.y = targetPos.y;
-        if (dx || dy) player.facing = { dx, dy };
+        /* ISSUE-20261029-41：落地朝向 = 下一步方向（终点沿用进入方向）。
+         * ISSUE-20261029-40：这是唯一「玩家主动走进去」的落位 —— 闪避只认它。 */
+        const f = facingAt(playerPath, pathIdx, { dx, dy });
+        if (f.dx || f.dy) player.facing = f;
+        arrivedByMove = true;
         if (attackIndices.includes(pathIdx)) {
           if (playerChargingThisTurn) didAttackThisTick = true;
           else pendingAttack = true;
         }
         tryPickup();
+      }
+    }
+    /* ★ ISSUE-20261029-40：闪避 = 走到闪避格**即生效**（不再等下一个「等待」tick）。
+     *
+     * 判定用「玩家实际站上了闪避格」而不是「这一步是等待步」：
+     *   · 走进闪避格的那一 tick（arrivedByMove）→ 生效，本 tick 后面的
+     *     resolveEnemyMeleeAttacks() 立刻用含 +3 的 AC；
+     *   · 仍在闪避格上等待的后续 tick 兜底一次（路径第 0 格之后立刻等待时，
+     *     「到达步」= 0 不会被 tick 走到，靠这条保住旧行为）；
+     *   · 相杀 / 被 Boss 推开 / 被挡这三种情况都不会满足 —— 玩家其实没走进去。
+     * 动作仍占 1 个（人类 16:18 拍板），动作不够时照旧不成立，且不再重复刷日志。 */
+    if (!dodgeResolved && dodgeTriggerIndex > 0 && !playerBlocked) {
+      const dodgeCell = playerPath[dodgeTriggerIndex];
+      const onDodgeCell = !!dodgeCell && player.x === dodgeCell.x && player.y === dodgeCell.y;
+      if (onDodgeCell && (arrivedByMove || pathIdx === dodgeTriggerIndex)) {
+        dodgeResolved = true;
+        if (playerActionsUsed >= maxActionsThisTurn()) {
+          // 本回合动作已用完（ISSUE-20261029-25 起上限 2：打完一拳还能闪一次）
+          log('本回合的动作已用于攻击，闪避不成立。');
+          floatText(player.x, player.y, '无法闪避', '#bbb');
+        } else {
+          playerDodging = true;
+          playerDodgeACBonus = DODGE_AC_BONUS;
+          playerActionsUsed += 1;   // 闪避占用 1 个动作
+          log(`闪避！到达闪避格，本回合 AC +${DODGE_AC_BONUS}（${player.ac} → ${playerEffectiveAC()}）。`);
+          floatText(player.x, player.y, `闪避 +${DODGE_AC_BONUS}AC`, '#7dd3fc', true);
+          ringFx(player.x, player.y, '#7dd3fc');
+          renderHeroCard();   // 面板 AC 立刻变成含 +3 的值（验收项）
+        }
       }
     }
     if (playerBlocked) pIdx = playerPath.length;

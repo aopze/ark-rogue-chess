@@ -340,6 +340,46 @@ console.log('\n[6] 手机圆钮：纯触屏环境才挂载（第二个实例，�
   const after = w2.eval('playerPath.length');
   check('点方向键走的是同一条路径逻辑（不报错、长度不为负）', after >= before, before + ' → ' + after);
 
+  /* ISSUE-20261029-41：朝向 = 「下一步要去的方向」，路径格右上角画箭头。
+   * 纯函数直接测；箭头要真的写一次棋盘（跑完把 playerPath 还原，别污染后面的用例）。 */
+  const fAt = JSON.parse(w2.eval(
+    "JSON.stringify([facingAt([{x:0,y:0},{x:1,y:0},{x:1,y:0},{x:1,y:-1}], 0)," +
+    " facingAt([{x:0,y:0},{x:1,y:0},{x:1,y:0},{x:1,y:-1}], 1)," +
+    " facingAt([{x:0,y:0},{x:1,y:0}], 1)])"));
+  check('facingAt：下一步方向 / 等待步不转身 / 终点用进入方向',
+    fAt[0].dx === 1 && fAt[0].dy === 0 && fAt[1].dx === 0 && fAt[1].dy === -1 && fAt[2].dx === 1 && fAt[2].dy === 0,
+    JSON.stringify(fAt));
+
+  const arrow = JSON.parse(w2.eval(`(function(){
+    const keep = JSON.stringify(playerPath);
+    const px = player.x, py = player.y;
+    let pick = null;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const a = { x: px + dx, y: py + dy }, b = { x: px + 2*dx, y: py + 2*dy };
+      const ha = document.querySelector('.cell[data-x="' + a.x + '"][data-y="' + a.y + '"]');
+      const hb = document.querySelector('.cell[data-x="' + b.x + '"][data-y="' + b.y + '"]');
+      if (ha && hb) { pick = { a: a, b: b, dx: dx, dy: dy }; break; }
+    }
+    if (!pick) return JSON.stringify({ n: -1, cls: [], start: null, keep: keep });
+    playerPath = [{x:px,y:py}, pick.a, pick.b, pick.b];
+    attackIndices = []; skillIndices = [];
+    refreshBoardOnly();
+    const arr = Array.from(document.querySelectorAll('.cell-dir'));
+    const startCell = document.querySelector('.cell[data-x="' + px + '"][data-y="' + py + '"]');
+    return JSON.stringify({
+      n: arr.length, cls: arr.map(function (e) { return e.className; }),
+      start: !!(startCell && startCell.querySelector('.cell-dir')),
+      want: pick.dy < 0 ? 'u' : pick.dy > 0 ? 'd' : pick.dx > 0 ? 'r' : 'l',
+      keep: keep,
+    });
+  })()`));
+  check('路径格箭头：每格一个、起点不画', arrow.n === 2 && arrow.start === false,
+    'n=' + arrow.n + ' start=' + arrow.start);
+  check('路径格箭头方向 = facingAt（含终点进入方向）',
+    arrow.cls.length === 2 && arrow.cls.every(c => c.indexOf('cell-dir ' + arrow.want) >= 0),
+    JSON.stringify(arrow.cls) + ' 期望 ' + arrow.want);
+  w2.eval('playerPath = ' + arrow.keep + '; refreshBoardOnly();');
+
   mapDom.window.close();
 }
 
