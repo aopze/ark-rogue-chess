@@ -29,7 +29,13 @@
     "src/rules/mapgen.js",
     "src/ui/layout.js",
     "src/ui/chrome.js",
-    "src/ui/mobile-pad.js"
+    "src/ui/mobile-pad.js",
+    "src/shell/01-sdk.js",
+    "src/shell/02-account.js",
+    "src/shell/03-board.js",
+    "src/shell/04-panel.js",
+    "src/shell/05-score.js",
+    "src/shell/06-boot.js"
   ],
   "notes": [
     "顺序敏感：game.html 单文件内的 let/const 提升与初始化顺序决定了行为，改动顺序必须重跑全量 e2e。",

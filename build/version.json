@@ -1,0 +1,4 @@
+{
+  "$comment": "BUILD 唯一真值来源（ISSUE-20261029-45）。格式 MMDDHHmm = 月日时分，例 10292228 = 10月29日 22:28。bundle.mjs 注入产物、verify.mjs 做 AC-23 比对，两处都读这里；index.html 已退化为跳转页，不再是真值来源。",
+  "build": "10292338"
+}

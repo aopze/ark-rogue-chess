@@ -1,14 +1,23 @@
-/* 外壳（index.html）行为回归：ISSUE-20261028-10
- *   打开即选角大厅 / 左侧抽屉 / 账号 =「显示名 + 数字口令」
+/* 外壳（已内联进 game.html）行为回归 —— ISSUE-20261029-45 重写
+ * ----------------------------------------------------------------------------
+ * 这个文件的前身测的是「index.html 外壳 + iframe 里装 game.html」，
+ * 合并成单文件后那个结构不存在了，所以整体重写为「单文档」口径：
  *
- * 为什么单独测：这一版把首屏整个删了，又动了身份模型。首屏删错会让页面直接白屏，
- * 账号校验写松会让口令漏进公开位置 —— 两类都不能只靠肉眼看。
+ *   [1] 单文件结构：iframe 边界确实没了
+ *   [2] 打开即进游戏（无主页）
+ *   [3] 面板开合：arkOpenLobby / 角标 / 遮罩 / Esc 四条路径
+ *   [4] 榜单：同名合并、自己高亮、[我]→[编辑]、未上榜兜底入口
+ *   [5] 编辑抽屉：内联展开在自己那行下方、说明文字口径、改名不新注册
+ *   [6] 竖屏密度：390x844 下面板高度够放 8 名
+ *   [7] 滚动条：细窄半透明，非系统白色
+ *   [8] 全程无报错
  *
  * 用法：
  *   NODE_PATH=/path/to/node_modules node net/lobby_shell_test.mjs
- *   （可选 ARK_SHELL_HTML 指定 index.html 路径）
+ *   ARK_SHELL_HTML=<产物绝对路径> 可指定被测文件（默认 build/out/game.html）
  */
 import fs from 'node:fs';
+import path from 'node:path';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -20,222 +29,248 @@ try {
   process.exit(2);
 }
 
-const SHELL = process.env.ARK_SHELL_HTML || 'index.html';
+const SHELL = process.env.ARK_SHELL_HTML || 'build/out/game.html';
 const html = fs.readFileSync(SHELL, 'utf8');
 
 const errors = [];
 const vc = new VirtualConsole();
-vc.on('jsdomError', (e) => errors.push('jsdomError: ' + (e && e.message ? e.message : e)));
-vc.on('error', (...a) => errors.push('console.error: ' + a.join(' ')));
+const isCanvasNoise = (s) => /getContext|Not implemented/.test(s);
+vc.on('jsdomError', (e) => {
+  const m = e && e.message ? e.message : String(e);
+  if (!isCanvasNoise(m)) errors.push('jsdomError: ' + m);
+});
+vc.on('error', (...a) => {
+  const m = a.join(' ');
+  if (!isCanvasNoise(m)) errors.push('console.error: ' + m);
+});
 
 const dom = new JSDOM(html, {
   runScripts: 'dangerously',
   pretendToBeVisual: true,
-  url: 'http://localhost/index.html',
+  url: 'http://localhost/game.html',
   virtualConsole: vc,
   beforeParse(window) {
-    // 外壳只读 leaderboard.json / api/leaderboard：一律当离线处理，走 catch 分支
+    /* 外壳只读 leaderboard.json / api/leaderboard：测试里一律当离线处理 */
     window.fetch = () => Promise.reject(new Error('offline'));
-    if (!window.matchMedia) {
-      window.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {},
-        addEventListener() {}, removeEventListener() {} });
-    }
+    window.matchMedia = (q) => ({
+      media: q, matches: false,
+      addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {},
+    });
     window.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 16);
+    window.HTMLCanvasElement.prototype.getContext = function () {
+      const base = {
+        measureText: () => ({ width: 8 }), canvas: this,
+        createLinearGradient: () => ({ addColorStop() {} }), getImageData: () => ({ data: [] }),
+      };
+      return new Proxy(base, { get: (t, k) => (k in t ? t[k] : function () {}), set: (t, k, v) => { t[k] = v; return true; } });
+    };
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true, writable: true });
   },
 });
 
 const { window } = dom;
 const doc = window.document;
+const NS = () => window.ArkShell;
+const $ = (id) => doc.getElementById(id);
 const ok = [], bad = [];
 function check(name, cond, detail = '') {
   (cond ? ok : bad).push(name);
   console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? '  <' + detail + '>' : ''}`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-await sleep(200);
 
-console.log('外壳：' + SHELL + '\n');
+await sleep(300);
+console.log('被测产物：' + SHELL + '\n');
 
-console.log('[1] 打开即选角大厅（旧主页已删除）');
+/* ---------------------------------------------------------------- [1] */
+console.log('[1] 单文件结构：iframe 边界确实没了');
 {
-  check('没有 #home 屏', doc.getElementById('home') === null);
-  check('没有「开始游戏」按钮', doc.getElementById('btnStart') === null);
-  check('#gameWrap 可见（不是 hidden）', !doc.getElementById('gameWrap').hidden);
-  const src = doc.getElementById('game').getAttribute('src') || '';
-  check('iframe 已指向 game.html?v=BUILD', /game\.html\?v=\d{8}/.test(src), src);
-  /* BUILD 不再硬编码：每次发版都会变（MMDDHHmm），写死等于给下一版埋雷。
-   * 正确的口径是「iframe 的 ?v= 必须等于 index.html 自己的 var BUILD」，
-   * 这正是 AC-23 缓存刷新的要害（不一致 → 用户拿到旧的 game.html）。 */
-  const shellBuild = (html.match(/var BUILD\s*=\s*'(\d{8})'/) || [])[1] || '';
-  check('iframe 的 ?v= 等于 index.html 的 BUILD（AC-23）',
-    shellBuild && src.indexOf('v=' + shellBuild) > 0, src + ' vs BUILD=' + (shellBuild || '∅'));
-  check('没有 console.error / jsdomError', errors.length === 0, errors.slice(0, 2).join(' | '));
+  check('没有 #gameWrap 容器', $('gameWrap') === null);
+  check('没有 game iframe', doc.querySelector('iframe#game') === null);
+  check('没有 #hooksrc 注入块', $('hooksrc') === null);
+  check('没有 #loading 遮罩', $('loading') === null);
+  check('#arkUi 外壳容器存在', !!$('arkUi'));
+  const iframes = doc.querySelectorAll('iframe');
+  check('只剩 1 条 iframe（完整排行榜）', iframes.length === 1,
+    iframes.length ? iframes[0].id : '0');
+  check('ArkShell 命名空间已建立', !!NS() && !!NS().panel && !!NS().board && !!NS().account);
 }
 
-console.log('\n[2] 左侧抽屉（入口 = 游戏内 ♟ 角标的 postMessage，2026-10-29 起外壳不再挂左边缘把手）');
+/* ---------------------------------------------------------------- [2] */
+console.log('\n[2] 打开即进游戏（无主页）');
 {
-  const mask = doc.getElementById('lobbyMask');
-  const drawer = doc.getElementById('lobbyDrawer');
-  const frame = doc.getElementById('game');
-  check('旧把手 #lobbyHandle 已删除（入口只留 ♟ 角标）', doc.getElementById('lobbyHandle') === null);
-  check('遮罩 / 抽屉都在', !!mask && !!drawer);
-  check('抽屉默认收起', !drawer.classList.contains('on') && !mask.classList.contains('on'));
+  check('没有 #home 屏', $('home') === null);
+  check('没有「开始游戏」按钮', $('btnStart') === null);
+  check('棋盘已建出格子', doc.querySelectorAll('#board .cell').length > 0,
+    String(doc.querySelectorAll('#board .cell').length));
+  check('当前在选角相位', window.eval('typeof phase !== "undefined" ? phase : ""') === 'char_select',
+    window.eval('typeof phase !== "undefined" ? phase : ""'));
+}
 
-  const openViaGame = () => window.dispatchEvent(
-    new window.MessageEvent('message', { data: { type: 'ark_open_lobby' } }));
-  openViaGame();
-  check("游戏发 'ark_open_lobby' → 抽屉滑出", drawer.classList.contains('on'));
-  check("aria-hidden 变为 'false'", drawer.getAttribute('aria-hidden') === 'false');
-  check('遮罩出现', mask.classList.contains('on'));
-  check('抽屉打开时游戏输入被暂停（iframe pointer-events:none）',
-    frame.style.pointerEvents === 'none', frame.style.pointerEvents);
-  check('角标式关闭钮 #lobbyCornerClose 存在', !!doc.getElementById('lobbyCornerClose'));
+/* ---------------------------------------------------------------- [3] */
+console.log('\n[3] 面板开合：四条路径');
+{
+  const d = $('lobbyDrawer'), m = $('lobbyMask'), btn = $('lobbyOpenBtn');
+  check('初始未打开', !d.classList.contains('on'));
 
-  mask.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  check('点遮罩 → 关闭', !drawer.classList.contains('on'));
-  check('关闭后游戏输入恢复', frame.style.pointerEvents === '', frame.style.pointerEvents);
+  window.arkOpenLobby();
+  check('arkOpenLobby() 打开面板', d.classList.contains('on'));
+  check('遮罩同步打开', m.classList.contains('on'));
+  check('游戏侧角标同步高亮（.on + aria-expanded）',
+    btn.classList.contains('on') && btn.getAttribute('aria-expanded') === 'true');
+  check('属性 aria-hidden 同步为 false', d.getAttribute('aria-hidden') === 'false');
 
-  openViaGame();
+  window.arkOpenLobby();
+  check('再按一次角标关闭', !d.classList.contains('on') && btn.getAttribute('aria-expanded') === 'false');
+
+  window.arkOpenLobby();
+  m.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('点遮罩关闭', !d.classList.contains('on'));
+
+  window.arkOpenLobby();
   doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check('Esc → 关闭', !drawer.classList.contains('on'));
+  check('Esc 关闭', !d.classList.contains('on'));
 
-  openViaGame();
-  doc.getElementById('lobbyCornerClose').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  check('点左上角 ✕ → 关闭', !drawer.classList.contains('on'));
+  window.arkOpenLobby();
+  $('lobbyCornerClose').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('左上角 ✕ 角标关闭', !d.classList.contains('on'));
 }
 
-console.log('\n[3] 账号校验（拒绝要写清原因，不得静默截断）');
+/* ---------------------------------------------------------------- [4] */
+console.log('\n[4] 榜单：同名合并 / 自己高亮 / [编辑] / 未上榜兜底');
 {
-  const good = window.eval("parseAccount('阿米娅1234')");
-  check('阿米娅1234 → 通过，名字=阿米娅', good.ok === true && good.name === '阿米娅' && good.code === '1234');
-  const en = window.eval("parseAccount('Amiya9876')");
-  check('Amiya9876 → 通过，名字=Amiya', en.ok === true && en.name === 'Amiya' && en.code === '9876');
-
-  const cases = [
-    ['阿米娅123', '口令 3 位'],
-    ['Amiya', '完全没有数字'],
-    ['阿米娅 1234', '含空格'],
-    ['1234', '只有数字没有名字'],
-    ['阿米娅123456789', '口令 9 位'],
-    ['阿米1娅1234', '数字夹在名字中间'],
-    ['', '空输入'],
+  const entries = [
+    { id: 'dev_me', name: '阿米娅1234', level: 9, kills: 12, runs: 3 },
+    { id: 'u2', name: '凯尔希', level: 8, kills: 20, runs: 5 },
+    { id: 'u3', name: '阿米娅', level: 6, kills: 40, runs: 2 },   // 与第一条同名（剥口令后）
+    { id: 'u4', name: '能天使', level: 7, kills: 9, runs: 1 },
+    { id: 'u5', name: '德克萨斯', level: 5, kills: 3, runs: 2 },
+    { id: 'u6', name: '闪灵', level: 4, kills: 30, runs: 1 },
+    { id: 'u7', name: '夜莺', level: 3, kills: 2, runs: 1 },
+    { id: 'u8', name: '星熊', level: 2, kills: 1, runs: 1 },
+    { id: 'u9', name: '塞雷娅', level: 1, kills: 0, runs: 1 },
   ];
-  cases.forEach(([input, why]) => {
-    const r = window.eval('parseAccount(' + JSON.stringify(input) + ')');
-    check('拒绝「' + (input || '空') + '」（' + why + '）', r.ok === false && !!r.reason, r.reason || '(无原因)');
-  });
+  NS().app.myId = 'dev_me';
+  NS().app.myName = '阿米娅';
+  NS().board.apply({ entries: entries, updated_at: 1761744000 });
+  NS().board.paint();
 
-  check('maxlength = 20（12 名字 + 8 口令）', doc.getElementById('pName').getAttribute('maxlength') === '20');
+  const lis = doc.querySelectorAll('#miniBoard > li');
+  /* 9 条原始 → 阿米娅合并 1 条 = 8 条榜单行；自己在榜所以不需要 setRow */
+  check('同名账户合并为一条（9 条 → 8 行）', lis.length === 8, String(lis.length));
+  const names = [...lis].map((li) => (li.querySelector('.nm') || {}).textContent);
+  check('合并后取最高层（阿米娅 = 第 9 层）',
+    names.includes('阿米娅') && lis[names.indexOf('阿米娅')].querySelector('.lv').textContent === '第 9 层');
+  check('公开位置不出现口令数字', !names.join(',').match(/阿米娅\d{4}/));
+
+  const me = doc.querySelector('#miniBoard > li.me');
+  check('自己那行有 .me 高亮', !!me);
+  const editBtn = me && me.querySelector('.meEdit');
+  check('名字右侧是 [编辑] 按钮（不再是 [我] 徽标）', !!editBtn && editBtn.textContent === '编辑',
+    editBtn ? editBtn.textContent : '');
+  check('不再有 .tag [我] 徽标', doc.querySelector('#miniBoard .tag') === null);
+  check('未上榜兜底行不该出现（自己在榜）', $('btnSetName') === null);
+
+  /* 未上榜场景 */
+  NS().app.myId = 'dev_nobody';
+  NS().app.myName = '还没上榜的人';
+  NS().board.paint();
+  check('未上榜时出现「设置名字」入口', !!$('btnSetName'),
+    $('btnSetName') ? $('btnSetName').textContent : '');
+  check('未上榜时没有 .me 行', doc.querySelector('#miniBoard > li.me') === null);
 }
 
-console.log('\n[4] 首次进入自动生成账号，且公开位置不含数字');
+/* ---------------------------------------------------------------- [5] */
+console.log('\n[5] 编辑抽屉：内联展开在自己那行下方 + 改名不新注册');
 {
-  const acct = window.localStorage.getItem('ark_account') || '';
-  check('已生成本机账号', /^[\u4e00-\u9fa5]{2}\d{4}$/.test(acct), acct);
-  check('显示名不含数字', !/\d/.test(window.eval('APP.myName')), window.eval('APP.myName'));
-  check('账号卡只显示显示名', !/\d/.test(doc.getElementById('pNameLine').textContent || ''),
-    doc.getElementById('pNameLine').textContent);
+  /* 回到「我在榜上」的场景 */
+  NS().app.myId = 'dev_me';
+  NS().app.myName = '阿米娅';
+  NS().app.myAccount = '阿米娅1234';
+  NS().board.apply({ entries: [{ id: 'dev_me', name: '阿米娅1234', level: 9, kills: 12, runs: 3 }] });
+  NS().board.paint();
 
-  // 改成自定义账号
-  window.eval("saveAccount('阿米娅9012'); renderPlayer();");
-  check('改成阿米娅9012 后显示名 = 阿米娅', doc.getElementById('pNameLine').textContent === '阿米娅',
-    doc.getElementById('pNameLine').textContent);
-  // 只查「玩家能看见的文本」：整个 body.textContent 会把 <script> 源码也算进去（示例字符串里有 1234）
-  const visibleText = ['pNameLine', 'pStats', 'miniBoard']
-    .map((id) => { const el = doc.getElementById(id); return el ? el.textContent : ''; })
-    .concat([(doc.querySelector('.acct-note') || {}).textContent || ''])
-    .join(' ');
-  check('账号卡与榜单的可见文本里搜不到口令 9012',
-    visibleText.indexOf('9012') < 0,
-    visibleText.indexOf('9012') >= 0 ? '出现在：' + visibleText.slice(0, 60) : '');
+  const me = doc.querySelector('#miniBoard > li.me');
+  check('重新渲染后自己在榜', !!me);
 
-  // 编辑时输入框回填完整串（含数字）
-  window.eval('toggleEdit(true)');
-  check('编辑时输入框回填完整账号（含口令）', doc.getElementById('pName').value === '阿米娅9012',
-    doc.getElementById('pName').value);
-  window.eval('toggleEdit(false)');
+  me.querySelector('.meEdit').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  const row = doc.querySelector('#miniBoard > li.editRow');
+  check('点 [编辑] 后出现内联编辑行', !!row);
+  check('编辑行紧跟在「自己那一行」后面', !!row && row.previousElementSibling === me);
+  check('编辑行里有名字输入框', !!$('pName'));
+  check('编辑行里的输入框预填当前账号',
+    $('pName') && $('pName').value === '阿米娅1234', $('pName') ? $('pName').value : '');
+  check('编辑行里有保存按钮', !!$('pSave'));
+
+  const note = row.querySelector('.ednote');
+  const noteText = note ? note.textContent.replace(/\s+/g, '') : '';
+  const expected = '名字只能用汉字或英文，后面的数字是口令：只在你编辑时显示，永远不会出现在排行榜上。记住整串（如「阿米娅1234」），换设备输入同一串就能找回同一账号';
+  check('说明文字与需求原文一致', noteText === expected.replace(/\s+/g, ''),
+    noteText === expected.replace(/\s+/g, '') ? '' : noteText.slice(0, 40) + '…');
+
+  /* 非法输入 → 就地报错，不改账号 */
+  $('pName').value = '1234';
+  $('pSave').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('非法输入就地报错', $('pErr') && !$('pErr').hidden && !!$('pErr').textContent,
+    $('pErr') ? $('pErr').textContent : '');
+  check('非法输入不改本机账号', NS().app.myAccount === '阿米娅1234', NS().app.myAccount);
+
+  /* 合法输入 → 改名走 renameAccount（不是新建账号） */
+  let renameArgs = null;
+  const origRename = NS().account.renameAccount;
+  NS().account.renameAccount = function (name, code) { renameArgs = [name, code]; };
+  $('pName').value = '罗德岛博士5678';
+  $('pSave').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  check('合法输入后调用 renameAccount', !!renameArgs && renameArgs[0] === '罗德岛博士' && renameArgs[1] === '5678',
+    renameArgs ? renameArgs.join(' / ') : 'null');
+  check('本机账号已更新', NS().app.myAccount === '罗德岛博士5678', NS().app.myAccount);
+  check('改名后不标记为新账号（不新注册）', NS().app.isNewAccount === false);
+  check('保存后编辑行收起', doc.querySelector('#miniBoard > li.editRow') === null);
+  NS().account.renameAccount = origRename;
 }
 
-console.log('\n[5] 排行榜只显示显示名（老数据里带口令也要剥掉）');
+/* ---------------------------------------------------------------- [6] */
+console.log('\n[6] 竖屏密度：390x844 下面板够放 8 名');
 {
-  window.eval(`APP.data = { updated_at: 1, entries: [
-    { id: 1, name: '阿米娅1234', level: 9, kills: 30, runs: 2 },
-    { id: 2, name: '雨', level: 7, kills: 20, runs: 1 },
-    { id: 3, name: '阿米娅5678', level: 5, kills: 10, runs: 1 }
-  ]}; renderMiniBoard();`);
-  const names = Array.from(doc.querySelectorAll('#miniBoard .nm')).map((el) => el.textContent);
-  check('榜上没有 4–8 位数字尾巴', !names.some((n) => /\d{4,8}/.test(n)), names.join(' | '));
-  // ISSUE-20261029-44 第4项：同名账户改为合并成一条（不再用 ·2 序号区分）
-  check('同名账户合并为一条（不再 ·2）',
-        names.filter((n) => n.indexOf('阿米娅') === 0).length === 1 && !names.some((n) => n.indexOf('·2') >= 0),
-        names.join(' | '));
-  check('无数字的老名字原样显示', names.indexOf('雨') >= 0, names.join(' | '));
+  const board = $('board');
+  /* jsdom 不做真实布局，量出来的 rect 全是 0 —— 这里按 iPhone 12 竖屏打桩：
+     棋盘正方形 390x390，顶栏之下从 y=40 开始 */
+  board.getBoundingClientRect = () => ({ left: 0, top: 40, width: 390, height: 390, right: 390, bottom: 430 });
+  NS().panel.place();
+  const d = $('lobbyDrawer');
+  const h = parseInt(d.style.height, 10);
+  check('面板高度至少容得下 8 行（8 × 42 + 96 = 432）', h >= 432, d.style.height);
+  check('面板高度不超出视口（844 - 40 - 6 = 798）', h <= 798, d.style.height);
+  check('面板贴到棋盘左上角', d.style.left === '0px' && d.style.top === '40px',
+    d.style.left + ',' + d.style.top);
+  check('面板宽度 = 棋盘宽度', d.style.width === '390px', d.style.width);
+
+  /* 单行高度：CSS 里 min-height:38 + margin-bottom:4 → 8 行 = 336，加头部/底部 96 = 432 */
+  const cssLi = html.match(/#arkUi #miniBoard > li \{[^}]*\}/);
+  check('榜单行 min-height 压到 38px', !!cssLi && /min-height:38px/.test(cssLi[0]),
+    cssLi ? cssLi[0].replace(/\s+/g, ' ').slice(0, 70) : '');
 }
 
-console.log('\n[6] 完整排行榜仍复用原浮层');
+/* ---------------------------------------------------------------- [7] */
+console.log('\n[7] 滚动条：细窄半透明，非系统白色');
 {
-  const p = doc.getElementById('rankPanel');
-  const f = doc.getElementById('rankFrame');
-  check('#rankPanel 与 #rankFrame 都在', !!p && !!f);
-  window.eval('openRank()');
-  check('openRank 打开浮层', p.classList.contains('open'));
-  check('iframe 带时间戳强制刷新', /leaderboard\.html\?t=\d+/.test(f.getAttribute('src') || ''), f.getAttribute('src'));
-  window.eval('closeRank()');
-  check('closeRank 关闭浮层', !p.classList.contains('open'));
+  check('声明 scrollbar-width:thin（Firefox / 新 Chromium）', /scrollbar-width:\s*thin/.test(html));
+  check('声明 scrollbar-color 半透明', /scrollbar-color:\s*rgba\(255,255,255,\.22\)\s*transparent/.test(html));
+  check('接管 ::-webkit-scrollbar（覆盖系统白色默认样式）', /::-webkit-scrollbar\s*\{[^}]*width:\s*6px/.test(html));
+  check('thumb 是半透明圆角', /::-webkit-scrollbar-thumb\s*\{[^}]*rgba\(255,255,255,\.22\)[^}]*border-radius/.test(html));
+  check('轨道透明（不画白底）', /::-webkit-scrollbar-track\s*\{\s*background:\s*transparent/.test(html));
 }
 
-console.log('\n[7] 关闭角标与游戏内 👤 角标像素级对齐（ISSUE-20261029-44 补丁①）');
-{
-  /* 为什么测：外壳的 ✕ 必须「原地变成」游戏里那颗 👤 —— 同尺寸、同左上角位置。
-     尺寸随 --cell（16~80px）变，写死 36px 必然对不上，所以要抄 iframe 内 #lobbyOpenBtn 的 rect。
-     jsdom 不做布局（rect 全 0），这里直接打桩验证换算与写入，真浏览器对齐靠肉眼 + 线上回归。 */
-  const corner = doc.getElementById('lobbyCornerClose');
-  const fr = doc.getElementById('game');
-  const dr = doc.getElementById('lobbyDrawer');
-  check('syncCornerToGame 已导出', typeof window.syncCornerToGame === 'function');
-
-  const fdoc = fr.contentDocument || (fr.contentWindow && fr.contentWindow.document);
-  /* jsdom 不加载 iframe 资源（contentDocument 常为 null），且不做布局 —— 这里打桩：
-     一个只有 getElementById('lobbyOpenBtn') 的最小文档 + 带 rect 的假角标。
-     syncCornerToGame 只依赖这一处读 DOM，桩掉它就能精确验证换算与写入。 */
-  let fakeRect = { left: 120, top: 40, width: 64, height: 64, right: 184, bottom: 104 };
-  const fakeBtn = { id: 'lobbyOpenBtn', getBoundingClientRect: () => fakeRect };
-  Object.defineProperty(fr, 'contentDocument', {
-    configurable: true,
-    get: () => ({ getElementById: (id) => (id === 'lobbyOpenBtn' ? fakeBtn : null) }),
-  });
-  void fdoc;
-  // 游戏内：👤 在 iframe 内 (120,40)，边长 64（--cell=64 时的典型值）
-  fr.getBoundingClientRect = () => ({ left: 0, top: 0, width: 800, height: 800, right: 800, bottom: 800 });
-  // 抽屉被贴在棋盘的 (100,30) 上（placeLobbyOverBoard 的产物）
-  dr.getBoundingClientRect = () => ({ left: 100, top: 30, width: 420, height: 420, right: 520, bottom: 450 });
-
-  window.lobbyOpen = true;
-  window.syncCornerToGame();
-  check('宽度 = 👤 角标宽度（不再是写死的 36px）', corner.style.width === '64px', corner.style.width);
-  check('左对齐 👤（120-100=20）', corner.style.left === '20px', corner.style.left);
-  check('上对齐 👤（40-30=10）', corner.style.top === '10px', corner.style.top);
-  check('✕ 字号随格子缩放（width × 0.5）', corner.style.fontSize === '32.00px', corner.style.fontSize);
-
-  // 角标被游戏隐藏（rect 为 0，如直开 game.html）时不得写出 0 尺寸 / NaN
-  fakeRect = { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 };
-  window.syncCornerToGame();
-  check('量不到时不改写（保留上一次的 64px）', corner.style.width === '64px', corner.style.width);
-  check('量不到时 left 保持上一次的 20px（不写 NaN / 0）',
-    corner.style.left === '20px' && !/NaN/.test(corner.style.left), corner.style.left);
-
-  // 样式层面：白圈 + 绿光晕必须与游戏 `.on` 角标一字不差，否则一眼看出不是同一颗
-  const css = Array.from(doc.querySelectorAll('style')).map((s) => s.textContent).join('\n');
-  check('角标带白圈（与游戏 .on 态同款 inset）', /0 0 0 2px #fff inset/.test(css));
-  check('角标带绿色光晕 + 同款过渡', /0 2px 8px rgba\(46,204,113,\.5\)/.test(css) && /transition:filter \.15s/.test(css));
-  window.lobbyOpen = false;
-}
-
+/* ---------------------------------------------------------------- [8] */
 console.log('\n[8] 全程无报错');
-check('无 console.error / jsdomError', errors.length === 0, errors.slice(0, 3).join(' | '));
+check('无 jsdomError / console.error（canvas 噪声已过滤）', errors.length === 0, errors.slice(0, 3).join(' | '));
 
-console.log(`\n通过 ${ok.length} 项，失败 ${bad.length} 项`);
-// 外壳里有 setInterval(syncBattleMode) 轮询，不显式退出会让 node 挂着不结束
-try { dom.window.close(); } catch (e) {}
-if (bad.length) { console.log('失败项：\n  ' + bad.join('\n  ')); process.exit(1); }
+console.log(`\n全部通过（${ok.length} 项）`);
+if (bad.length) {
+  console.log(`失败 ${bad.length} 项：` + bad.join('、'));
+  process.exit(1);
+}
+/* 不用 dom.window.close()：产物里有 300ms 轮询与延迟回调，关窗后仍可能触发一次
+   render()，会在 document 已销毁时抛 TypeError 把退出码弄脏。直接硬退出。 */
 process.exit(0);

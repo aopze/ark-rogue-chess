@@ -63,117 +63,24 @@ logResetBtn.addEventListener('click', function (e) {
   drawerClose();
   initCharSelect();
 });
-/* 「♟ 账号与排行」（ISSUE-20261029-21 S2）：游戏内只做按钮 + 点击链路。
- * 联网与榜单本体留在外壳 index.html —— NB-04 规定单文件产物不得引入运行时外部依赖，
- * 把 bot API 搬进 game.html 会让离线 / 微信 / TG 环境直接白屏。
- * 点击 → postMessage 交外壳开 #lobbyDrawer；外壳开合后再回发状态，这里同步 .on / aria-expanded。
- * 直开 game.html（window.parent === window）时按钮隐藏，不留一个点了没反应的死按钮。 */
+/* 「👤 账号与排行」角标（ISSUE-20261029-21 S2 / ISSUE-20261029-45 重构）
+ * 外壳（账号 + 榜单 + 面板）已内联进本文件，不再有 iframe 边界，所以原来那套
+ * 「上报棋盘矩形 → postMessage 开面板 → 等外壳回发状态」全部删除：
+ *   · 面板位置：ArkShell.panel.place() 直接读 #board 的 rect
+ *   · 开合状态：ArkShell.panel.setOpen() 直接改这里的 .on / aria-expanded
+ *   · 按钮不再「非嵌入就隐藏」—— 单文件里它永远有功能。 */
 (function bindLobbyOpenBtn() {
   const btn = document.getElementById('lobbyOpenBtn');
   if (!btn) return;
-  let embedded = false;
-  try { embedded = !!(window.parent && window.parent !== window); } catch (e) { embedded = false; }
-  if (!embedded) { btn.hidden = true; return; }
-
-  /* ★ ISSUE-20261029-29：账号面板与设置面板一样改成「覆盖棋盘格」。
-   * 面板本体在外壳（index.html）里，而棋盘的位置只有游戏内部量得到，
-   * 所以这里在请求打开的同时把棋盘的矩形（iframe 内坐标系）一并上报，
-   * 外壳再加上 iframe 自身的偏移即可把面板贴到棋盘上。
-   * 转屏 / 换布局时窗口尺寸不一定变，所以抽屉开着还要在 resize 里补报一次。 */
-  let lobbyDrawerOpen = false;
-  function postBoardRect() {
-    try {
-      const r = boardEl.getBoundingClientRect();
-      if (!(r.width > 0) || !(r.height > 0)) return;
-      window.parent.postMessage({
-        type: 'ark_board_rect',
-        rect: { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) },
-      }, '*');
-    } catch (e) {}
-  }
-
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    postBoardRect();
-    try { window.parent.postMessage({ type: 'ark_open_lobby' }, '*'); } catch (e2) {}
-  });
-  window.addEventListener('resize', function () { if (lobbyDrawerOpen) setTimeout(postBoardRect, 160); });
-  window.addEventListener('message', function (e) {
-    const d = e && e.data;
-    if (!d || d.type !== 'ark_lobby_state') return;
-    const on = !!d.open;
-    lobbyDrawerOpen = on;
-    btn.classList.toggle('on', on);
-    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (typeof window.arkOpenLobby === 'function') window.arkOpenLobby();
   });
 })();
 
 /* @slot:beforeDlcChrome */
-/* P0.1-4 拆分 · DLC 外壳接管：patchDLCChrome（隐藏外壳 #btnHome / 劫持 showHint / #ghint 同步）
- * 嵌入 DLC 外壳（同源 iframe）时，由游戏侧统一接管两处外壳 UI：
- *  - 隐藏外壳自带的悬浮「🏠 主页」按钮（主页已取消，ISSUE-20261028-10）
- *  - 顶部绿色提示条 #hint：点击即消失 + 显示时长缩短到 ~2.2s
- * 单文件独立运行（无父窗口 / 跨域）时自动跳过，不影响单机。 */
-(function patchDLCChrome() {
-  var P;
-  try { P = window.parent; } catch (e) { return; }
-  if (!P || P === window) return;
-  var pd;
-  try { pd = P.document; } catch (e) { return; }
-  if (!pd) return;
-
-  function hideHint() {
-    var h = null;
-    try { h = pd.getElementById('hint'); } catch (e) {}
-    if (h) h.className = 'hide';
-  }
-  function shortenHint() {
-    var h = null;
-    try { h = pd.getElementById('hint'); } catch (e) {}
-    if (!h) return;
-    h.style.cursor = 'pointer';
-    if (!h.__arkHintBound) {
-      h.__arkHintBound = 1;
-      h.addEventListener('click', hideHint);
-    }
-    if (h.className.indexOf('hide') < 0) {           // 当前可见 → 缩短为 2.2s 后消失
-      try { P.clearTimeout(P.__arkHintT); } catch (e) {}
-      P.__arkHintT = P.setTimeout(hideHint, 2200);
-    }
-  }
-
-  // 1) 隐藏外壳悬浮主页
-  try { var hb = pd.getElementById('btnHome'); if (hb) hb.style.display = 'none'; } catch (e) {}
-
-  // 1.5) 外壳顶部居中的空胶囊（#ghint）：没文字时隐藏，有文字时挪到右上角，避免压住左上角「设置」
-  try {
-    var gh = pd.getElementById('ghint');
-    if (gh) {
-      gh.style.left = 'auto';
-      gh.style.right = '8px';
-      gh.style.transform = 'none';
-      var syncGhint = function () {
-        var has = (gh.textContent || '').trim().length > 0;
-        gh.style.display = has ? '' : 'none';
-      };
-      syncGhint();
-      try {
-        new P.MutationObserver(syncGhint).observe(gh, { childList: true, characterData: true, subtree: true });
-      } catch (e) {}
-    }
-  } catch (e) {}
-
-  // 2) 劫持外壳 showHint，使之后弹出的绿色提示同样变短 + 可点击
-  try {
-    if (typeof P.showHint === 'function') {
-      var origShowHint = P.showHint;
-      P.showHint = function (text, ok) {
-        origShowHint(text, ok);
-        shortenHint();
-      };
-    }
-  } catch (e) {}
-
-  // 3) 若提示条此刻已显示，也立刻缩短
-  shortenHint();
-})();
+/* ISSUE-20261029-45：原 patchDLCChrome 已整块删除。
+ * 它存在的唯一理由是「游戏在 iframe 里、外壳在父文档」，需要跨文档做三件事：
+ * 隐藏外壳悬浮主页 #btnHome、把 #ghint 挪到右上角、劫持外壳 showHint 缩短提示时长。
+ * 合并成单文件后父文档就是本文档，这三件事全部失去意义；
+ * #hint 的「点击消失 + 缩短时长」改由 ArkShell.panel.showHint 自行实现。 */

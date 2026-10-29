@@ -660,6 +660,138 @@
   .cis-hint { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #7e7e97; white-space: nowrap; }
   .cis-desc { font-size: 12.5px; color: #c3c3da; margin-bottom: 7px; }
   .cis-tips { gap: 5px; }
+  /* ===================================================================
+     ISSUE-20261029-45：账号与排行榜（原 index.html 外壳，已内联进单文件）
+     -------------------------------------------------------------------
+     为什么内联：外壳与游戏之间原有 3 条 postMessage、1 处直接读 iframe DOM、
+     1 处注入脚本轮询顶层变量 phase/level/enemies、1 处反向劫持父文档 UI。
+     隔离早已名存实亡，合并后全部消失；角标位置也能直接用 --corner-x/--cell，
+     不再需要「量 iframe 里 #lobbyOpenBtn 的 rect 再换算坐标系」那套补丁。
+
+     ★ 全部选择器以 #arkUi 作用域：避开与游戏重名的 .empty/.ghost/.tag/.lv/.nm。
+     ★ z-index 并入游戏 --z-* 变量族（1200 起），不再自建 80/90/9999/10000。
+     ★ 滚动条：显式接管 webkit 伪元素，消除系统默认白色滚动条。
+     =================================================================== */
+  #arkUi { --z-lobbyMask: 1200; --z-lobby: 1201; --z-fullrank: 1500; }
+
+  #arkUi #lobbyMask { position:fixed; inset:0; z-index:var(--z-lobbyMask);
+    background:rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .2s ease-out; }
+  #arkUi #lobbyMask.on { opacity:1; pointer-events:auto; }
+
+  #arkUi #lobbyDrawer { position:fixed; left:0; top:0; bottom:0; z-index:var(--z-lobby);
+    width:min(360px, 86vw); display:flex; flex-direction:column; outline:none;
+    background:#14142b; border:1px solid rgba(255,255,255,.12);
+    box-shadow:12px 0 32px rgba(0,0,0,.5);
+    opacity:0; visibility:hidden; transform:scale(.985);
+    transition:opacity .18s ease-out, transform .18s ease-out, visibility .18s; }
+  #arkUi #lobbyDrawer.on { opacity:1; visibility:visible; transform:none; }
+
+  /* 关闭角标 = 棋盘 👤 角标的「打开态」：同文档后位置/尺寸直接吃棋盘变量，像素级一致 */
+  #arkUi .dcorner { position:absolute; left:var(--corner-x); top:var(--corner-y);
+    width:var(--cell); height:var(--cell); padding:0; display:flex; align-items:center; justify-content:center;
+    border-radius:3px; border:1px solid rgba(255,255,255,.28);
+    background:linear-gradient(135deg,#4ecdc4,#2ecc71); color:#fff;
+    font-size:calc(var(--cell) * .5); line-height:1; cursor:pointer; font-family:inherit; touch-action:manipulation;
+    box-shadow:0 0 0 2px #fff inset, 0 2px 8px rgba(46,204,113,.5);
+    transition:filter .15s, box-shadow .15s, transform .12s; z-index:2; }
+  #arkUi .dcorner:hover { filter:brightness(1.08); }
+  #arkUi .dcorner:active { transform:scale(.92); }
+
+  #arkUi .dhead { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 12px 8px calc(var(--corner-x) + var(--cell) + 8px);
+    border-bottom:1px solid rgba(255,255,255,.08); }
+  #arkUi .dtitle { font-size:13px; font-weight:800; letter-spacing:.5px; color:#ffd166; }
+  #arkUi .dhead .meta { font-size:10.5px; color:#7d83a8; font-weight:400; white-space:nowrap; }
+
+  /* 榜单主体：唯一滚动容器（面板内只显示排行榜，不再有左栏账号卡） */
+  #arkUi .dbody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;
+    padding:6px 8px; -webkit-overflow-scrolling:touch;
+    overflow-anchor:none;
+    scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.22) transparent; }
+  #arkUi .dbody::-webkit-scrollbar { width:6px; height:6px; }
+  #arkUi .dbody::-webkit-scrollbar-track { background:transparent; }
+  #arkUi .dbody::-webkit-scrollbar-thumb { background:rgba(255,255,255,.22); border-radius:3px; }
+  #arkUi .dbody::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.34); }
+  #arkUi .dbody::-webkit-scrollbar-corner { background:transparent; }
+
+  /* 每项压缩：原 ≈62px/项（padding 8+8 + nm 13.5 + sc 11 + margin 6）→ 现 ≈38px，
+     竖屏 390x844 下至少 8 名完整可见（AC-7）。 */
+  #arkUi #miniBoard { list-style:none; margin:0; padding:0; }
+  #arkUi #miniBoard > li { display:flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07);
+    border-radius:8px; padding:5px 7px; margin-bottom:4px; min-height:38px; }
+  #arkUi #miniBoard > li.me { border-color:#3ddc84;
+    box-shadow:0 0 0 1px rgba(61,220,132,.28) inset; background:rgba(61,220,132,.07); }
+  #arkUi .rk { width:19px; height:19px; flex:0 0 19px; border-radius:50%; display:flex;
+    align-items:center; justify-content:center; font-size:10.5px; font-weight:700;
+    background:rgba(255,255,255,.08); color:#9aa0c0; font-variant-numeric:tabular-nums; }
+  #arkUi #miniBoard > li:nth-child(1) .rk { background:#ffd166; color:#3a2a00; }
+  #arkUi #miniBoard > li:nth-child(2) .rk { background:#cfd6e6; color:#2c3244; }
+  #arkUi #miniBoard > li:nth-child(3) .rk { background:#d9a066; color:#3a2400; }
+  #arkUi .who { flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:5px; }
+  #arkUi .nm { font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; min-width:0; flex:0 1 auto; }
+  #arkUi li.me .nm { color:#3ddc84; }
+  #arkUi .sc { font-size:10px; color:#7d83a8; white-space:nowrap; flex:0 0 auto; }
+  #arkUi .lv { font-size:11.5px; font-weight:700; color:#ffd166; white-space:nowrap;
+    flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  @media (max-width:420px) { #arkUi .sc { display:none; } }
+
+  /* 自己那行的 [编辑]：取代原 [我] 徽标（ISSUE-20261029-45） */
+  #arkUi .meEdit { flex:0 0 auto; padding:3px 8px; font-size:10.5px; font-weight:700;
+    border-radius:6px; background:rgba(61,220,132,.16); color:#7ef0ab;
+    border:1px solid rgba(61,220,132,.45); cursor:pointer; font-family:inherit;
+    touch-action:manipulation; }
+  #arkUi .meEdit:active { transform:scale(.94); }
+
+  /* 编辑抽屉：展开在「自己那一行」下方（不是弹窗、不换屏） */
+  #arkUi #miniBoard > li.editRow { display:block; padding:7px 8px 9px; margin:-1px 0 4px;
+    border-radius:0 0 8px 8px; background:rgba(61,220,132,.05);
+    border-color:rgba(61,220,132,.28); border-top:0; }
+  #arkUi .edline { display:flex; gap:6px; align-items:center; }
+  #arkUi .pname { flex:1 1 auto; min-width:0; background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,255,255,.16); color:#fff; border-radius:8px;
+    padding:7px 9px; font-size:12.5px; font-weight:600; outline:none; font-family:inherit; }
+  #arkUi .pname:focus { border-color:#3ddc84; }
+  #arkUi .psave { flex:0 0 auto; background:#3ddc84; color:#06301c; border:0; border-radius:8px;
+    padding:7px 11px; font-size:12px; font-weight:800; cursor:pointer; font-family:inherit; }
+  #arkUi .psave:active { transform:scale(.96); }
+  #arkUi .perr { margin-top:5px; font-size:11px; color:#ff8a8a; line-height:1.5; }
+  #arkUi .ednote { margin-top:6px; font-size:10.5px; color:#7d83a8; line-height:1.55; }
+  #arkUi .ednote b { color:#ffd166; font-weight:700; }
+
+  /* 未上榜时的编辑入口（榜单底部一行，点开同一套编辑抽屉） */
+  #arkUi #miniBoard > li.setRow { display:block; padding:0; border-style:dashed;
+    border-color:rgba(255,255,255,.18); }
+  #arkUi #btnSetName { display:block; width:100%; padding:9px; background:none; border:0;
+    color:#9aa0c0; font-size:12px; font-family:inherit; cursor:pointer; touch-action:manipulation; }
+
+  #arkUi .dfoot { flex:0 0 auto; padding:7px 8px 9px; border-top:1px solid rgba(255,255,255,.08); }
+  #arkUi .ghost { display:block; width:100%; background:rgba(255,255,255,.06); color:#cfd2ff;
+    border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:8px;
+    font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+  #arkUi .ghost:active { transform:scale(.98); }
+  #arkUi .empty { text-align:center; color:#9aa0c0; padding:24px 10px; font-size:12px; line-height:1.7; }
+
+  /* 顶部提示条 / toast / 完整排行榜浮层 */
+  #arkUi #hint { position:fixed; left:0; right:0; top:0; z-index:calc(var(--z-fullrank) + 1);
+    padding:8px 12px; font-size:12.5px; line-height:1.5; font-family:inherit;
+    background:#8a5a00; color:#fff; text-align:center; }
+  #arkUi #hint.ok { background:#1f6f3f; }
+  #arkUi #hint.hide { display:none; }
+  #arkUi #toast { position:fixed; left:50%; bottom:14%; transform:translateX(-50%);
+    z-index:calc(var(--z-fullrank) + 1); max-width:86%; padding:11px 15px; border-radius:10px;
+    font-size:13px; line-height:1.6; background:rgba(0,0,0,.86); color:#fff;
+    text-align:center; display:none; white-space:pre-line; }
+  #arkUi #rankPanel { position:fixed; inset:0; z-index:var(--z-fullrank); display:none;
+    background:rgba(8,9,20,.94); }
+  #arkUi #rankPanel.open { display:block; }
+  #arkUi #rankPanel iframe { position:absolute; left:0; top:0; width:100%; height:100%; border:0; }
+  #arkUi #rankClose { position:absolute; right:12px; top:12px; z-index:calc(var(--z-fullrank) + 1);
+    width:34px; height:34px; padding:0; display:flex; align-items:center; justify-content:center;
+    border-radius:9px; border:1px solid #3a3a55; background:rgba(24,24,42,.96); color:#cfe6ff;
+    font-size:16px; line-height:1; font-family:inherit; cursor:pointer; }
+  #arkUi #rankClose:active { transform:scale(.94); }
 </style>
 </head>
 <body>
@@ -747,6 +879,40 @@
   </div>
 </section>
 
+<!-- ===================================================================
+     ISSUE-20261029-45：账号与排行榜（原 index.html 外壳，已内联进单文件）
+     -------------------------------------------------------------------
+     面板内「只显示排行榜」：原左 1/3 账号卡（.acct / .avatar / .pnameLine / .pstats）
+     已整块删除。账号信息改为「自己那一行 + 该行下方的内联编辑抽屉」（由 JS 按需插入），
+     玩家未上榜时由底部 setRow 提供同一套编辑入口。
+     =================================================================== -->
+<div id="arkUi">
+  <div id="lobbyMask"></div>
+
+  <aside id="lobbyDrawer" tabindex="-1" aria-hidden="true" aria-label="排行榜">
+    <button id="lobbyCornerClose" class="dcorner" title="关闭">✕</button>
+    <header class="dhead">
+      <span class="dtitle">🏆 排行榜</span>
+      <span class="meta" id="boardMeta"></span>
+    </header>
+    <div class="dbody" id="rankScroll">
+      <ol id="miniBoard"></ol>
+      <div class="empty" id="boardEmpty" hidden>还没有人上榜<br>去玩一把，把名字留在上面 ✦</div>
+    </div>
+    <div class="dfoot">
+      <button id="btnFullRank" class="ghost">📊 查看完整排行榜</button>
+    </div>
+  </aside>
+
+  <div id="hint" class="hide"></div>
+  <div id="toast"></div>
+
+  <div id="rankPanel">
+    <button id="rankClose" title="关闭">✕</button>
+    <iframe id="rankFrame" src="leaderboard.html"></iframe>
+  </div>
+</div>
+
 <script>
 /* ---- P0.1-1 冻结基线：版本号 ----
  * 用途：排障与回滚定位 + 让玩家确认「是不是最新版」。
@@ -761,9 +927,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10292300',
-  commit:  '3ea8c30f7f62bb54625efe0016e9a56bcc76a86b',
-  builtAt: '2026-10-29T15:03:20Z'
+  build:   '10292338',
+  commit:  '4618d80085b98d6b9c729e528c69cb15c85d438c',
+  builtAt: '2026-10-29T15:38:28Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -8171,48 +8337,18 @@ logResetBtn.addEventListener('click', function (e) {
   drawerClose();
   initCharSelect();
 });
-/* 「♟ 账号与排行」（ISSUE-20261029-21 S2）：游戏内只做按钮 + 点击链路。
- * 联网与榜单本体留在外壳 index.html —— NB-04 规定单文件产物不得引入运行时外部依赖，
- * 把 bot API 搬进 game.html 会让离线 / 微信 / TG 环境直接白屏。
- * 点击 → postMessage 交外壳开 #lobbyDrawer；外壳开合后再回发状态，这里同步 .on / aria-expanded。
- * 直开 game.html（window.parent === window）时按钮隐藏，不留一个点了没反应的死按钮。 */
+/* 「👤 账号与排行」角标（ISSUE-20261029-21 S2 / ISSUE-20261029-45 重构）
+ * 外壳（账号 + 榜单 + 面板）已内联进本文件，不再有 iframe 边界，所以原来那套
+ * 「上报棋盘矩形 → postMessage 开面板 → 等外壳回发状态」全部删除：
+ *   · 面板位置：ArkShell.panel.place() 直接读 #board 的 rect
+ *   · 开合状态：ArkShell.panel.setOpen() 直接改这里的 .on / aria-expanded
+ *   · 按钮不再「非嵌入就隐藏」—— 单文件里它永远有功能。 */
 (function bindLobbyOpenBtn() {
   const btn = document.getElementById('lobbyOpenBtn');
   if (!btn) return;
-  let embedded = false;
-  try { embedded = !!(window.parent && window.parent !== window); } catch (e) { embedded = false; }
-  if (!embedded) { btn.hidden = true; return; }
-
-  /* ★ ISSUE-20261029-29：账号面板与设置面板一样改成「覆盖棋盘格」。
-   * 面板本体在外壳（index.html）里，而棋盘的位置只有游戏内部量得到，
-   * 所以这里在请求打开的同时把棋盘的矩形（iframe 内坐标系）一并上报，
-   * 外壳再加上 iframe 自身的偏移即可把面板贴到棋盘上。
-   * 转屏 / 换布局时窗口尺寸不一定变，所以抽屉开着还要在 resize 里补报一次。 */
-  let lobbyDrawerOpen = false;
-  function postBoardRect() {
-    try {
-      const r = boardEl.getBoundingClientRect();
-      if (!(r.width > 0) || !(r.height > 0)) return;
-      window.parent.postMessage({
-        type: 'ark_board_rect',
-        rect: { top: Math.round(r.top), left: Math.round(r.left), width: Math.round(r.width), height: Math.round(r.height) },
-      }, '*');
-    } catch (e) {}
-  }
-
   btn.addEventListener('click', function (e) {
     e.stopPropagation();
-    postBoardRect();
-    try { window.parent.postMessage({ type: 'ark_open_lobby' }, '*'); } catch (e2) {}
-  });
-  window.addEventListener('resize', function () { if (lobbyDrawerOpen) setTimeout(postBoardRect, 160); });
-  window.addEventListener('message', function (e) {
-    const d = e && e.data;
-    if (!d || d.type !== 'ark_lobby_state') return;
-    const on = !!d.open;
-    lobbyDrawerOpen = on;
-    btn.classList.toggle('on', on);
-    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (typeof window.arkOpenLobby === 'function') window.arkOpenLobby();
   });
 })();
 
@@ -8775,77 +8911,976 @@ function pvpClosePanel() {
 }
 
 /* src: src/ui/chrome.js 第 2 段/beforeDlcChrome */
-/* P0.1-4 拆分 · DLC 外壳接管：patchDLCChrome（隐藏外壳 #btnHome / 劫持 showHint / #ghint 同步）
- * 嵌入 DLC 外壳（同源 iframe）时，由游戏侧统一接管两处外壳 UI：
- *  - 隐藏外壳自带的悬浮「🏠 主页」按钮（主页已取消，ISSUE-20261028-10）
- *  - 顶部绿色提示条 #hint：点击即消失 + 显示时长缩短到 ~2.2s
- * 单文件独立运行（无父窗口 / 跨域）时自动跳过，不影响单机。 */
-(function patchDLCChrome() {
-  var P;
-  try { P = window.parent; } catch (e) { return; }
-  if (!P || P === window) return;
-  var pd;
-  try { pd = P.document; } catch (e) { return; }
-  if (!pd) return;
-
-  function hideHint() {
-    var h = null;
-    try { h = pd.getElementById('hint'); } catch (e) {}
-    if (h) h.className = 'hide';
-  }
-  function shortenHint() {
-    var h = null;
-    try { h = pd.getElementById('hint'); } catch (e) {}
-    if (!h) return;
-    h.style.cursor = 'pointer';
-    if (!h.__arkHintBound) {
-      h.__arkHintBound = 1;
-      h.addEventListener('click', hideHint);
-    }
-    if (h.className.indexOf('hide') < 0) {           // 当前可见 → 缩短为 2.2s 后消失
-      try { P.clearTimeout(P.__arkHintT); } catch (e) {}
-      P.__arkHintT = P.setTimeout(hideHint, 2200);
-    }
-  }
-
-  // 1) 隐藏外壳悬浮主页
-  try { var hb = pd.getElementById('btnHome'); if (hb) hb.style.display = 'none'; } catch (e) {}
-
-  // 1.5) 外壳顶部居中的空胶囊（#ghint）：没文字时隐藏，有文字时挪到右上角，避免压住左上角「设置」
-  try {
-    var gh = pd.getElementById('ghint');
-    if (gh) {
-      gh.style.left = 'auto';
-      gh.style.right = '8px';
-      gh.style.transform = 'none';
-      var syncGhint = function () {
-        var has = (gh.textContent || '').trim().length > 0;
-        gh.style.display = has ? '' : 'none';
-      };
-      syncGhint();
-      try {
-        new P.MutationObserver(syncGhint).observe(gh, { childList: true, characterData: true, subtree: true });
-      } catch (e) {}
-    }
-  } catch (e) {}
-
-  // 2) 劫持外壳 showHint，使之后弹出的绿色提示同样变短 + 可点击
-  try {
-    if (typeof P.showHint === 'function') {
-      var origShowHint = P.showHint;
-      P.showHint = function (text, ok) {
-        origShowHint(text, ok);
-        shortenHint();
-      };
-    }
-  } catch (e) {}
-
-  // 3) 若提示条此刻已显示，也立刻缩短
-  shortenHint();
-})();
+/* ISSUE-20261029-45：原 patchDLCChrome 已整块删除。
+ * 它存在的唯一理由是「游戏在 iframe 里、外壳在父文档」，需要跨文档做三件事：
+ * 隐藏外壳悬浮主页 #btnHome、把 #ghint 挪到右上角、劫持外壳 showHint 缩短提示时长。
+ * 合并成单文件后父文档就是本文档，这三件事全部失去意义；
+ * #hint 的「点击消失 + 缩短时长」改由 ArkShell.panel.showHint 自行实现。 */
 
 initCharSelect();
 pvpInjectUI();
+
+/* ISSUE-20261029-45：外壳（账号 / 榜单 / 面板）在游戏初始化**之后**启动。
+   顺序敏感：它要读 updateCellSize() 算出的 --cell / --corner-x，
+   以及确认 #lobbyOpenBtn 已挂好监听，否则面板角标会落在错误的格子上。 */
+/* src: src/shell/01-sdk.js */
+/* #SHELL_START */
+/* ============================================================================
+ * 外壳 · 平台层（ISSUE-20261029-45）
+ * ----------------------------------------------------------------------------
+ * 把原 index.html 的「Telegram 能力判定」搬进单文件，并改了一处关键实现：
+ *
+ *   Telegram SDK 由本文件**运行时按需注入**，不再是 index.html 里那行
+ *   外链 script 标签（src=…telegram-web-app.js）。因为外壳内联后，那行外链会让
+ *   NB-04（离线自包含）直接失败 —— 游戏本体必须能双击离线跑。
+ *
+ *   语义是「有则增强、无则降级」，不是偷偷绕闸门：
+ *     · 加载成功 → Mini App 能力（initData 验签身份、sendData 上报）
+ *     · 失败/超时  → 网页游客通道（localStorage 设备 id），功能不残缺
+ *   build/verify.mjs 的 NB-04 注释里已显式写下这条例外。
+ *
+ * 所有模块各自独立 IIFE，只通过 window.ArkShell 命名空间通信 ——
+ * 避免与游戏侧已有的 ~26 个模块抢全局名（曾实测 paintBoard / hideHint 撞名）。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  var NS = window.ArkShell = window.ArkShell || {};
+
+  /* ---- UI 占位：04-panel 会覆盖成真实实现，保证 02/03 先写也不报错 ---- */
+  NS.ui = NS.ui || {};
+  if (!NS.ui.toast) NS.ui.toast = function () {};
+  if (!NS.ui.showHint) NS.ui.showHint = function () {};
+  if (!NS.ui.hideHint) NS.ui.hideHint = function () {};
+
+  var SDK_URL = 'https://telegram.org/js/telegram-web-app.js';
+  /* Telegram 的 WebView 里 SDK 一般 <300ms；普通浏览器/离线要等到失败才知道，
+     这里按 UA 给两档超时，避免网页模式干等。 */
+  var TIMEOUT_MS = /Telegram/i.test(navigator.userAgent || '') ? 3000 : 1200;
+
+  NS.sdkReady = new Promise(function (resolve) {
+    if (window.Telegram && window.Telegram.WebApp) return resolve(window.Telegram.WebApp);
+    var settled = false;
+    function done(v) { if (settled) return; settled = true; resolve(v || null); }
+    try {
+      var s = document.createElement('script');
+      s.src = SDK_URL;
+      s.async = true;
+      s.onload = function () { done(window.Telegram && window.Telegram.WebApp); };
+      s.onerror = function () { done(null); };
+      document.head.appendChild(s);
+      setTimeout(function () { done(window.Telegram && window.Telegram.WebApp); }, TIMEOUT_MS);
+    } catch (e) { done(null); }
+  }).then(function (W) {
+    /* 纯浏览器里 telegram-web-app.js 也会注入 WebApp，但 platform === 'unknown'
+       且 sendData 是空壳 —— 不排除这种情况会把「已提交」变成「实际没记录」。*/
+    var HAS_SDK = !!W;
+    var HAS_INIT = !!(W && W.initData);
+    var IN_TG = HAS_SDK && W.platform !== 'unknown';
+    NS.plat = {
+      W: W || null,
+      HAS_SDK: HAS_SDK,
+      HAS_INIT: HAS_INIT,
+      IN_TG: IN_TG,
+      CAN_REPORT: IN_TG && !HAS_INIT,   // 键盘按钮入口：sendData 可用
+      IS_WEB: !HAS_INIT,                // 无 initData（含纯浏览器）→ 走设备身份
+    };
+    return NS.plat;
+  });
+
+  /* ---- 小工具 ---- */
+  NS.$ = function (id) { return document.getElementById(id); };
+
+  /** 设备身份（网页直接打开时用，替代 initData）。 */
+  NS.deviceId = function () {
+    var k = 'ark_device_id';
+    try {
+      var v = localStorage.getItem(k);
+      if (v && v.length >= 8) return v;
+      var id = '';
+      if (window.crypto && crypto.randomUUID) id = crypto.randomUUID().replace(/-/g, '');
+      else {
+        var s = 'abcdef0123456789';
+        for (var i = 0; i < 32; i++) id += s.charAt(Math.floor(Math.random() * 16));
+      }
+      localStorage.setItem(k, id);
+      return id;
+    } catch (e) { return ''; }
+  };
+})();
+
+/* src: src/shell/02-account.js */
+/* ============================================================================
+ * 外壳 · 账号层（ISSUE-20261029-45）
+ * ----------------------------------------------------------------------------
+ * 搬自 index.html，业务逻辑**逐字未改**（账号串解析、本机存储、身份判定、上报），
+ * 只做了两处结构性调整：
+ *   1. 全局单例 APP → NS.app（避免与游戏侧 ~26 个模块抢全局名）
+ *   2. 直接调用的 toast/showHint → NS.ui.*（由 04-panel 覆盖成真实实现）
+ *
+ * 身份模型（与服务端 bot_rank.py 一致，勿单方面改）：
+ *   · Telegram 入口 → initData 验签 → uid = tg user id（跨设备稳定）
+ *   · 网页游客     → localStorage 设备 id → uid = dev_<uuid>（换设备即换 uid，已知限制）
+ *
+ * 「改名不新注册」：走 kind:'rename' → bot 侧 rename_user(uid, name) 按 uid 更新，
+ * 保留 best_level/best_kills/runs，只有该 uid 从未出现过才新建。服务端语义已满足，
+ * 前端要做的只是**别传错身份**（始终用同一个 uid，不因改名而重置设备 id）。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  var NS = window.ArkShell;
+  if (!NS) return;
+
+  var ACCT_KEY = 'ark_account';        // 完整账号串（含数字口令），只存本机
+  var NAME_KEY = 'ark_player_name';    // 显示名（兼容旧字段与上报）
+  var ACCT_RE = /^([\u4e00-\u9fa5A-Za-z]{1,12})(\d{4,8})$/;
+  var REPORT_URL_FALLBACK = '';
+  var BOT_USER_FALLBACK = 'yu7_bot';
+
+  var app = NS.app = {
+    data: null,          // leaderboard 数据
+    myId: 0,             // Telegram user id 或 dev_<uuid>
+    myName: '',          // 显示名
+    myAccount: '',       // 完整账号 = 显示名 + 数字口令
+    isNewAccount: false,
+    reportUrl: '',
+    botUser: '',
+  };
+  NS.myScore = null;
+
+  function $(id) { return document.getElementById(id); }
+  function ui() { return NS.ui; }
+
+  /* ===== 账号串解析 / 校验（失败必须给具体原因，绝不静默截断） ===== */
+  function parseAccount(raw) {
+    var s = String(raw == null ? '' : raw).trim();
+    if (!s) return { ok: false, reason: '请输入「名字 + 4–8 位数字口令」，例如 阿米娅1234' };
+    if (/\s/.test(s)) return { ok: false, reason: '不能包含空格：名字后面直接跟数字' };
+    if (/^\d+$/.test(s)) return { ok: false, reason: '名字不能全是数字：开头请用汉字或英文字母' };
+    var m = s.match(ACCT_RE);
+    if (m) return { ok: true, name: m[1], code: m[2] };
+    var tail = s.match(/(\d+)$/);
+    var head = tail ? s.slice(0, s.length - tail[1].length) : s;
+    if (!/[\u4e00-\u9fa5A-Za-z]/.test(head)) return { ok: false, reason: '名字只能用汉字或英文字母' };
+    if (/\d/.test(head)) return { ok: false, reason: '数字只能放在最后当口令，不能夹在名字里' };
+    if (head.length > 12) return { ok: false, reason: '名字最多 12 个字' };
+    if (!tail) return { ok: false, reason: '结尾需要 4–8 位数字口令（例如 阿米娅1234）' };
+    if (tail[1].length < 4) return { ok: false, reason: '数字口令至少 4 位' };
+    if (tail[1].length > 8) return { ok: false, reason: '数字口令最多 8 位' };
+    return { ok: false, reason: '格式是「名字 + 4–8 位数字」，中间不要加字符' };
+  }
+
+  function displayNameOf(acct) {
+    var p = parseAccount(acct);
+    return p.ok ? p.name : '';
+  }
+
+  /* 公开显示名：老数据可能把口令写在名字里（如 阿米娅1234），公开位置一律剥掉 4–8 位纯数字尾巴。
+     只影响显示，不回写 leaderboard.json（那是 bot 的事）。 */
+  function publicName(raw) {
+    var s = String(raw == null ? '' : raw);
+    var stripped = s.replace(/\d{4,8}$/, '');
+    return stripped || s;
+  }
+
+  /* ===== 本机账号 ===== */
+  function loadAccount() {
+    try { app.myAccount = localStorage.getItem(ACCT_KEY) || ''; } catch (e) { app.myAccount = ''; }
+    if (!app.myAccount) {
+      var legacy = '';
+      try { legacy = localStorage.getItem(NAME_KEY) || ''; } catch (e) {}
+      if (legacy && parseAccount(legacy).ok) app.myAccount = legacy;
+    }
+    if (!app.myAccount) {
+      // 首次进入：自动生成「玩家 + 4 位数字」
+      var code = String(1000 + Math.floor(Math.random() * 9000));
+      app.myAccount = '玩家' + code;
+      app.isNewAccount = true;
+      saveAccount(app.myAccount);
+    }
+    app.myName = displayNameOf(app.myAccount);
+  }
+
+  function saveAccount(acct) {
+    app.myAccount = acct;
+    app.myName = displayNameOf(acct) || app.myName;
+    try {
+      localStorage.setItem(ACCT_KEY, acct);
+      if (app.myName) localStorage.setItem(NAME_KEY, app.myName);
+    } catch (e) {}
+  }
+
+  /* ===== 我的身份 ===== */
+  function resolveMyId() {
+    var p = NS.plat || {};
+    if (p.HAS_INIT && p.W && p.W.initDataUnsafe && p.W.initDataUnsafe.user) {
+      app.myId = p.W.initDataUnsafe.user.id || 0;
+    } else {
+      var dev = NS.deviceId();
+      app.myId = dev ? ('dev_' + dev) : 0;
+    }
+  }
+
+  /* ===== 接口地址 ===== */
+  function onOurDomain() {
+    var h = (location.hostname || '').toLowerCase();
+    return h === 'arkroguelike.top' || /\.arkroguelike\.top$/.test(h);
+  }
+  function apiBase() {
+    if (onOurDomain()) return location.origin;
+    var u = app.reportUrl || '';
+    return u.replace(/\/api\/score\/?$/i, '');
+  }
+
+  /* ===== 配置与静态榜单兜底 ===== */
+  /**
+   * 没有 fetch 的环境（老 Safari、jsdom 门禁、离线裁剪版）直接走回调，
+   * 不要抛异常 —— 外壳现在内联在产物里，一旦在这里冒泡就会把整个游戏打白。
+   * 榜单显示为「还没有人上榜」，游戏照常可玩。
+   */
+  function hasFetch() { return typeof fetch === 'function'; }
+
+  function loadConfig(cb) {
+    if (!hasFetch()) { if (cb) cb(); return; }
+    fetch('leaderboard.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        app.data = d || app.data;
+        if (app.data) {
+          app.reportUrl = app.data.report_url || REPORT_URL_FALLBACK || '';
+          app.botUser = app.data.bot_username || BOT_USER_FALLBACK || app.botUser || '';
+          if (onOurDomain()) app.reportUrl = location.origin + '/api/score';
+        }
+        if (cb) cb();
+      })
+      .catch(function () { if (cb) cb(); });
+  }
+
+  /* ===== 上报 ===== */
+  function deepLinkScore(level, kills) {
+    try {
+      var bot = app.botUser || BOT_USER_FALLBACK;
+      if (!bot) {
+        ui().toast('未配置 bot 用户名，无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
+        return;
+      }
+      var dl = 'https://t.me/' + bot + '?start=score:' + level + '_' + kills;
+      var W = (NS.plat || {}).W;
+      if (W && W.openTelegramLink) W.openTelegramLink(dl);
+      else window.location.href = dl;
+      ui().toast('正在记录成绩…（已切到聊天）\n点机器人回复里的 /rank 看排行榜', 5000);
+    } catch (e) {
+      ui().toast('当前入口无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
+    }
+  }
+
+  function reportScore(level, kills) {
+    var p = NS.plat || {};
+    var W = p.W;
+    NS.myScore = { level: level, kills: kills };
+    if (NS.board && NS.board.pushMyScore) NS.board.pushMyScore();
+
+    if (p.CAN_REPORT && W && W.sendData) {
+      try {
+        W.sendData(JSON.stringify({ type: 'rogue_score', level: level, kills: kills, tg_id: 0, tg_name: app.myName || '', initData: '' }));
+        ui().toast('成绩已提交：第 ' + level + ' 层 / 击杀 ' + kills + '\n点棋盘左上角 👤 可看排行榜', 5000);
+        return;
+      } catch (e) { /* 落到下面的 fetch 通道 */ }
+    }
+
+    if (app.reportUrl && (p.HAS_INIT || p.IS_WEB)) {
+      var body = { kind: 'score', level: level, kills: kills, name: app.myName || '', account: app.myAccount || '' };
+      if (p.HAS_INIT) { body.initData = W.initData; }
+      else {
+        var dev = NS.deviceId();
+        if (!dev) { ui().toast('浏览器禁用了本地存储，无法识别身份。\n请在 Telegram 内打开。', 9000); return; }
+        body.device = dev;
+      }
+      fetch(app.reportUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.ok) {
+          ui().toast('成绩已记录：第 ' + level + ' 层 / 击杀 ' + kills + '\n点棋盘左上角 👤 可看排行榜', 5000);
+          if (j.leaderboard && NS.board && NS.board.apply(j.leaderboard)) NS.board.paint();
+          else if (NS.board) NS.board.refresh();
+          if (NS.board) setTimeout(function () { NS.board.refresh(); }, 3000);
+        } else if (p.HAS_INIT) { deepLinkScore(level, kills); }
+        else { ui().toast('成绩记录失败（服务器拒绝了请求）。\n稍后再打一局试试。', 8000); }
+      }).catch(function () {
+        if (p.HAS_INIT) { deepLinkScore(level, kills); }
+        else { ui().toast('连不上成绩服务器。\n确认 bot 正在运行后重试。', 8000); }
+      });
+      return;
+    }
+
+    if (p.HAS_INIT && app.botUser) { deepLinkScore(level, kills); return; }
+    if (p.IN_TG) {
+      ui().toast('当前入口无法回传成绩。\n用 /play 的键盘按钮重开一局即可记录。', 9000);
+    } else if (!app.reportUrl) {
+      ui().toast('成绩服务器地址还没加载到（bot 可能没启动）。\n你的成绩：第 ' + level + ' 层 / 击杀 ' + kills, 8000);
+    } else {
+      ui().toast('浏览器预览模式，成绩不会记录。\n（你的成绩：第 ' + level + ' 层 / 击杀 ' + kills + '）', 7000);
+    }
+  }
+
+  /**
+   * 改名字 + 口令。
+   * 「直接视为修改，不新注册」靠两点：
+   *   1. 前端不动设备 id / initData（uid 不变）
+   *   2. 上报 kind:'rename'（不是 kind:'score'），服务端 rename_user(uid) 只改 name 字段
+   * 因此历史成绩（best_level / best_kills / runs）全部保留在同一条记录上。
+   */
+  function renameAccount(name, code) {
+    var p = NS.plat || {};
+    var W = p.W;
+    if (p.CAN_REPORT && W && W.sendData) {
+      try {
+        W.sendData(JSON.stringify({ type: 'rename', name: name, account: name + code }));
+        ui().toast('账号已保存，回聊天确认同步', 4000);
+        return;
+      } catch (e) { ui().toast('账号已在本机保存', 3000); return; }
+    }
+    if (app.reportUrl && (p.HAS_INIT || p.IS_WEB)) {
+      var body = { kind: 'rename', name: name, account: name + code, code: code };
+      if (p.HAS_INIT) { body.initData = W.initData; }
+      else { body.device = NS.deviceId(); }
+      fetch(app.reportUrl, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (j && j.ok) {
+          ui().toast('账号已同步到排行榜', 4000);
+          if (NS.board) NS.board.refresh();
+        } else {
+          ui().toast('账号已在本机保存（同步失败）', 4000);
+        }
+      }).catch(function () { ui().toast('账号已在本机保存（同步失败）', 4000); });
+    } else {
+      ui().toast('账号已在本机保存', 3000);
+    }
+  }
+
+  /* 我是否在榜单里（先按 id，再按显示名兜底） */
+  function findMe() {
+    if (!app.data || !app.data.entries) return null;
+    var list = app.data.entries;
+    if (app.myId) {
+      for (var i = 0; i < list.length; i++) if (String(list[i].id) === String(app.myId)) return list[i];
+    }
+    if (app.myName) {
+      for (var j = 0; j < list.length; j++) if (publicName(list[j].name) === app.myName) return list[j];
+    }
+    return null;
+  }
+
+  NS.account = {
+    app: app,
+    parseAccount: parseAccount,
+    displayNameOf: displayNameOf,
+    publicName: publicName,
+    hasFetch: hasFetch,
+    loadAccount: loadAccount,
+    saveAccount: saveAccount,
+    resolveMyId: resolveMyId,
+    onOurDomain: onOurDomain,
+    apiBase: apiBase,
+    loadConfig: loadConfig,
+    reportScore: reportScore,
+    renameAccount: renameAccount,
+    deepLinkScore: deepLinkScore,
+    findMe: findMe,
+  };
+})();
+
+/* src: src/shell/03-board.js */
+/* ============================================================================
+ * 外壳 · 榜单层（ISSUE-20261029-45）
+ * ----------------------------------------------------------------------------
+ * 数据来源与原实现一致（优先 /api/leaderboard 实时接口，失败回退 leaderboard.json）。
+ *
+ * 渲染按人类 2026-10-29 的新规格重写：
+ *   · 面板内**只显示排行榜**（原左 1/3 账号卡整块删除）
+ *   · 自己那行：名字右侧 [我] 徽标 → [编辑] 按钮
+ *   · 点 [编辑] → 在**该行下方**插入 editRow（输入框 + 保存 + 说明文字），不换屏不弹窗
+ *   · 未上榜 → 榜单底部 setRow 提供同一套入口
+ *   · 打开面板自动滚到自己那行（scrollTop 居中，不用 scrollIntoView，避免连带滚动整页）
+ *
+ * 密度：每项 ≈38px（原 ≈62px），竖屏 390x844 下至少 8 名完整可见（ISSUE-45 AC-7）。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  var NS = window.ArkShell;
+  if (!NS) return;
+
+  var editAnchor = null;      // 当前展开编辑抽屉所依附的 <li>
+
+  function $(id) { return document.getElementById(id); }
+  function acct() { return NS.account; }
+  function ui() { return NS.ui; }
+
+  /* 按显示名合并同名账户（公开 leaderboard.json 只有显示名、无口令）。
+     口径：最高层、最高击杀、游玩次数累加；代表 id 取最高层那条。 */
+  function mergeByName(entries) {
+    var map = {}, order = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i] || {};
+      var key = acct().publicName(e.name) || '匿名';
+      var m = map[key];
+      if (!m) {
+        m = map[key] = { id: e.id, name: key, level: (e.level || 0), kills: (e.kills || 0), runs: (e.runs || 0) };
+        order.push(key);
+      } else {
+        if ((e.level || 0) > m.level) { m.level = (e.level || 0); m.id = e.id; }
+        if ((e.kills || 0) > m.kills) m.kills = (e.kills || 0);
+        m.runs += (e.runs || 0);
+      }
+    }
+    return order.map(function (k) { return map[k]; });
+  }
+
+  function sortedList() {
+    var app = NS.app;
+    var raw = (app.data && app.data.entries) ? app.data.entries.slice() : [];
+    return mergeByName(raw).sort(function (a, b) {
+      if ((b.level || 0) !== (a.level || 0)) return (b.level || 0) - (a.level || 0);
+      return (b.kills || 0) - (a.kills || 0);
+    });
+  }
+
+  function isMine(u) {
+    var app = NS.app;
+    if (app.myId && String(u.id) === String(app.myId)) return true;
+    return !!(app.myName && u.name === app.myName);
+  }
+
+  /* ===== 渲染 ===== */
+  function render() {
+    var ol = $('miniBoard'), empty = $('boardEmpty'), meta = $('boardMeta');
+    if (!ol) return;
+    closeEdit();
+    ol.innerHTML = '';
+
+    var list = sortedList();
+    if (!list.length) {
+      if (empty) empty.hidden = false;
+      if (meta) meta.textContent = '';
+      return;
+    }
+    if (empty) empty.hidden = true;
+
+    var data = NS.app.data;
+    if (data && data.updated_at && meta) {
+      var dt = new Date(data.updated_at * 1000);
+      function p(n) { return n < 10 ? '0' + n : '' + n; }
+      meta.textContent = '更新 ' + (dt.getMonth() + 1) + '-' + p(dt.getDate()) + ' ' + p(dt.getHours()) + ':' + p(dt.getMinutes());
+    }
+
+    var meFound = false;
+    list.forEach(function (u, i) {
+      var mine = isMine(u);
+      if (mine) meFound = true;
+
+      var li = document.createElement('li');
+      if (mine) li.className = 'me';
+
+      var rk = document.createElement('div');
+      rk.className = 'rk';
+      rk.textContent = (i + 1);
+
+      var who = document.createElement('div');
+      who.className = 'who';
+      var nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = u.name;
+      /* 副信息（击杀 / 次数）在 ≤420px 由 CSS 隐藏，把宽度让给名字 */
+      var sc = document.createElement('div');
+      sc.className = 'sc';
+      sc.textContent = (u.kills || 0) + '杀 · ' + (u.runs || 0) + '次';
+      who.appendChild(nm);
+      who.appendChild(sc);
+
+      var lv = document.createElement('div');
+      lv.className = 'lv';
+      lv.textContent = '第 ' + (u.level || 0) + ' 层';
+
+      li.appendChild(rk);
+      li.appendChild(who);
+      li.appendChild(lv);
+
+      /* 自己那行：原来的 [我] 徽标 → [编辑]（ISSUE-45） */
+      if (mine) {
+        var btn = document.createElement('button');
+        btn.className = 'meEdit';
+        btn.type = 'button';
+        btn.textContent = '编辑';
+        btn.setAttribute('aria-label', '编辑账号');
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (editAnchor === li) { closeEdit(); return; }
+          openEdit(li);
+        });
+        li.appendChild(btn);
+      }
+      ol.appendChild(li);
+    });
+
+    /* 未上榜：底部给一行入口，点开同一套编辑抽屉。
+       没有它，新玩家在「只显示排行榜」的面板里就找不到改名字的地方。 */
+    if (!meFound) {
+      var row = document.createElement('li');
+      row.className = 'setRow';
+      var b = document.createElement('button');
+      b.id = 'btnSetName';
+      b.type = 'button';
+      b.textContent = '你还没上榜 · 设置名字';
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (editAnchor === row) { closeEdit(); return; }
+        openEdit(row);
+      });
+      row.appendChild(b);
+      ol.appendChild(row);
+    }
+  }
+
+  /* ===== 编辑抽屉（内联展开在自己那一行下方） ===== */
+  function openEdit(anchorLi) {
+    closeEdit();
+    var st = acct();
+    var li = document.createElement('li');
+    li.className = 'editRow';
+    li.innerHTML =
+      '<div class="edline">'
+      + '<input class="pname" id="pName" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="例如 阿米娅1234" />'
+      + '<button class="psave" id="pSave" type="button">保存</button>'
+      + '</div>'
+      + '<div class="perr" id="pErr" hidden></div>'
+      + '<div class="ednote">名字只能用<b>汉字或英文</b>，后面的数字是<b>口令</b>：只在你编辑时显示，<b>永远不会出现在排行榜上</b>。记住整串（如「阿米娅1234」），换设备输入同一串就能找回同一账号</div>';
+
+    anchorLi.parentNode.insertBefore(li, anchorLi.nextSibling);
+    editAnchor = anchorLi;
+
+    var inp = $('pName'), save = $('pSave'), err = $('pErr');
+    if (inp) {
+      inp.value = st.app.myAccount || '';
+      /* 移动端键盘弹起会压缩可视区，滚一下保证输入框不被遮挡 */
+      try {
+        inp.focus();
+        if (inp.setSelectionRange) inp.setSelectionRange(inp.value.length, inp.value.length);
+      } catch (e) {}
+      inp.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); submit(); }
+        else if (e.key === 'Escape') { e.preventDefault(); closeEdit(); }
+      });
+      setTimeout(function () {
+        try { li.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+      }, 60);
+    }
+    function showErr(msg) {
+      if (!err) return;
+      err.textContent = msg || '';
+      err.hidden = !msg;
+    }
+    function submit() {
+      var p = st.parseAccount(inp ? inp.value : '');
+      if (!p.ok) { showErr(p.reason); return; }
+      showErr('');
+      var next = p.name + p.code;
+      var changed = next !== st.app.myAccount;
+      st.saveAccount(next);
+      st.app.isNewAccount = false;
+      closeEdit();
+      render();                       // 名字变了要重绘（自己那行的高亮跟着走）
+      if (!changed) { ui().toast('账号未变', 2500); return; }
+      st.renameAccount(p.name, p.code);
+    }
+    if (save) save.addEventListener('click', submit);
+  }
+
+  function closeEdit() {
+    if (!editAnchor) return;
+    var row = editAnchor.nextElementSibling;
+    if (row && row.classList && row.classList.contains('editRow')) row.parentNode.removeChild(row);
+    editAnchor = null;
+  }
+
+  /* ===== 滚动到「我」 ===== */
+  function scrollToMe() {
+    var ol = $('miniBoard'), sc = $('rankScroll');
+    if (!ol || !sc) return;
+    var me = ol.querySelector('li.me');
+    if (!me) return;
+    var top = me.offsetTop - (sc.clientHeight - me.offsetHeight) / 2;
+    sc.scrollTop = Math.max(0, top);
+  }
+
+  /* ===== 数据接入 ===== */
+  function apply(d) {
+    if (!d || !d.entries) return false;
+    var app = NS.app;
+    app.data = {
+      updated_at: d.updated_at || Math.floor(Date.now() / 1000),
+      entries: d.entries,
+      bot_username: d.bot_username || app.botUser || 'yu7_bot',
+      report_url: d.report_url || app.reportUrl,
+    };
+    if (d.report_url && !acct().onOurDomain()) app.reportUrl = d.report_url;
+    if (d.bot_username) app.botUser = d.bot_username;
+    return true;
+  }
+
+  /* 推给完整排行榜 iframe（leaderboard.html 是独立页面，这条 iframe 边界保留） */
+  function pushToFrame(msg) {
+    var f = $('rankFrame');
+    try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*'); } catch (e) {}
+  }
+  function pushMyScore() {
+    if (!NS.myScore) return;
+    pushToFrame({ type: 'my_score', level: NS.myScore.level, kills: NS.myScore.kills });
+    pushMyId();
+  }
+  function pushMyId() {
+    if (NS.app.myId) pushToFrame({ type: 'my_id', id: NS.app.myId });
+  }
+  function pushSnapshot() {
+    if (NS.app.data && NS.app.data.entries) pushToFrame({ type: 'board', data: NS.app.data });
+  }
+  function pushApiBase() {
+    var b = acct().apiBase();
+    if (b) pushToFrame({ type: 'api_base', base: b });
+  }
+
+  function paint() {
+    render();
+    pushSnapshot();
+    pushApiBase();
+    if (NS.panel && NS.panel.syncCorner) NS.panel.syncCorner();
+  }
+
+  function refresh() {
+    if (!acct().hasFetch()) { render(); return; }
+    var b = acct().apiBase();
+    if (!b) { acct().loadConfig(paint); return; }
+    fetch(b + '/api/leaderboard?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (apply(d)) paint();
+        else acct().loadConfig(paint);
+      })
+      .catch(function () { acct().loadConfig(paint); });
+  }
+
+  NS.board = {
+    render: render,
+    apply: apply,
+    paint: paint,
+    refresh: refresh,
+    mergeByName: mergeByName,
+    sortedList: sortedList,
+    isMine: isMine,
+    scrollToMe: scrollToMe,
+    closeEdit: closeEdit,
+    pushMyScore: pushMyScore,
+    pushMyId: pushMyId,
+    pushSnapshot: pushSnapshot,
+    pushApiBase: pushApiBase,
+  };
+})();
+
+/* src: src/shell/04-panel.js */
+/* ============================================================================
+ * 外壳 · 面板层（ISSUE-20261029-45）
+ * ----------------------------------------------------------------------------
+ * 与原 index.html 相比，这里删掉了两块纯为跨 iframe 服务的补丁：
+ *   · placeLobbyOverBoard()：原来要「iframe 偏移 + 游戏内棋盘矩形」两次换算，
+ *     还得等游戏 postMessage 上报；现在同文档，直接读 #board 的 rect。
+ *   · syncCornerToGame()：原来要量 #lobbyOpenBtn 的 rect 再换算到抽屉坐标系；
+ *     现在 CSS 直接用棋盘的 --corner-x / --cell（同 :root），CSS 就精确。
+ *
+ * 新增：面板高度按「至少 8 名」兜底（ISSUE-45 AC-7）—— 棋盘是正方形，
+ * 竖屏下棋盘高可能只有 390px，装不下 8 行，所以面板允许在棋盘基础上**向上撑高**，
+ * 上限是「棋盘上沿到视口底部」，不会溢出屏幕。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  var NS = window.ArkShell;
+  if (!NS) return;
+
+  var open = false;
+  var ROWS_VISIBLE = 8;
+  var ROW_BLOCK = 42;      // 行高 38 + 间距 4
+  var CHROME_H = 96;       // header 36 + footer 44 + 内边距
+
+  function $(id) { return document.getElementById(id); }
+  function boardEl() { return document.getElementById('board'); }
+
+  /* ===== 提示条 / toast（游戏侧没有同名实现，这里是唯一一套）===== */
+  function showHint(text, ok) {
+    var h = $('hint');
+    if (!h) return;
+    h.textContent = text || '';
+    h.className = (ok ? 'ok' : '');
+    clearTimeout(showHint._t);
+    showHint._t = setTimeout(hideHint, 6000);
+  }
+  function hideHint() {
+    var h = $('hint');
+    if (h) h.className = 'hide';
+  }
+  function toast(text, ms) {
+    var t = $('toast');
+    if (!t) return;
+    t.textContent = text || '';
+    t.style.display = 'block';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.style.display = 'none'; }, ms || 3000);
+  }
+
+  /* 覆盖 01 的占位实现，让 02/03 拿到真实 UI */
+  NS.ui.toast = toast;
+  NS.ui.showHint = showHint;
+  NS.ui.hideHint = hideHint;
+
+  /* ===== 面板定位与显隐 ===== */
+  function place() {
+    var d = $('lobbyDrawer'), b = boardEl();
+    if (!d || !b) return;
+    var r = b.getBoundingClientRect();
+    if (!(r.width > 0) || !(r.height > 0)) return;
+    var vh = window.innerHeight || 0;
+    var need = ROWS_VISIBLE * ROW_BLOCK + CHROME_H;
+    var avail = vh - r.top - 6;
+    var h = Math.max(r.height, Math.min(need, avail > 0 ? avail : r.height));
+    d.style.left = Math.round(r.left) + 'px';
+    d.style.top = Math.round(r.top) + 'px';
+    d.style.width = Math.round(r.width) + 'px';
+    d.style.height = Math.round(h) + 'px';
+    d.style.bottom = 'auto';
+  }
+
+  /* 角标位置由 CSS 的 --corner-x/--cell 决定，这里只需在尺寸变化时确保面板跟随 */
+  function syncCorner() { /* CSS 变量自动生效，保留钩子供 board.paint() 调用 */ }
+
+  function setOpen(next) {
+    open = !!next;
+    var d = $('lobbyDrawer'), m = $('lobbyMask'), btn = $('lobbyOpenBtn');
+    if (open) place();
+    if (d) {
+      d.classList.toggle('on', open);
+      d.setAttribute('aria-hidden', open ? 'false' : 'true');
+      d.style.pointerEvents = '';
+    }
+    if (m) m.classList.toggle('on', open);
+    /* 游戏侧角标同步高亮（原来是 postMessage 'ark_lobby_state'，现在直接改） */
+    if (btn) {
+      btn.classList.toggle('on', open);
+      btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    if (open) {
+      if (d && d.focus) { try { d.focus({ preventScroll: true }); } catch (e) {} }
+      NS.board.refresh();          // 每次打开都拉一次实时榜
+      /* 等榜单落地后再滚到自己：refresh 是异步的，paint 里会再调一次 */
+      setTimeout(function () { NS.board.scrollToMe(); }, 120);
+    } else {
+      NS.board.closeEdit();
+    }
+  }
+
+  /* ===== 完整排行榜浮层（leaderboard.html 仍是独立页面，保留这条 iframe）===== */
+  function openRank() {
+    var p = $('rankPanel');
+    if (!p) return;
+    p.classList.add('open');
+    var f = $('rankFrame');
+    if (f) f.src = 'leaderboard.html?t=' + Date.now();
+    NS.board.pushMyScore();
+    NS.board.pushSnapshot();
+    NS.board.pushApiBase();
+  }
+  function closeRank() {
+    var p = $('rankPanel');
+    if (p) p.classList.remove('open');
+  }
+
+  NS.panel = {
+    isOpen: function () { return open; },
+    setOpen: setOpen,
+    open: function () { setOpen(true); },
+    close: function () { setOpen(false); },
+    toggle: function () { setOpen(!open); },
+    place: place,
+    syncCorner: syncCorner,
+    openRank: openRank,
+    closeRank: closeRank,
+    toast: toast,
+    showHint: showHint,
+    hideHint: hideHint,
+  };
+})();
+
+/* src: src/shell/05-score.js */
+/* ============================================================================
+ * 外壳 · 成绩触发（ISSUE-20261029-45）
+ * ----------------------------------------------------------------------------
+ * 这是原 index.html 里那段 `#hooksrc` 的等价实现，做了两处关键降级：
+ *   原：外壳把一段 script 注入 iframe 的 body，靠 parent.postMessage 回传
+ *   现：同在本文档，直接读顶层变量、直接调 window.arkReportScore()
+ *
+ * ⚠ 已知遗留（如实记录，不在本次解决）：仍然是 300ms 轮询 + 依赖顶层变量名
+ *   `phase` / `level` / `enemies`。彻底的做法是在 `initLevel()` 里累加、在
+ *   `phase = PHASE.GAMEOVER` 处直接调用 —— 但那要动游戏核心状态机，
+ *   本次合并的首要目标是"不改变玩法行为"，所以先把注入与跨文档这两层去掉，
+ *   轮询留到下一个 issue 再做事件化。改名风险仍由本文件的常量引用收敛。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  var NS = window.ArkShell;
+  if (!NS) return;
+
+  var sent = false;
+  var prevEnemies = null;
+  var prevDead = 0;
+  var carry = 0;        // 跨关累计的已击杀数
+  var prevLevel = 0;
+
+  function collect() {
+    var p = (typeof phase !== 'undefined') ? phase : null;
+    var lvl = (typeof level !== 'undefined') ? level : 0;
+    var en = (typeof enemies !== 'undefined') ? enemies : null;
+
+    /* 换关时 enemies 会被整个替换 → 上一关的死亡数先结转，再清零本关计数 */
+    if (prevEnemies !== null && en !== prevEnemies) { carry += prevDead; prevDead = 0; }
+    /* 重开一局（关卡回退）→ 整局累计清零 */
+    if (lvl < prevLevel) { carry = 0; prevDead = 0; }
+    prevLevel = lvl;
+
+    var dead = (en && en.filter) ? en.filter(function (e) { return !e.alive; }).length : 0;
+    prevEnemies = en;
+    prevDead = dead;
+    return { phase: p, level: lvl, kills: carry + dead };
+  }
+
+  function isGameOver(phaseName) {
+    if (typeof PHASE !== 'undefined' && PHASE && PHASE.GAMEOVER) return phaseName === PHASE.GAMEOVER;
+    return phaseName === 'gameover';
+  }
+
+  function tick() {
+    try {
+      var s = collect();
+      if (isGameOver(s.phase)) {
+        if (!sent) {
+          sent = true;
+          if (typeof window.arkReportScore === 'function') window.arkReportScore(s.level, s.kills);
+        }
+      } else {
+        sent = false;
+      }
+    } catch (e) {}
+    setTimeout(tick, 300);
+  }
+
+  setTimeout(tick, 300);
+})();
+
+/* src: src/shell/06-boot.js */
+/* ============================================================================
+ * 外壳 · 启动层（ISSUE-20261029-45）
+ * ----------------------------------------------------------------------------
+ * 串起 sdk → account → board → panel，并把两个入口暴露给游戏侧：
+ *   window.arkOpenLobby()      —— 棋盘左上角 👤 角标点击
+ *   window.arkReportScore(l,k) —— 游戏结束（原 hook 轮询 phase 的替代）
+ *
+ * 顺序说明：本文件在所有游戏模块**之后**执行（槽位在 initCharSelect() 之后），
+ * 所以能保证 #board 已完成首次布局、--cell/--corner-x 已有值。
+ * 但 SDK 是异步的：游戏立刻可玩，外壳的身份判定在 SDK 就绪（或超时）后才落定。
+ * ========================================================================== */
+(function () {
+  'use strict';
+  var NS = window.ArkShell;
+  if (!NS) return;
+
+  function $(id) { return document.getElementById(id); }
+
+  function bindEvents() {
+    var mask = $('lobbyMask');
+    if (mask) mask.addEventListener('click', function () { NS.panel.close(); });
+
+    var lc = $('lobbyCornerClose');
+    if (lc) lc.addEventListener('click', function (e) { e.stopPropagation(); NS.panel.close(); });
+
+    var fr = $('btnFullRank');
+    if (fr) fr.addEventListener('click', function (e) { e.stopPropagation(); NS.panel.openRank(); });
+
+    var rc = $('rankClose');
+    if (rc) rc.addEventListener('click', NS.panel.closeRank);
+
+    var rf = $('rankFrame');
+    if (rf) rf.addEventListener('load', function () {
+      NS.board.pushMyScore();
+      NS.board.pushSnapshot();
+      NS.board.pushApiBase();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if (NS.panel.isOpen()) { NS.panel.close(); e.preventDefault(); return; }
+      var p = $('rankPanel');
+      if (p && p.classList.contains('open')) { NS.panel.closeRank(); e.preventDefault(); }
+    });
+
+    /* 转屏 / 改窗口大小：棋盘格子重算（--cell 变），面板正开着就重新贴一次 */
+    window.addEventListener('resize', function () {
+      if (NS.panel.isOpen()) NS.panel.place();
+    });
+  }
+
+  function boot() {
+    bindEvents();
+
+    NS.sdkReady.then(function (plat) {
+      NS.account.resolveMyId();
+      NS.account.loadAccount();
+
+      if (plat.IN_TG) {
+        if (plat.CAN_REPORT) { NS.panel.showHint('键盘入口 · 成绩会自动记录', true); setTimeout(NS.panel.hideHint, 4000); }
+        else { NS.panel.showHint('主页/菜单入口 · 成绩也会记录', true); setTimeout(NS.panel.hideHint, 4500); }
+      } else {
+        NS.panel.showHint('网页模式 · 正在连接成绩服务器…', false);
+      }
+
+      NS.account.loadConfig(function () {
+        NS.board.paint();
+        NS.board.refresh();
+
+        if (!plat.IN_TG) {
+          if (NS.app.reportUrl) {
+            NS.panel.showHint('网页模式 · 成绩会自动记录（同一份排行榜）', true);
+            setTimeout(NS.panel.hideHint, 4500);
+          } else {
+            NS.panel.showHint('网页模式 · 成绩服务未连接（bot 没启动？本局成绩不会记录）', false);
+          }
+        }
+
+        if (NS.app.isNewAccount) {
+          setTimeout(function () {
+            NS.panel.toast('你的账号是「' + NS.app.myAccount + '」\n点棋盘左上角 👤 → 编辑，可以改成自己的名字（数字口令 4–8 位）', 7000);
+          }, 1200);
+        }
+      });
+
+      try { if (plat.W) { plat.W.ready(); plat.W.expand(); } } catch (e) {}
+    });
+  }
+
+  /* 游戏侧入口：外壳总是存在（已内联），但保留 typeof 检查让 game.html 被裁剪时也不炸 */
+  window.arkOpenLobby = function () { NS.panel.toggle(); };
+  window.arkReportScore = function (level, kills) { NS.account.reportScore(level || 0, kills || 0); };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+/* #SHELL_END */
 </script>
 </body>
 </html>

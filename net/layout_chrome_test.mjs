@@ -200,71 +200,38 @@ console.log('\n[3.5] 手机虚拟圆钮的挂载判据');
   check('#vpadHost 没有 .on（不占位）', !doc.getElementById('vpadHost').classList.contains('on'));
 }
 
-console.log('\n[4] DLC 外壳接管（单文件独立运行时必须自动跳过）');
+console.log('\n[4] 外壳已内联进产物（ISSUE-20261029-45）：不再有 iframe 边界');
 {
-  // patchDLCChrome 是**命名函数表达式**（(function patchDLCChrome(){...})()），
-  // 名字不会外泄到全局 —— 这与搬移前完全一致，保持它是为了断点调试时能看出栈帧名。
-  check('patchDLCChrome 不外泄全局（命名函数表达式，与原状一致）',
-    window.eval('typeof patchDLCChrome') === 'undefined');
-  check('无父窗口时不触碰自身 document（设置抽屉仍在）', !!doc.getElementById('drawerSettings'));
-  check('无父窗口时没有凭空创建外壳元素', doc.getElementById('hint') === null && doc.getElementById('ghint') === null);
+  check('patchDLCChrome 已删除（跨文档补丁不再需要）', window.eval('typeof patchDLCChrome') === 'undefined');
+  check('设置抽屉仍在（合并未破坏游戏 DOM）', !!doc.getElementById('drawerSettings'));
+  /* 与原状态相反：以前「无父窗口时不得凭空创建外壳元素」，现在外壳就是本文档的一部分 */
+  check('外壳容器 #arkUi 在本文档内', !!doc.getElementById('arkUi'));
+  check('账号面板 #lobbyDrawer 在本文档内', !!doc.getElementById('lobbyDrawer'));
+  check('榜单容器 #miniBoard 在本文档内', !!doc.getElementById('miniBoard'));
+  check('提示条 #hint / #toast 在本文档内',
+    !!doc.getElementById('hint') && !!doc.getElementById('toast'));
+  check('完整排行榜浮层仍保留（leaderboard.html 那条 iframe 不变）',
+    !!doc.getElementById('rankPanel') && !!doc.getElementById('rankFrame'));
+  check('ArkShell 命名空间已建立', typeof window.ArkShell === 'object' && !!window.ArkShell.panel);
+  check('对外入口 arkOpenLobby 可调用', typeof window.arkOpenLobby === 'function');
+  check('对外入口 arkReportScore 可调用', typeof window.arkReportScore === 'function');
 }
 
-console.log('\n[5] DLC 外壳（同源 iframe）接管真实行为');
+console.log('\n[5] 合并结构自查：iframe 边界确实没了');
 {
-  const dir = process.cwd().replace(/\\/g, '/');
-  const toFileUrl = (p) => 'file:///' + p.split('/').map((s) => encodeURIComponent(s)).join('/').replace(/^file:\/%2F/, 'file:///');
-  const target = toFileUrl(dir + '/build/out/game.html');
-  const shellHtml = `<!doctype html><html><body>
-<button id="btnHome">🏠</button>
-<div id="hint" class="hint">提示</div>
-<div id="ghint"></div>
-<iframe id="f" src="${target}"></iframe>
-<script>window.__origShowHint = window.showHint = function () { window.__hintCalls = (window.__hintCalls || 0) + 1; };</script>
-</body></html>`;
-  const shellErrors = [];
-  const svc = new VirtualConsole();
-  // canvas 是 jsdom 的已知限制（未装 node-canvas），与本测试无关，过滤掉
-  const isCanvasNoise = (s) => /getContext|Not implemented/.test(s);
-  svc.on('jsdomError', (e) => { const m = 'jsdomError: ' + (e && e.message ? e.message : e); if (!isCanvasNoise(m)) shellErrors.push(m); });
-  svc.on('error', (...a) => { const m = 'console.error: ' + a.join(' '); if (!isCanvasNoise(m)) shellErrors.push(m); });
-
-  const shell = new JSDOM(shellHtml, {
-    url: target.replace('build/out/game.html', 'tests/fixtures/_shell.html'),
-    runScripts: 'dangerously', resources: 'usable', pretendToBeVisual: true, virtualConsole: svc,
-  });
-  const sw = shell.window;
-  const sdoc = sw.document;
-  // 等 iframe 里的 game.html 真正跑完（体量大，给足时间；再兜底等到 setLayout 可见）
-  const deadline = Date.now() + 15000;
-  while (Date.now() < deadline) {
-    const cw = sdoc.getElementById('f') && sdoc.getElementById('f').contentWindow;
-    if (cw && (() => { try { return cw.eval('typeof setLayout') === 'function'; } catch (_) { return false; } })()) break;
-    await sleep(120);
-  }
-  const frame = sdoc.getElementById('f');
-  const cw = frame && frame.contentWindow;
-  check('外壳 iframe 内的游戏已初始化', !!cw && (() => { try { return cw.eval('typeof setLayout') === 'function'; } catch (_) { return false; } })());
-
-  check('外壳悬浮「🏠 主页」被隐藏', sdoc.getElementById('btnHome').style.display === 'none',
-    JSON.stringify(sdoc.getElementById('btnHome').style.display));
-  check('#ghint 无文字时隐藏（不压标题栏）', sdoc.getElementById('ghint').style.display === 'none',
-    JSON.stringify(sdoc.getElementById('ghint').style.display));
-
-  const gh = sdoc.getElementById('ghint');
-  gh.textContent = '已保存';
-  await sleep(120);
-  check('#ghint 有文字后恢复显示（MutationObserver 同步）', gh.style.display === '',
-    JSON.stringify(gh.style.display));
-  // jsdom 的 cssstyle 会丢弃 left:auto（读回空串），真实浏览器里是 'auto'；两者都算「已挪到右上角」。
-  check('#ghint 被挪到右上角', gh.style.right === '8px' && (gh.style.left === 'auto' || gh.style.left === ''),
-    `left=${gh.style.left} right=${gh.style.right}`);
-
-  check('外壳 showHint 被劫持（弹出的提示也会变短）', sw.showHint !== sw.__origShowHint);
-  check('#hint 被接管后可点击收起（cursor:pointer）', sdoc.getElementById('hint').style.cursor === 'pointer',
-    sdoc.getElementById('hint').style.cursor);
-  check('外壳侧无异常', shellErrors.length === 0, shellErrors.slice(0, 3).join(' | '));
-  shell.window.close();
+  /* 原 [5] 是「造一个假外壳 + iframe 装 game.html，验证 patchDLCChrome 的跨文档接管」。
+     ISSUE-20261029-45 把外壳内联后，那个场景整体不存在了（没有父文档、没有 #btnHome、
+     没有 #ghint、没有 showHint 劫持），所以本段改为验证「边界真的拆干净了」——
+     一旦有人把 iframe 结构加回来，这里会立刻红。 */
+  check('产物内无 game iframe', !/<iframe[^>]*\bid=["']game["']/.test(html));
+  check('产物内无 hooksrc 注入块', !/id=["']hooksrc["']/.test(html));
+  check('产物内无 gameWrap 容器', !/id=["']gameWrap["']/.test(html));
+  check('产物内无 loading 遮罩（不再等 iframe onload）', !/id=["']loading["']/.test(html));
+  /* 只允许一条 iframe：完整排行榜 leaderboard.html（独立页面，本次有意不合并） */
+  const iframes = html.match(/<iframe\b/g) || [];
+  check('产物内只剩 1 条 iframe（完整排行榜）', iframes.length === 1, String(iframes.length));
+  check('产物内无 window.parent.postMessage（跨文档回传已删）',
+    !/parent\.postMessage/.test(html.replace(/\/\*[\s\S]*?\*\//g, '')));
 }
 
 console.log('\n[6] 手机圆钮：纯触屏环境才挂载（第二个实例，把 matchMedia 伪装成 coarse）');

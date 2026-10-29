@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
-import { ROOT, VER_OBJ_RE, readBuildFromIndex, validateBuild, runVerify, printVerify } from './verify.mjs';
+import { ROOT, VER_OBJ_RE, readBuild, readBuildFromIndex, validateBuild, runVerify, printVerify } from './verify.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = path.join(__dirname, 'out');
@@ -272,17 +272,17 @@ function resolveTemplate(explicit) {
 function build(args) {
   console.log('[构建] 方舟战棋 · 单文件产物');
 
-  // 1) build 号：index.html 的 var BUILD 是唯一真值来源（§0.9）
-  const idx = readBuildFromIndex(INDEX_HTML);
-  if (!idx.ok) throw new Error(`读取 index.html 的 var BUILD 失败：${idx.reason}`);
+  // 1) build 号：build/version.json 是唯一真值来源（ISSUE-20261029-45 起，原 index.html 的 var BUILD）
+  const idx = readBuild({ indexPath: INDEX_HTML });
+  if (!idx.ok) throw new Error(`读取 BUILD 真值来源失败：${idx.reason}`);
   const fmt = validateBuild(idx.build);
-  if (!fmt.ok) throw new Error(`index.html 的 var BUILD 不合法 —— ${fmt.reason}`);
-  console.log(`  真值来源 index.html: var BUILD = '${idx.build}'`);
+  if (!fmt.ok) throw new Error(`${idx.source} 的 BUILD 不合法 —— ${fmt.reason}`);
+  console.log(`  真值来源 ${idx.source}: build = '${idx.build}'`);
 
   const next = bumpBuild(idx.build);
   if (args.bump) {
-    console.log(`\n  下一个 build 号：${next || '（无法推导，请检查 index.html 的 BUILD）'}`);
-    console.log('  提示：index.html 是只读资产（NB-01），本脚本不会改写它 —— 需人工改后再构建。');
+    console.log(`\n  下一个 build 号：${next || '（无法推导，请检查 BUILD 真值来源）'}`);
+    console.log(`  提示：真值来源是 ${idx.source}，本脚本不会改写它 —— 需人工改后再构建。`);
     return 0;
   }
 

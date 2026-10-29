@@ -127,7 +127,15 @@ console.log('\n[5] 单人流程仍然能进入关卡（随机数种子化后回�
 
 console.log('\n[6] 改造点自查');
 const src = html;
-check('随机数已全部走 rng()', !/Math\.random\s*\(/.test(src.replace(/\/\*[\s\S]*?\*\//g, '')));
+/* ISSUE-20261029-45：外壳（src/shell/*）已内联进产物，它有自己的两处 Math.random ——
+ * 「生成设备 id」「首次进入自动起名 玩家1234」。这两处是**身份随机**，绝不能走 rng()：
+ * rng() 是联机可复现种子链，把身份随机塞进去会改变同一 seed 的对局走向。
+ * 所以按 #SHELL_START / #SHELL_END 标记把外壳段整体排除在玩法随机检查之外，
+ * 而不是放宽断言（其余代码的 Math.random 仍然会被抓出来）。 */
+const srcNoShell = src.replace(/\/\* #SHELL_START \*\/[\s\S]*?\/\* #SHELL_END \*\//g, '');
+check('外壳段标记成对存在', /\/\* #SHELL_START \*\//.test(src) && /\/\* #SHELL_END \*\//.test(src));
+check('随机数已全部走 rng()（玩法代码，不含外壳身份随机）',
+  !/Math\.random\s*\(/.test(srcNoShell.replace(/\/\*[\s\S]*?\*\//g, '')));
 check('PvP 核心标记成对存在', (src.match(/\/\/#PVP_CORE_START/g) || []).length === 1 &&
       (src.match(/\/\/#PVP_CORE_END/g) || []).length === 1);
 check('confirmAction 有联机分流', /function confirmAction\(\)[\s\S]{0,200}mode === 'pvp'/.test(src));

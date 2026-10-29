@@ -45,6 +45,30 @@ export function readBuildFromIndex(indexPath = path.join(ROOT, 'index.html')) {
   return { ok: true, build: m[1], raw: m[0] };
 }
 
+/**
+ * BUILD 唯一真值来源（ISSUE-20261029-45）：`build/version.json`。
+ *
+ * 为什么搬家：外壳已内联进 game.html，index.html 退化为跳转页，不再承载任何业务，
+ * 把一个发布号继续埋在"已废弃的壳"里会让下一个接手的人找不到。version.json 属于
+ * 构建配置，语义上本来就该在这里。
+ *
+ * 向后兼容：version.json 不存在时回退读 index.html 的 var BUILD（老分支/老工具仍可用）。
+ */
+export function readBuild({ versionPath = path.join(ROOT, 'build', 'version.json'), indexPath } = {}) {
+  if (fs.existsSync(versionPath)) {
+    let j;
+    try {
+      j = JSON.parse(readText(versionPath));
+    } catch (e) {
+      return { ok: false, build: null, reason: `build/version.json 解析失败：${e.message}` };
+    }
+    if (!j || !j.build) return { ok: false, build: null, reason: 'build/version.json 缺少 build 字段' };
+    return { ok: true, build: String(j.build), source: 'build/version.json' };
+  }
+  const fb = readBuildFromIndex(indexPath);
+  return fb.ok ? { ...fb, source: 'index.html（回退，version.json 缺失）' } : fb;
+}
+
 /** 校验 MMDDHHmm 格式（§0.9）。 */
 export function validateBuild(build) {
   if (!build) return { ok: false, reason: 'build 为空' };
@@ -89,17 +113,17 @@ export function readVersionFromArtifact(p) {
 /* ------------------------------------------------- 1. AC-23 双 BUILD */
 
 /**
- * AC-23：产物 build 必须等于 index.html 的 var BUILD。
- * index.html 是只读资产（NB-01），这里只校验不改写；不一致时打印应改的值。
+ * AC-23：产物 build 必须等于 BUILD 真值来源（`build/version.json`，ISSUE-20261029-45 起）。
+ * 真值来源只校验不改写；不一致时打印应改的值。
  */
 export function checkBuildConsistency(artifactPath, { indexPath } = {}) {
-  const idx = readBuildFromIndex(indexPath);
+  const idx = readBuild({ indexPath });
   if (!idx.ok) {
-    return { pass: false, title: 'AC-23 双 BUILD', detail: `读 index.html 失败：${idx.reason}` };
+    return { pass: false, title: 'AC-23 双 BUILD', detail: `读 BUILD 真值来源失败：${idx.reason}` };
   }
   const fmt = validateBuild(idx.build);
   if (!fmt.ok) {
-    return { pass: false, title: 'AC-23 双 BUILD', detail: `index.html 的 BUILD 不合法 —— ${fmt.reason}` };
+    return { pass: false, title: 'AC-23 双 BUILD', detail: `${idx.source} 的 BUILD 不合法 —— ${fmt.reason}` };
   }
   const art = readVersionFromArtifact(artifactPath);
   if (!art.ok) {
@@ -109,15 +133,15 @@ export function checkBuildConsistency(artifactPath, { indexPath } = {}) {
     return {
       pass: false,
       title: 'AC-23 双 BUILD',
-      detail: `产物 build='${art.build}' 与 index.html 的 BUILD='${idx.build}' 不一致。\n`
-        + `        → 请把 index.html 的 var BUILD 改为 '${art.build}'（index.html 只读，需人工改），\n`
+      detail: `产物 build='${art.build}' 与 ${idx.source} 的 BUILD='${idx.build}' 不一致。\n`
+        + `        → 请把 ${idx.source} 的 build 改为 '${art.build}'，\n`
         + `          或重新构建使产物 build = '${idx.build}'。`,
     };
   }
   return {
     pass: true,
     title: 'AC-23 双 BUILD',
-    detail: `产物 build = index.html BUILD = '${art.build}'`,
+    detail: `产物 build = ${idx.source} = '${art.build}'`,
   };
 }
 
@@ -126,6 +150,11 @@ export function checkBuildConsistency(artifactPath, { indexPath } = {}) {
 /**
  * NB-04：game.html 必须能双击离线运行 —— 不得有运行时外部依赖。
  * 只检查会真正发起网络请求的形式：外链 <script src>、<link href>、import from http。
+ *
+ * 允许的唯一例外（ISSUE-20261029-45，此处显式声明，避免后来者把它当成漏检）：
+ *   Telegram SDK 由 src/shell/01-sdk.js 在运行时动态注入（createElement('script')，
+ *   带 1200ms 超时），失败即降级为网页游客通道。游戏本体零依赖 SDK，离线双击照常可玩。
+ *   静态扫描看不到它是有意的：它不是"依赖"，是"有则增强、无则降级"。
  */
 export function checkOfflineSelfContained(artifactPath) {
   const src = readText(artifactPath);
