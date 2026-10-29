@@ -4367,7 +4367,7 @@ PVP_NET.on('closed', function (ev) {
  * 而且 pvp-core.js 的协议、pvpMakeUnit 的镜像逻辑都是花时间调出来的。
  * ★ 关闭时的实际效果：设置抽屉里看不到「⚔️ 联机」按钮，且 #pvpMask 根本不会被创建
  *   → 客户端不存在任何可达的联机入口（连手改 DOM 找按钮也没有，因为它 display:none 且没绑定）。 */
-const PVP_ENABLED = false;
+const PVP_ENABLED = true;
 
 function pvpInjectUI() {
   /* 闸门放在最前面：不建 style、不建 #pvpMask、不给 #setPvpBtn 绑 onclick */

@@ -24,8 +24,16 @@ function pvpRng(seed) {
 
 function pvpMod(score) { return Math.floor((score - 10) / 2); }
 
-function pvpMakeUnit(chars, charId, slot, x, y) {
-  const a = { ...chars[charId].abilities };
+function pvpMakeUnit(chars, charId, slot, x, y, abilities) {
+  // abilities 可选：联机里房主/挑战者各自带来的加点（ISSUE-20261029-26 预备干员加点）。
+  // 传输格式为 6 维数组 [str, dex, con, int, wis, cha]，此处转为内部对象 {str,dex,con,int,wis,cha}；
+  // 未提供（单人局 / 老客户端）时回退静态角色定义，向后兼容。
+  let a;
+  if (Array.isArray(abilities)) {
+    a = { str: abilities[0], dex: abilities[1], con: abilities[2], int: abilities[3], wis: abilities[4], cha: abilities[5] };
+  } else {
+    a = { ...(abilities || chars[charId].abilities) };
+  }
   return {
     slot: slot, charId: charId, x: x, y: y,
     abilities: a,

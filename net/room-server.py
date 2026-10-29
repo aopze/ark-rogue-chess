@@ -60,6 +60,16 @@ def _now():
     return time.time()
 
 
+def _norm_abilities(v):
+    """把客户端传来的 abilities 归一为 6 个 int 的列表；缺省/非法返回 None。"""
+    if not isinstance(v, (list, tuple)) or len(v) != 6:
+        return None
+    try:
+        return [int(x) for x in v]
+    except (TypeError, ValueError):
+        return None
+
+
 def _emit(room, ev):
     """追加一条事件并唤醒所有挂起的轮询。调用方必须已持有 LOCK。"""
     room["seq"] += 1
@@ -196,9 +206,11 @@ class Handler(BaseHTTPRequestHandler):
     def _create(self, d):
         name = str(d.get("name") or "房主")[:16]
         char_id = str(d.get("charId") or "")[:16]
+        abilities = _norm_abilities(d.get("abilities"))
         with LOCK:
             room = _new_room(name)
             room["slots"][0]["charId"] = char_id
+            room["slots"][0]["abilities"] = abilities
             slot = 0
             token = room["slots"][0]["token"]
         print(f"[create] {room['id']} by {name} [{char_id or '-'}]", flush=True)
@@ -208,6 +220,7 @@ class Handler(BaseHTTPRequestHandler):
         rid = str(d.get("room") or "").strip().upper()
         name = str(d.get("name") or "挑战者")[:16]
         char_id = str(d.get("charId") or "")[:16]
+        abilities = _norm_abilities(d.get("abilities"))
         with LOCK:
             room = ROOMS.get(rid)
             if not room:
@@ -215,11 +228,14 @@ class Handler(BaseHTTPRequestHandler):
             if room["slots"][1]:
                 return self._send(409, {"error": "房间已满"})
             room["slots"][1] = {"name": name, "token": secrets.token_hex(8),
-                                "charId": char_id}
+                                "charId": char_id, "abilities": abilities}
             token = room["slots"][1]["token"]
+            ab0 = room["slots"][0].get("abilities")
+            ab1 = abilities
             _emit(room, {"type": "start",
                          "slots": [room["slots"][0]["name"], name],
-                         "chars": [room["slots"][0].get("charId", ""), char_id]})
+                         "chars": [room["slots"][0].get("charId", ""), char_id],
+                         "abilities": [ab0, ab1]})
         print(f"[join]  {rid} <- {name} [{char_id or '-'}]", flush=True)
         return self._send(200, {"token": token, "slot": 1})
 

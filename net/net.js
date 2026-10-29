@@ -128,8 +128,8 @@
     on: on,
     get state() { return { room: S.room, slot: S.slot, turn: S.turn, seq: S.seq, alive: S.alive }; },
 
-    create: function (name, charId) {
-      return req('/api/create', { name: name || '房主', charId: charId || '' }).then(function (j) {
+    create: function (name, charId, abilities) {
+      return req('/api/create', { name: name || '房主', charId: charId || '', abilities: abilities || null }).then(function (j) {
         S.room = j.room; S.token = j.token; S.slot = j.slot; S.seq = 0;
         start();
         emit('joined', { room: j.room, slot: j.slot, host: true });
@@ -137,8 +137,8 @@
       });
     },
 
-    join: function (room, name, charId) {
-      return req('/api/join', { room: room, name: name || '挑战者', charId: charId || '' }).then(function (j) {
+    join: function (room, name, charId, abilities) {
+      return req('/api/join', { room: room, name: name || '挑战者', charId: charId || '', abilities: abilities || null }).then(function (j) {
         S.room = String(room).toUpperCase(); S.token = j.token; S.slot = j.slot; S.seq = 0;
         start();
         emit('joined', { room: S.room, slot: j.slot, host: false });
