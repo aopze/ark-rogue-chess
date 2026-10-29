@@ -8,7 +8,7 @@
  * 覆盖：
  *   [1] 横竖版切换：setLayout / currentLayout / localStorage['ark_layout']
  *   [2] 正方形棋盘：updateCellSize 写同一像素宽高 / 竖版拖动条已废弃
- *   [3] 抽屉体系：drawerOpen / drawerClose / 互斥 / Esc / 二层属性说明卡
+ *   [3] 抽屉体系：drawerOpen / drawerClose / 互斥 / Esc / ♟️ 角色面板六维加点
  *   [3.5] 手机圆钮挂载判据：非纯触屏环境不建 DOM
  *   [4] DLC 外壳接管：单文件独立运行（无父窗口）时必须自动跳过，不得报错
  *
@@ -128,14 +128,14 @@ console.log('\n[2] 正方形棋盘（updateCellSize / boardAvailSize）');
   check('格子不再乘 1.12（.cell height == var(--cell)）', !/1\.12/.test(cellRule), cellRule.slice(0, 70));
 }
 
-console.log('\n[3] 抽屉体系（drawerOpen / drawerClose / 互斥 / Esc / 二层）');
+console.log('\n[3] 抽屉体系（drawerOpen / drawerClose / 互斥 / Esc / ♟️ 角色面板六维加点）');
 {
   const settings = doc.getElementById('drawerSettings');
-  const stats = doc.getElementById('drawerStats');
+  const char = doc.getElementById('drawerChar');
   const levelup = doc.getElementById('drawerLevelUp');
   const mask = doc.getElementById('drawerMask');
   const btn = doc.getElementById('setOpenBtn');
-  check('三个抽屉 + 遮罩 + ⚙ 按钮都在', !!settings && !!stats && !!levelup && !!mask && !!btn);
+  check('三个抽屉（设置/升级/角色） + 遮罩 + ⚙ 按钮都在', !!settings && !!char && !!levelup && !!mask && !!btn);
 
   check('初始没有抽屉打开', !settings.classList.contains('on') && !mask.classList.contains('on'));
 
@@ -145,29 +145,24 @@ console.log('\n[3] 抽屉体系（drawerOpen / drawerClose / 互斥 / Esc / 二�
     (btn.textContent || '').trim() === '✕' && btn.getAttribute('aria-expanded') === 'true', btn.textContent);
   check('打开设置：遮罩出现', mask.classList.contains('on'));
 
-  window.eval("drawerOpen('stats')");
-  check('互斥：打开属性时设置自动收起', !settings.classList.contains('on') && stats.classList.contains('on'));
-  check('属性抽屉打开时遮罩仍在', mask.classList.contains('on'));
+  window.eval("drawerOpen('char')");
+  check('互斥：打开角色面板时设置自动收起', !settings.classList.contains('on') && char.classList.contains('on'));
+  check('角色面板打开时遮罩仍在', mask.classList.contains('on'));
+  check('角色面板含六维图画布', !!doc.getElementById('charRadarCanvas'));
+  check('分配入口 allocateAbilityPoint 是全局函数', typeof window.allocateAbilityPoint === 'function');
 
   doc.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  check('Esc 关闭当前抽屉', !stats.classList.contains('on'));
+  check('Esc 关闭当前抽屉', !char.classList.contains('on'));
   check('Esc 关闭后遮罩收起', !mask.classList.contains('on'));
 
-  window.eval("drawerOpen('stats'); openAbilityInfo('str')");
-  const layer = doc.getElementById('abilityInfoLayer');
-  check('点属性名 → 二层说明卡滑入', layer.classList.contains('on'));
-  const infoName = doc.querySelector('#abilityInfoBody .ab-info-name');
-  check('说明卡标题是属性全称', !!infoName && (infoName.textContent || '').trim() === '力量',
-    infoName ? infoName.textContent : '(无)');
-  check('说明卡带当前值与修正值', !!doc.querySelector('#abilityInfoBody .ab-info-val'));
-
-  const back = doc.getElementById('abilityInfoBack');
-  back.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-  check('点「← 返回」回六维图（二层收起、抽屉仍在）',
-    !layer.classList.contains('on') && stats.classList.contains('on'));
+  window.eval("drawerOpen('char')");
+  let clickThrew = false;
+  try { doc.getElementById('charRadarCanvas').dispatchEvent(new window.MouseEvent('click', { bubbles: true })); }
+  catch (e) { clickThrew = true; }
+  check('点六维图不抛错（命中判定无几何时为空操作）', !clickThrew);
 
   window.eval('drawerClose()');
-  check('关闭后遮罩与抽屉都收起', !mask.classList.contains('on') && !stats.classList.contains('on'));
+  check('关闭后遮罩与抽屉都收起', !mask.classList.contains('on') && !char.classList.contains('on'));
 }
 
 console.log('\n[3.5] 手机虚拟圆钮的挂载判据');
@@ -280,7 +275,7 @@ console.log('\n[6] 手机圆钮：纯触屏环境才挂载（第二个实例，�
   const d2 = w2.document;
   await sleep(300);
 
-  check('纯触屏：建出 4 方向 + 3 动作 = 7 个圆钮', d2.querySelectorAll('.vbtn').length === 7,
+  check('纯触屏：建出 4 方向 + 4 动作（含重置路径）= 8 个圆钮', d2.querySelectorAll('.vbtn').length === 8,
     String(d2.querySelectorAll('.vbtn').length));
   check('#vpadHost 带 .on（参与布局，不悬浮）', d2.getElementById('vpadHost').classList.contains('on'));
   const firstBtn = d2.querySelector('.vbtn');

@@ -149,9 +149,9 @@ console.log('[1] 桌面端（any-pointer:fine）：4 角色 × 3 回合实战 + 
       /* 每回合轮着开抽屉，制造「抽屉开着时结算」的最坏情况 */
       const which = turns % 3;
       try {
-        if (which === 0) { w.eval("drawerOpen('stats')"); w.eval("openAbilityInfo('str')"); w.eval('drawerCloseLayer()'); }
+        if (which === 0) { w.eval("drawerOpen('char')"); }
         else if (which === 1) { w.eval("drawerOpen('settings')"); }
-        else { w.eval("drawerOpen('stats')"); }
+        else { w.eval("drawerOpen('char')"); }
       } catch (e) { planErr.push(`${c}: drawer ${which} ${e}`); }
 
       const e1 = planTurn(w, rand);
@@ -212,7 +212,7 @@ console.log('\n[2] 手机端（pointer:coarse）：3 回合全用圆钮操作');
   check('触屏环境进关即 planning', ph0 === 'planning', ph0);
 
   const btns = d.querySelectorAll('[data-vdir]');
-  check('7 个圆钮就位', d.querySelectorAll('.vbtn').length === 7, String(d.querySelectorAll('.vbtn').length));
+  check('8 个圆钮就位（含重置路径）', d.querySelectorAll('.vbtn').length === 8, String(d.querySelectorAll('.vbtn').length));
 
   let turns = 0;
   for (let i = 0; i < 3; i++) {
@@ -256,16 +256,16 @@ console.log('\n[3] 通关链路：onLevelClear → 属性闸门 → 下一关（
   const ph1 = await waitPhase(w, ['levelclear', 'planning'], 4000);
   check('清场后进入 levelclear', ph1 === 'levelclear', ph1);
 
-  /* 属性闸门：有点数时必须弹属性抽屉（且不覆盖通关面板） */
+  /* 属性闸门：有点数时必须弹 ♟️ 角色面板（六维加点，且不覆盖通关面板） */
   w.eval('playerStats.abilityPoints = 1; enterAllocGate()');
-  const statsOpen = w.eval("drawerIsOpen('stats')");
-  check('属性闸门自动打开属性抽屉', statsOpen === true, String(statsOpen));
-  /* drawerOpen('stats') 里的文案刷新走 requestAnimationFrame（要等滑入后画雷达 ·
+  const charOpen = w.eval("drawerIsOpen('char')");
+  check('属性闸门自动打开角色面板', charOpen === true, String(charOpen));
+  /* drawerOpen('char') 里的文案刷新走 requestAnimationFrame（要等滑入后画雷达 ·
    * clientWidth 才是非 0），所以这里必须让出一拍再读，否则读到的是空行。 */
   await sleep(60);
-  check('抽屉里能读到剩余点数（#abilityPointsRow）',
-    ((d.getElementById('abilityPointsRow') || {}).textContent || '').indexOf('剩余 1 点') === 0,
-    ((d.getElementById('abilityPointsRow') || {}).textContent || '∅'));
+  check('面板里能读到剩余点数（#charAllocHint）',
+    ((d.getElementById('charAllocHint') || {}).textContent || '').indexOf('剩余 1 点') === 0,
+    ((d.getElementById('charAllocHint') || {}).textContent || '∅'));
   w.eval("allocateAbilityPoint('str'); playerStats.abilityPoints = 0; drawerClose()");
 
   w.eval('proceedNextLevel()');

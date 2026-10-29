@@ -81,7 +81,10 @@ function mountVirtualPad() {
       '</div>' +
       '<div class="vpad-act">' +
         '<button class="vbtn" data-vact="wait" aria-label="等待"><span>⏳</span><span class="vnum" data-k="wait">0</span></button>' +
-        '<button class="vbtn" data-vact="attack" aria-label="攻击"><span>⚔️</span><span class="vnum" data-k="atk">0</span></button>' +
+        '<div class="vact-col">' +
+          '<button class="vbtn vbtn-reset" data-vact="reset" aria-label="重置路径"><span>↺</span></button>' +
+          '<button class="vbtn" data-vact="attack" aria-label="攻击"><span>⚔️</span><span class="vnum" data-k="atk">0</span></button>' +
+        '</div>' +
         '<button class="vbtn" data-vact="skill" aria-label="技能"><span>✦</span><span class="vlab" data-k="sp">0</span></button>' +
       '</div>' +
     '</div>';
@@ -194,10 +197,12 @@ function syncVirtualPad() {
   const waitBtn = vpadHostEl.querySelector('[data-vact="wait"]');
   const atkBtn = vpadHostEl.querySelector('[data-vact="attack"]');
   const spBtn = vpadHostEl.querySelector('[data-vact="skill"]');
-  /* 等待 / 攻击 / 技能是战斗语义，大厅里没有意义 → 保持禁用 */
+  const resetBtn = vpadHostEl.querySelector('[data-vact="reset"]');
+  /* 等待 / 攻击 / 技能 / 重置路径 是战斗语义，大厅里没有意义 → 保持禁用 */
   if (waitBtn) waitBtn.disabled = !planning;
   if (atkBtn) atkBtn.disabled = !planning;
   if (spBtn) spBtn.disabled = !planning;
+  if (resetBtn) resetBtn.disabled = !planning;
   /* ★ ISSUE-20261029-35：大厅里没有对局数据，三键数字清成「—」。
    * 注意不能只看 `!player` —— 回大厅时 player 还留着上一局的残留对象，
    * 直接读它会显示上一局的伤害骰 / 技力环（看起来像「还能用」，其实是脏数据）。 */

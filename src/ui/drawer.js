@@ -10,7 +10,7 @@
  *  4. Esc 用捕获阶段拦截并 stopPropagation，避免顺带触发 X（重置路径）等快捷键。
  *  5. 遮罩只挡游戏区：视觉上全屏，但抽屉 z-index 更高，露在遮罩之上。
  * ========================================================================= */
-const DRAWER_IDS = ['settings', 'stats', 'levelup'];
+const DRAWER_IDS = ['settings', 'levelup', 'char'];
 const drawerEls = {};
 DRAWER_IDS.forEach(function (id) {
   const el = document.getElementById('drawer' + id.charAt(0).toUpperCase() + id.slice(1));
@@ -31,11 +31,13 @@ function drawerSyncChrome() {
     btn.title = on ? '收起设置' : '设置';
     btn.setAttribute('aria-expanded', on ? 'true' : 'false');
   }
-  const sbtn = document.getElementById('statsOpenBtn');
-  if (sbtn) {
-    const on = drawerCurrent === 'stats';
-    sbtn.classList.toggle('on', on);
-    sbtn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  const cbtn = document.getElementById('charOpenBtn');
+  if (cbtn) {
+    const on = drawerCurrent === 'char';
+    cbtn.classList.toggle('on', on);
+    cbtn.textContent = on ? '✕' : '♟️';
+    cbtn.title = on ? '收起角色面板' : '角色面板';
+    cbtn.setAttribute('aria-expanded', on ? 'true' : 'false');
   }
   if (drawerMaskEl) drawerMaskEl.classList.toggle('on', !!drawerCurrent);
 }
@@ -88,7 +90,9 @@ function drawerOpen(id) {
   const el = drawerEls[id];
   if (!el) return;
   if (id === 'settings') syncBoardOverlayRect();
+  if (id === 'char') syncBoardOverlayRect();
   // 互斥：先收起别的抽屉与所有二层
+  if (id === 'stats') return;   // 属性抽屉已移除（ISSUE-20261029-37），不再受理
   if (drawerCurrent && drawerCurrent !== id) {
     const prev = drawerEls[drawerCurrent];
     if (prev) { prev.classList.remove('on'); prev.setAttribute('aria-hidden', 'true'); }
@@ -106,6 +110,12 @@ function drawerOpen(id) {
       try { if (typeof syncAbilityInfoIfOpen === 'function') syncAbilityInfoIfOpen(); } catch (_) {}
     });
   }
+  if (id === 'char') {
+    // 面板贴棋盘，下一帧 clientWidth 才是真实值；renderCharPanel 会绘制六维图到 #charRadarCanvas
+    requestAnimationFrame(function () {
+      try { if (typeof renderCharPanel === 'function') renderCharPanel(); } catch (_) {}
+    });
+  }
 }
 
 function drawerToggle(id) {
@@ -117,11 +127,11 @@ if (drawerMaskEl) drawerMaskEl.addEventListener('click', function () { drawerClo
 document.querySelectorAll('[data-drawer-close]').forEach(function (b) {
   b.addEventListener('click', function (e) { e.stopPropagation(); drawerClose(); });
 });
-// 角色卡下方的「属性」入口（六维图搬走后它是唯一入口，手机也用它）
-const statsOpenBtnEl = document.getElementById('statsOpenBtn');
-if (statsOpenBtnEl) statsOpenBtnEl.addEventListener('click', function (e) {
+// 角色面板入口（ISSUE-20261029-36）：右下角 ♟️ 按钮（六维图 / 加点入口并入面板与升级抽屉，不再单独留属性按钮）
+const charOpenBtnEl = document.getElementById('charOpenBtn');
+if (charOpenBtnEl) charOpenBtnEl.addEventListener('click', function (e) {
   e.stopPropagation();
-  drawerToggle('stats');
+  drawerToggle('char');
 });
 /* Esc：先关二层，再关抽屉。捕获阶段 + stopPropagation，避免落到 handleKeyDown 的其它键位 */
 document.addEventListener('keydown', function (e) {

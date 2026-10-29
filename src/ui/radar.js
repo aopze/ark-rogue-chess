@@ -2,17 +2,22 @@
 /* =========================================================
  * 六维雷达图
  * ========================================================= */
-function drawRadar() {
-  if (!radarCanvas) return;
-  const ctx = radarCanvas.getContext('2d');
+let charRadarLabelHits = [];   // drawRadar 写入：角色面板六维图 6 个属性文字的命中框（ISSUE-20261029-37）
+function drawRadar(forceCanvas, forceAbilities) {
+  const canvas = forceCanvas || radarCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  radarLabelHits = [];
+  /* ★ 角色面板六维图（#charRadarCanvas）也要记录命中区，让点击顶点文字直接加点（ISSUE-20261029-37） */
+  const isChar = (canvas && canvas.id === 'charRadarCanvas');
+  const recordHits = (canvas === radarCanvas) || isChar;
+  if (recordHits) { if (isChar) charRadarLabelHits = []; else radarLabelHits = []; }
   const dpr = window.devicePixelRatio || 1;
-  const cssW = radarCanvas.clientWidth || 120;
-  const cssH = radarCanvas.clientHeight || 120;
-  if (radarCanvas.width !== Math.round(cssW * dpr) || radarCanvas.height !== Math.round(cssH * dpr)) {
-    radarCanvas.width = Math.round(cssW * dpr);
-    radarCanvas.height = Math.round(cssH * dpr);
+  const cssW = canvas.clientWidth || 120;
+  const cssH = canvas.clientHeight || 120;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
@@ -28,14 +33,16 @@ function drawRadar() {
     (Math.min(cssW, cssH) / 2 - labelFont * 2.45) / 0.87 - pad
   );
 
-  let abilities = null;
-  if (phase === PHASE.CHAR_SELECT) {
-    /* ISSUE-20261028-19：动态角色读候选副本（加点后立刻反映），静态角色仍读常量 */
-    if (selectedCandidate) abilities = candidateAbilitiesOf(selectedCandidate.id);
-  } else if (player) {
-    abilities = player.abilities;
-  } else if (playerStats && playerStats.abilities) {
-    abilities = playerStats.abilities;
+  let abilities = forceAbilities || null;
+  if (!abilities) {
+    if (phase === PHASE.CHAR_SELECT) {
+      /* ISSUE-20261028-19：动态角色读候选副本（加点后立刻反映），静态角色仍读常量 */
+      if (selectedCandidate) abilities = candidateAbilitiesOf(selectedCandidate.id);
+    } else if (player) {
+      abilities = player.abilities;
+    } else if (playerStats && playerStats.abilities) {
+      abilities = playerStats.abilities;
+    }
   }
 
   ctx.strokeStyle = 'rgba(255,255,255,0.10)';
@@ -119,9 +126,9 @@ function drawRadar() {
   ctx.textBaseline = 'middle';
   /* ISSUE-20261028-19：选角阶段的可加点提示要跟随候选副本（预备干员有 5 点，前四人没有）。
    * 这里不用 canAllocateNow() 是为了不让 radar.js 依赖 panels.js 的加载顺序 —— 语义完全一致。 */
-  const canAlloc = (phase === PHASE.CHAR_SELECT)
+  const canAlloc = !forceAbilities && ((phase === PHASE.CHAR_SELECT)
     ? (candidatePointsLeft() > 0)
-    : !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
+    : !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR)));
   for (let i = 0; i < n; i++) {
     const k = ABILITY_ORDER[i];
     const ang = -Math.PI / 2 + (Math.PI * 2 * i) / n;
@@ -141,7 +148,7 @@ function drawRadar() {
     if (canAlloc) col = '#cfe6ff';           // 可加点时整体提亮，提示可点击
     ctx.fillStyle = col;
     ctx.fillText(ABILITY_FULL[k], lx, ly);
-    radarLabelHits.push({ k, x: lx, y: ly, r: labelFont });
+    if (recordHits) { (isChar ? charRadarLabelHits : radarLabelHits).push({ k, x: lx, y: ly, r: labelFont }); }
     // 可加点且未达上限：在属性名外画一圈金色方框，明确「点我加点」
     if (canAlloc && abilities && abilities[k] < ABILITY_CAP) {
       const tw = ctx.measureText(ABILITY_FULL[k]).width;

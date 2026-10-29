@@ -20,7 +20,7 @@
      不能用 flex-grow —— 一旦拉伸就会破坏 1:1。 */
   #boardWrap { flex: 0 0 auto; display: flex; justify-content: center; align-items: center; position:relative; min-width: 0; min-height: 0; overflow: hidden; aspect-ratio: 1 / 1; }
   /* ISSUE-18 B5：iOS Safari 长按会弹「拷贝/放大镜」，拖动跟随前必须关掉 callout */
-  #board { display:grid; gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; position: relative; }
+  #board { display:grid; grid-auto-rows: var(--cell); gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; position: relative; }
   #unitLayer { position:absolute; inset:0; pointer-events:none; z-index:40; overflow:visible; }
   #fxLayer { position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:50; }
   /* 正方形格子（ISSUE-20261028-09 A）：原来 height 是 calc(var(--cell) * 1.12)，
@@ -212,8 +212,8 @@
    * z-index 一律收敛成变量，禁止各处硬编码（--z-corner 是地图角标专用：30，必须低于单位层 40）。
    * ========================================================================= */
   :root { --z-corner: 30; --z-mask: 1100; --z-drawer: 1101; --z-vpad: 1002; }
-  /* 地图角标（ISSUE-20261029-21 · B 方案「叠层」，人类 01:0x 拍板）：
-     ⚙ 设置 → 棋盘右上格；♟ 账号与排行 → 棋盘左上格。尺寸 = 恰好一个格子（var(--cell)），
+  /* 地图角标（ISSUE-20261029-21 · B 方案「叠层」；20261029-36 增角色面板）：
+     ⚙ 设置 → 棋盘右上格；👤 账号与排行 → 棋盘左上格；♟️ 角色面板 → 棋盘右下格。尺寸 = 恰好一个格子（var(--cell)），
      随格子缩放；两者共用同一套样式（大小 / 圆角 / 配色 / 高亮态 / aria）。
      --corner-x / --corner-y 由 updateCellSize() 算出：#board 在 #boardWrap 里居中，
      四周可能各剩几像素，角标要贴的是「棋盘」的角而不是容器的角。
@@ -221,7 +221,7 @@
        敌人绘制在角标之上，血条 / 词缀 / 意图不会被盖住（本号 §B 强制处理 1）。
      ★ 代价（人类明确接受）：这两格点不到、也走不上去；攻击 / 技能 / 闪避都是点路径节点，
        所以角落里的敌人照样能打（§B 强制处理 3）。 */
-  #setOpenBtn, #lobbyOpenBtn {
+  #setOpenBtn, #lobbyOpenBtn, #charOpenBtn {
     position: absolute; top: var(--corner-y); z-index: var(--z-corner);
     display: flex; width: var(--cell); height: var(--cell);
     align-items: center; justify-content: center; padding: 0;
@@ -234,9 +234,11 @@
   }
   #setOpenBtn { right: var(--corner-x); }
   #lobbyOpenBtn { left: var(--corner-x); }
-  #setOpenBtn:hover, #lobbyOpenBtn:hover { background: rgba(48,48,72,.95); color: #fff; }
-  #setOpenBtn:active, #lobbyOpenBtn:active { transform: scale(.92); }
-  #setOpenBtn.on, #lobbyOpenBtn.on { color: #ffd700; border-color: #6b5a1f; background: rgba(60,50,20,.92); }
+  /* ★ 角色面板按钮：地图右下格（ISSUE-20261029-36，人类 07:0x） */
+  #charOpenBtn { top: auto; bottom: var(--corner-y); right: var(--corner-x); }
+  #setOpenBtn:hover, #lobbyOpenBtn:hover, #charOpenBtn:hover { background: rgba(48,48,72,.95); color: #fff; }
+  #setOpenBtn:active, #lobbyOpenBtn:active, #charOpenBtn:active { transform: scale(.92); }
+  #setOpenBtn.on, #lobbyOpenBtn.on, #charOpenBtn.on { color: #ffd700; border-color: #6b5a1f; background: rgba(60,50,20,.92); }
   /* 直开 game.html（无外壳）时 ♟ 由 chrome.js 置 hidden，不留死按钮 */
   #lobbyOpenBtn[hidden] { display: none; }
   /* 遮罩：全屏半透明，抽屉本体 z-index 更高所以露在上面 */
@@ -311,6 +313,32 @@
   #drawerSettings.on { opacity: 1; visibility: visible; transform: none; }
   #drawerSettings .drawer-corner-x { top: 0; right: 0; }
   #drawerSettings .drawer-corner-x:active { transform: scale(.92); }
+  /* =========================================================================
+   * ★ 角色面板弹窗（ISSUE-20261029-36）：与设置面板同款「覆盖棋盘格」机制。
+   * 正方形（9×9 棋盘 = 正方形），视觉上就是「地图原地变成角色面板」。
+   * 显隐同样用 opacity + visibility（ID 选择器优先级高于 .drawer.on，覆盖平移）。
+   * 内容：顶部 = 名字；名字下 = 血条；左下 = 六维图；右下 = 空出一栏。无属性按钮。
+   * ========================================================================= */
+  #drawerChar {
+    top: var(--board-top, 0); left: var(--board-left, 0);
+    right: auto; bottom: auto;
+    width: var(--board-w, min(360px, 86vw));
+    height: var(--board-h, 100%);
+    max-width: none; border-left: 1px solid #33334f; border-radius: 0; box-shadow: none;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
+  }
+  #drawerChar.on { opacity: 1; visibility: visible; transform: none; }
+  #drawerChar .drawer-corner-x { top: 0; right: 0; }
+  #drawerChar .drawer-corner-x:active { transform: scale(.92); }
+  /* 角色面板内部布局：上 = 名字 + 血条；下 = 左六维图 / 右空栏（2 列） */
+  .char-body { gap: 12px; }
+  .char-head { display: flex; flex-direction: column; gap: 8px; }
+  .char-name { font-size: 20px; font-weight: 900; color: #4ecdc4; letter-spacing: 1px; }
+  .char-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: center; flex: 1 1 auto; min-height: 0; }
+  .char-radar { display: flex; align-items: center; justify-content: center; }
+  .char-radar canvas { width: min(46vw, 240px); height: min(46vw, 240px); touch-action: manipulation; }
+  .char-empty { /* 右下空出一栏，仅占位 */ }
   /* 标题靠右：右侧要给那个格子大小的关闭按钮让出位置（不然会压在标题上） */
   .drawer-head.head-end { justify-content: flex-end; padding-right: calc(var(--corner-x) + var(--cell) + 8px); }
   .drawer-body {
@@ -443,6 +471,20 @@
   .tips .tip-k.skill { color:#ffd700; }
   .ability-btn { padding:1px 6px; font-size:12px; border-radius:3px; background:#4ecdc4; color:#111; margin-left:2px; cursor:pointer; border:none; font-weight:bold; }
   .start-btn { width: 100%; padding: 16px; font-size: 18px; background: linear-gradient(135deg, #4ecdc4, #2ecc71); color: #fff; border-radius: 8px; box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); transition: all 0.2s; font-weight: 900; letter-spacing: 2px; }
+  /* ★ ISSUE-20261029-36：开始行动按钮内部改为显示「动作 UI」，去掉「开始行动」四字。
+   * 框沿用 .start-btn 的绿色胶囊配色，内部文字更紧凑（动作标签含 ×N / 计数，2px 字距会太散）。 */
+  .action-start-btn { letter-spacing: .5px; font-size: 15px; padding: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* ★ ISSUE-20261029-37：行动按钮上方 HUD（姓名/等级/经验条/血条）。不显示技力条。 */
+  .action-wrap { width: 100%; max-width: 380px; margin: 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  .hud { display: flex; flex-direction: column; gap: 3px; padding: 5px 8px; background: rgba(10,12,24,.55); border: 1px solid rgba(255,255,255,.10); border-radius: 8px; box-sizing: border-box; }
+  .hud-line { display: flex; justify-content: space-between; align-items: center; }
+  .hud-name { font-weight: 800; color: #fff; font-size: 12px; }
+  .hud-lv { color: #ffd700; font-weight: 800; font-size: 12px; }
+  .hud-bar { position: relative; height: 9px; background: rgba(0,0,0,.5); border-radius: 5px; overflow: hidden; }
+  .hud-xp-fill { height: 100%; width: 0; background: linear-gradient(90deg, #4ea0ff, #7dd3fc); transition: width .25s ease; }
+  .hud-hp { height: 13px; }
+  .hud-hp-fill { height: 100%; width: 0; background: linear-gradient(90deg, #e74c3c, #f1c40f); transition: width .25s ease; }
+  .hud-hp-txt { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000; }
   .start-btn:active:not(:disabled) { transform: scale(0.97); }
   .start-btn:disabled { background: #444; box-shadow: none; color: #777; letter-spacing: normal; }
   @media (max-width: 760px) {
@@ -586,6 +628,9 @@
   .vpad-dir .vbtn:nth-child(3) { grid-column: 2; grid-row: 2; }
   .vpad-dir .vbtn:nth-child(4) { grid-column: 3; grid-row: 2; }
   .vpad-act { display: flex; gap: 8px; align-items: flex-end; }
+  .vact-col { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .vbtn-reset { width: 38px; height: 38px; font-size: 18px; background: rgba(120,58,58,.92); border: 1px solid #6b3a3a; }
+  .vbtn-reset:active { transform: scale(.92); background: rgba(150,70,70,.96); }
   .vbtn { position: relative; width: 46px; height: 46px; padding: 0; border-radius: 50%;
     border: 1px solid #44445f; background: rgba(38,38,60,.94); color: #dbe6ff;
     font-size: 15px; font-weight: 900; line-height: 1; font-family: inherit;
@@ -634,10 +679,11 @@
     <div id="board"></div>
     <div id="unitLayer"></div>
     <div id="fxLayer"></div>
-    <!-- 地图角标（ISSUE-20261029-21）：♟ 左上格 / ⚙ 右上格，尺寸 = 一格。
+    <!-- 地图角标（ISSUE-20261029-21）：👤 左上格 / ⚙ 右上格 / ♟️ 右下格，尺寸 = 一格。
          不能放进 #board —— paintBoard() 每帧都 innerHTML 重刷那一层，角标会被冲掉。 -->
-    <button id="lobbyOpenBtn" title="账号与排行" aria-label="账号与排行" aria-expanded="false">♟</button>
+    <button id="lobbyOpenBtn" title="账号与排行" aria-label="账号与排行" aria-expanded="false">👤</button>
     <button id="setOpenBtn" title="设置" aria-label="设置" aria-expanded="false">⚙</button>
+    <button id="charOpenBtn" title="角色面板" aria-label="角色面板" aria-expanded="false">♟️</button>
     <!-- 选角厅「技能说明展开层」（ISSUE-20261029-29）：点角色后盖在棋盘中部（第 1 行 ~ 倒数第 2 行），
          出口所在的第一行不遮。放在 #boardWrap 里而不是 #board 里：paintBoard() 每次都 innerHTML
          重建 #board 那一层，放进去会被冲掉。位置由 layoutCharInfoSheet() 按格子矩形实算。 -->
@@ -652,8 +698,7 @@
         <div id="heroKv"></div>
       </div>
     </div>
-    <!-- 六维图入口（原左上六维图已搬进抽屉；方形按钮 = 信息块，不用圆形） -->
-    <button id="statsOpenBtn" title="属性 / 六维图" aria-expanded="false">⌗ 属性</button>
+    <!-- 六维图 / 加点入口已并入 ♟️ 角色面板弹窗与升级奖励抽屉（ISSUE-20261029-36），侧栏不再单独留「属性」按钮 -->
     <div id="stats"></div>
     <div id="footBar" class="mini"></div>
     <div id="vpadHost"></div>
@@ -684,36 +729,34 @@
   </div>
 </section>
 
-<!-- ② 属性抽屉（六维图 + 剩余点数；二层是属性说明卡） -->
-<section class="drawer" id="drawerStats" data-drawer="stats" aria-hidden="true">
-  <header class="drawer-head">
-    <span class="drawer-title" id="drawerStatsTitle">属性</span>
-    <button class="drawer-x" data-drawer-close title="关闭">✕</button>
-  </header>
-  <div class="drawer-body">
-    <div id="statsDrawerRadar">
-      <div id="radarWrap"><canvas id="radarCanvas"></canvas></div>
-      <div id="abilityPointsRow"></div>
-    </div>
-    <div id="statsDrawerTip" class="mini"></div>
-  </div>
-  <!-- 二层：属性说明卡（点属性名后从右侧再滑一层，不新开浮层） -->
-  <div class="drawer-layer" id="abilityInfoLayer" aria-hidden="true">
-    <header class="drawer-head">
-      <button class="ab-back" id="abilityInfoBack">← 返回</button>
-      <button class="drawer-x" data-drawer-close title="关闭">✕</button>
-    </header>
-    <div class="drawer-body" id="abilityInfoBody"></div>
-  </div>
-</section>
-
-<!-- ③ 升级奖励抽屉（通关自动弹出；选完自动收，若还有属性点再弹②） -->
+<!-- ③ 升级奖励抽屉（通关自动弹出；选完奖励后自动弹 ♟️ 角色面板做六维加点，ISSUE-20261029-37） -->
 <section class="drawer" id="drawerLevelUp" data-drawer="levelup" aria-hidden="true">
   <header class="drawer-head">
     <span class="drawer-title" id="drawerLevelUpTitle">升级奖励</span>
     <button class="drawer-x" data-drawer-close title="关闭">✕</button>
   </header>
   <div class="drawer-body" id="drawerLevelUpBody"></div>
+</section>
+
+<!-- ④ 角色面板抽屉（ISSUE-20261029-36 奠基，2026-10-29 扩展为升级加点入口）：与设置面板同款覆盖棋盘弹窗。
+     内容：顶部名字 + 血条 + 剩余点数提示；左下六维图（可直接点属性名加点）；右下空出一栏。
+     属性抽屉（drawerStats）已移除（ISSUE-20261029-37）：升级时自动弹出本面板，用六维图加点。 -->
+<section class="drawer" id="drawerChar" data-drawer="char" aria-hidden="true">
+  <header class="drawer-head head-end">
+    <span class="drawer-title">角色</span>
+  </header>
+  <button class="drawer-corner-x" data-drawer-close title="关闭角色面板">✕</button>
+  <div class="drawer-body char-body">
+    <div class="char-head">
+      <div class="char-name" id="charPanelName">—</div>
+      <div class="char-hp" id="charPanelHp"></div>
+      <div class="char-alloc" id="charAllocHint"></div>
+    </div>
+    <div class="char-grid">
+      <div class="char-radar"><canvas id="charRadarCanvas"></canvas></div>
+      <div class="char-empty"></div>
+    </div>
+  </div>
 </section>
 
 <script>
@@ -730,9 +773,9 @@
  *   builtAt  —— 基线冻结时间 */
 window.__ARK_VERSION__ = {
   version: '0.1.0-prototype',
-  build:   '10290649',
-  commit:  '0123dc4003d6eaa8e4e29c814395c253aac585ee',
-  builtAt: '2026-10-28T22:49:23Z'
+  build:   '10290745',
+  commit:  'c27cd896b343a39ae3b34823a4bdce7798b0f388',
+  builtAt: '2026-10-29T05:35:28Z'
 };
 (function () {
   var v = window.__ARK_VERSION__, el = document.getElementById('setVer');
@@ -773,17 +816,17 @@ window.__ARK_VERSION__ = {
 const SPAWN_CLEAR_RADIUS = 2;
 const OBSTACLE_MAX_GROUP = 4;
 const OBSTACLE_GROUPS_TRY = 8;
-/* ★ 固定棋盘尺寸（ISSUE-20261029-29，人类 2026-10-29 04:42）
- * 「地图改成固定的 9*9，随机地图的机制不变，最长的列和最长的行都固定为 9」。
+/* ★ 固定棋盘尺寸（ISSUE-20261029-29，人类 2026-10-29 04:42 定为 9×9，2026-10-29 07:31 改为 11×11）
+ * 「地图改成固定的 11*11，随机地图的机制不变，最长的列和最长的行都固定为 11」。
  * 旧公式按关卡把地图从 16×16 一路长到 25×25（格子越往后越小、走位越挤），
- * 现在行列都写死 9：内部可用 7×7 = 49 格，随机生成流程（growRegion → smooth →
- * placeObstacles → 起点筛选）一行不改，只是把「目标可走格数」从 70+ 降到适配 49 格的量级。 */
-const BOARD_ROWS = 9;
-const BOARD_COLS = 9;
+ * 现在行列都写死 11：内部可用 9×9 = 81 格，随机生成流程（growRegion → smooth →
+ * placeObstacles → 起点筛选）一行不改，只是把「目标可走格数」从 70+ 降到适配 81 格的量级。 */
+const BOARD_ROWS = 11;
+const BOARD_COLS = 11;
 /* 目标可走格数（喂给 growRegion，最终还要再被 smooth / placeObstacles 削一轮）。
- * 9×9 内部只有 7×7 = 49 格：写 42 时实测最终只剩 29 格可走，5 只敌人 + 玩家挤得没法走位；
- * 提到 46（＝内部的 94%）后实测 36-40 格，既留得出掩体也留得出绕后的路。 */
-const BOARD_TARGET_WALKABLE = 46;
+ * 11×11 内部有 9×9 = 81 格：按 9×9 时代 46（＝内部 94%）等比放大到 70（≈内部 86%），
+ * 既留得出掩体也留得出绕后的路；generateMap 的 ±15 容差会自动收口。 */
+const BOARD_TARGET_WALKABLE = 70;
 /* 单关敌人上限：9×9 定版后从 6 降到 5。
  * 旧地图 16×16（后期 25×25）装 6 只还有走位空间；9×9 内部只有 49 格、实际可走 ~38 格，
  * 6 只 + 玩家会把整张图塞满：generateMap 要求「两两曼哈顿 ≥2 且离玩家 ≥5」的起点，
@@ -1904,6 +1947,7 @@ const heroKvEl = document.getElementById('heroKv');
 const controlsEl = document.getElementById('controls');
 const actionSlotEl = document.getElementById('actionSlot');   // 竖屏时「开始行动」按钮的槽位
 const radarCanvas = document.getElementById('radarCanvas');
+const charRadarCanvas = document.getElementById('charRadarCanvas');
 let radarLabelHits = [];   // drawRadar 写入：六维图 6 个属性文字的命中框
 
 /* 点六维图顶点文字：有可分配点数 → 直接 +1；否则 → 打开属性说明卡。
@@ -1915,29 +1959,31 @@ let radarLabelHits = [];   // drawRadar 写入：六维图 6 个属性文字的�
  *   这样既有「一键加点」的顺手，又保留「这属性到底管什么」的查法。
  * 判定用 canAllocateNow()（panels.js 定义，函数声明提升可跨文件调用），
  * 与说明卡里「+1」按钮的启用条件完全同源 —— 不会出现「图能点、按钮灰着」的错位。 */
-radarCanvas.addEventListener('click', (e) => {
-  if (phase === PHASE.GAMEOVER || phase === PHASE.RESOLVING) return;
-  const rect = radarCanvas.getBoundingClientRect();
-  const x = e.clientX - rect.left, y = e.clientY - rect.top;
-  const hit = radarLabelHits.find(h => Math.hypot(h.x - x, h.y - y) <= h.r + 10);
-  if (!hit) return;
-  if (canAllocateNow() && currentAbilityValue(hit.k) < ABILITY_CAP) {
-    allocateAbilityPoint(hit.k);
-    try { renderAbilityDrawer(); } catch (_) {}
-    try { drawRadar(); } catch (_) {}
-    try { if (typeof syncAbilityInfoIfOpen === 'function') syncAbilityInfoIfOpen(); } catch (_) {}
-    /* 局内加点要把「下一关」按钮的禁用态一并刷新（点数归零才放行） */
-    try { render(); } catch (_) {}
-    return;
-  }
-  if (typeof openAbilityInfo === 'function') openAbilityInfo(hit.k);
-});
-radarCanvas.addEventListener('mousemove', (e) => {
-  const rect = radarCanvas.getBoundingClientRect();
-  const x = e.clientX - rect.left, y = e.clientY - rect.top;
-  const hit = radarLabelHits.find(h => Math.hypot(h.x - x, h.y - y) <= h.r + 10);
-  radarCanvas.style.cursor = hit ? 'pointer' : '';
-});
+/* ★ ISSUE-20261029-37：属性抽屉已移除，六维图加点入口改为「角色面板（♟️）里的六维图」。
+ * 点顶点文字：有可分配点数 → 直接 +1（canAllocateNow 与 allocateAbilityPoint 同源）；
+ * 点数用完 / 该项已满 → 不弹说明卡（属性说明卡已随属性抽屉移除），仅忽略点击。 */
+if (charRadarCanvas) {
+  charRadarCanvas.addEventListener('click', (e) => {
+    if (phase === PHASE.GAMEOVER || phase === PHASE.RESOLVING) return;
+    const rect = charRadarCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const hit = charRadarLabelHits.find(h => Math.hypot(h.x - x, h.y - y) <= h.r + 10);
+    if (!hit) return;
+    if (canAllocateNow() && currentAbilityValue(hit.k) < ABILITY_CAP) {
+      allocateAbilityPoint(hit.k);
+      try { if (drawerIsOpen('char')) renderCharPanel(); } catch (_) {}
+      /* 加点后刷新「下一关」按钮禁用态（点数归零才放行）；升级加点全部加完会自动收起面板 */
+      try { render(); } catch (_) {}
+      return;
+    }
+  });
+  charRadarCanvas.addEventListener('mousemove', (e) => {
+    const rect = charRadarCanvas.getBoundingClientRect();
+    const x = e.clientX - rect.left, y = e.clientY - rect.top;
+    const hit = charRadarLabelHits.find(h => Math.hypot(h.x - x, h.y - y) <= h.r + 10);
+    charRadarCanvas.style.cursor = hit ? 'pointer' : '';
+  });
+}
 
 const unitEls = new Map();
 
@@ -1954,7 +2000,7 @@ const unitEls = new Map();
  *  4. Esc 用捕获阶段拦截并 stopPropagation，避免顺带触发 X（重置路径）等快捷键。
  *  5. 遮罩只挡游戏区：视觉上全屏，但抽屉 z-index 更高，露在遮罩之上。
  * ========================================================================= */
-const DRAWER_IDS = ['settings', 'stats', 'levelup'];
+const DRAWER_IDS = ['settings', 'levelup', 'char'];
 const drawerEls = {};
 DRAWER_IDS.forEach(function (id) {
   const el = document.getElementById('drawer' + id.charAt(0).toUpperCase() + id.slice(1));
@@ -1975,11 +2021,13 @@ function drawerSyncChrome() {
     btn.title = on ? '收起设置' : '设置';
     btn.setAttribute('aria-expanded', on ? 'true' : 'false');
   }
-  const sbtn = document.getElementById('statsOpenBtn');
-  if (sbtn) {
-    const on = drawerCurrent === 'stats';
-    sbtn.classList.toggle('on', on);
-    sbtn.setAttribute('aria-expanded', on ? 'true' : 'false');
+  const cbtn = document.getElementById('charOpenBtn');
+  if (cbtn) {
+    const on = drawerCurrent === 'char';
+    cbtn.classList.toggle('on', on);
+    cbtn.textContent = on ? '✕' : '♟️';
+    cbtn.title = on ? '收起角色面板' : '角色面板';
+    cbtn.setAttribute('aria-expanded', on ? 'true' : 'false');
   }
   if (drawerMaskEl) drawerMaskEl.classList.toggle('on', !!drawerCurrent);
 }
@@ -2032,7 +2080,9 @@ function drawerOpen(id) {
   const el = drawerEls[id];
   if (!el) return;
   if (id === 'settings') syncBoardOverlayRect();
+  if (id === 'char') syncBoardOverlayRect();
   // 互斥：先收起别的抽屉与所有二层
+  if (id === 'stats') return;   // 属性抽屉已移除（ISSUE-20261029-37），不再受理
   if (drawerCurrent && drawerCurrent !== id) {
     const prev = drawerEls[drawerCurrent];
     if (prev) { prev.classList.remove('on'); prev.setAttribute('aria-hidden', 'true'); }
@@ -2050,6 +2100,12 @@ function drawerOpen(id) {
       try { if (typeof syncAbilityInfoIfOpen === 'function') syncAbilityInfoIfOpen(); } catch (_) {}
     });
   }
+  if (id === 'char') {
+    // 面板贴棋盘，下一帧 clientWidth 才是真实值；renderCharPanel 会绘制六维图到 #charRadarCanvas
+    requestAnimationFrame(function () {
+      try { if (typeof renderCharPanel === 'function') renderCharPanel(); } catch (_) {}
+    });
+  }
 }
 
 function drawerToggle(id) {
@@ -2061,11 +2117,11 @@ if (drawerMaskEl) drawerMaskEl.addEventListener('click', function () { drawerClo
 document.querySelectorAll('[data-drawer-close]').forEach(function (b) {
   b.addEventListener('click', function (e) { e.stopPropagation(); drawerClose(); });
 });
-// 角色卡下方的「属性」入口（六维图搬走后它是唯一入口，手机也用它）
-const statsOpenBtnEl = document.getElementById('statsOpenBtn');
-if (statsOpenBtnEl) statsOpenBtnEl.addEventListener('click', function (e) {
+// 角色面板入口（ISSUE-20261029-36）：右下角 ♟️ 按钮（六维图 / 加点入口并入面板与升级抽屉，不再单独留属性按钮）
+const charOpenBtnEl = document.getElementById('charOpenBtn');
+if (charOpenBtnEl) charOpenBtnEl.addEventListener('click', function (e) {
   e.stopPropagation();
-  drawerToggle('stats');
+  drawerToggle('char');
 });
 /* Esc：先关二层，再关抽屉。捕获阶段 + stopPropagation，避免落到 handleKeyDown 的其它键位 */
 document.addEventListener('keydown', function (e) {
@@ -2076,11 +2132,10 @@ document.addEventListener('keydown', function (e) {
 
 /* src: src/ui/panels.js */
 /* =========================================================================
- * ISSUE-20261028-09 G2 · 属性抽屉（六维 + 剩余点数）与属性说明卡
+ * ISSUE-20261028-09 G2 · 属性数据（属性抽屉与说明卡已随 ISSUE-20261029-37 移除）
  *
- * 说明卡的数值公式必须与代码现状一致，不许凭印象写（本文件的文案照 issue 表格抄）。
- * 加点入口保留在说明卡里（一个方形「+1」），不挪进别的抽屉 —— 否则手机端要两次点击才能加一点。
- * 六维图上的金色方框提示仍由 drawRadar() 画，状态与「+1」按钮一致。
+ * 六维数值公式仅保留给雷达图（canAlloc / 顶点提示）与角色面板（♟️）六维图加点使用。
+ * 加点入口：角色面板里的六维图 —— 点属性名直接 +1（见 dom-refs.js 的 #charRadarCanvas 点击）。
  * ========================================================================= */
 const ABILITY_INFO = {
   str: { name: '力量', desc: '近战伤害与近战命中。近战伤害 = <code>1 + 力量修正</code>；风笛 / 泥岩 用这一条。' },
@@ -2118,87 +2173,6 @@ function canAllocateNow() {
   return !!(playerStats && playerStats.abilityPoints > 0
     && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
 }
-
-/* 属性抽屉第一层：剩余点数 + 一句说明 */
-function renderAbilityDrawer() {
-  const row = document.getElementById('abilityPointsRow');
-  const tip = document.getElementById('statsDrawerTip');
-  const inSelect = phase === PHASE.CHAR_SELECT;
-  const pts = pointsLeftNow();
-  if (row) {
-    /* ISSUE-20261028-19：选角 + 动态角色时**必须显示**点数行（原来 inSelect 一律隐藏），
-     * 否则玩家看不到「剩余 5 点」，只能在说明卡里猜。 */
-    const show = pts > 0 && (!inSelect || candidateIsDynamic());
-    row.textContent = show ? ('剩余 ' + pts + ' 点 · 点属性名加点') : '';
-    row.style.display = show ? '' : 'none';
-  }
-  if (tip) {
-    if (inSelect) {
-      tip.textContent = candidateIsDynamic()
-        ? '点属性名直接加点（剩余 ' + pts + ' 点）。智力高于力量 → 远程熟练，否则近战熟练。'
-        : '六维越高越强：绿色 = 熟练项与最高属性。点属性名看具体作用。';
-    } else {
-      tip.textContent = pts > 0
-        ? '点属性名直接 +1（金色方框 = 还能加）；点数用完后点属性名看作用与数值公式。'
-        : '点属性名查看作用与数值公式（没有可分配的点数）。';
-    }
-  }
-  const title = document.getElementById('drawerStatsTitle');
-  if (title) title.textContent = (inSelect && !candidateIsDynamic()) ? '角色属性' : '属性 · 加点';
-}
-
-/* 说明卡：填内容 + 滑入二层。同一点属性名可原地刷新，不关闭卡片 */
-function openAbilityInfo(k) {
-  const info = ABILITY_INFO[k];
-  if (!info) return;
-  const body = document.getElementById('abilityInfoBody');
-  const layer = document.getElementById('abilityInfoLayer');
-  if (!body || !layer) return;
-  const v = currentAbilityValue(k);
-  const canAdd = canAllocateNow() && v < ABILITY_CAP;
-  const left = pointsLeftNow();
-  body.innerHTML =
-    '<div class="ab-info-name">' + info.name + '</div>' +
-    '<div class="ab-info-val">当前 <b>' + v + '</b> · 修正 <b>' + abilityLabel(v) + '</b></div>' +
-    '<div class="ab-info-desc">' + info.desc + '</div>' +
-    '<div style="display:flex;align-items:center;gap:10px;margin-top:2px;">' +
-      '<button class="ab-plus" id="abilityInfoPlus"' + (canAdd ? '' : ' disabled') + '>+1</button>' +
-      '<span class="mini">' + (canAllocateNow()
-        ? ('剩余 ' + left + ' 点')
-        : (v >= ABILITY_CAP ? '已达上限 ' + ABILITY_CAP : '没有可分配的点数')) + '</span>' +
-    '</div>';
-  const plus = document.getElementById('abilityInfoPlus');
-  if (plus) plus.onclick = function () {
-    if (!canAllocateNow() || currentAbilityValue(k) >= ABILITY_CAP) return;
-    /* ISSUE-20261028-19：选角阶段加的是候选副本（不碰 CHARACTERS），局内加的是 playerStats。
-     * 分支放在 allocateAbilityPoint 里统一处理，这里只保留一个入口，免得两套加点逻辑走岔。 */
-    allocateAbilityPoint(k);
-    openAbilityInfo(k);                 // 原地刷新数值，说明卡不关闭
-    renderAbilityDrawer();
-    try { drawRadar(); } catch (_) {}
-    render();                           // 同步右侧控件（通关闸门按钮随点数归零启用）
-  };
-  layer.classList.add('on');
-  layer.setAttribute('aria-hidden', 'false');
-}
-
-/* 抽屉已开时若数值变了（加点 / 进入下一关），刷新说明卡里的数字 */
-function syncAbilityInfoIfOpen() {
-  const layer = document.getElementById('abilityInfoLayer');
-  if (!layer || !layer.classList.contains('on')) return;
-  const nameEl = layer.querySelector('.ab-info-name');
-  if (!nameEl) return;
-  for (const k in ABILITY_INFO) {
-    if (ABILITY_INFO[k].name === nameEl.textContent) { openAbilityInfo(k); return; }
-  }
-}
-
-const abilityInfoBackBtn = document.getElementById('abilityInfoBack');
-if (abilityInfoBackBtn) abilityInfoBackBtn.addEventListener('click', function (e) {
-  e.stopPropagation();
-  const layer = document.getElementById('abilityInfoLayer');
-  if (layer) { layer.classList.remove('on'); layer.setAttribute('aria-hidden', 'true'); }
-});
 
 /* src: src/rules/rng.js */
 /* P0.1-4 拆分 · 20261028b 基线 847-873 行 · mulberry32 可播种随机（RNG_SEED / RUN_SEED） */
@@ -2643,17 +2617,22 @@ function computeEnemyMove(type) {
 /* =========================================================
  * 六维雷达图
  * ========================================================= */
-function drawRadar() {
-  if (!radarCanvas) return;
-  const ctx = radarCanvas.getContext('2d');
+let charRadarLabelHits = [];   // drawRadar 写入：角色面板六维图 6 个属性文字的命中框（ISSUE-20261029-37）
+function drawRadar(forceCanvas, forceAbilities) {
+  const canvas = forceCanvas || radarCanvas;
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  radarLabelHits = [];
+  /* ★ 角色面板六维图（#charRadarCanvas）也要记录命中区，让点击顶点文字直接加点（ISSUE-20261029-37） */
+  const isChar = (canvas && canvas.id === 'charRadarCanvas');
+  const recordHits = (canvas === radarCanvas) || isChar;
+  if (recordHits) { if (isChar) charRadarLabelHits = []; else radarLabelHits = []; }
   const dpr = window.devicePixelRatio || 1;
-  const cssW = radarCanvas.clientWidth || 120;
-  const cssH = radarCanvas.clientHeight || 120;
-  if (radarCanvas.width !== Math.round(cssW * dpr) || radarCanvas.height !== Math.round(cssH * dpr)) {
-    radarCanvas.width = Math.round(cssW * dpr);
-    radarCanvas.height = Math.round(cssH * dpr);
+  const cssW = canvas.clientWidth || 120;
+  const cssH = canvas.clientHeight || 120;
+  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
@@ -2669,14 +2648,16 @@ function drawRadar() {
     (Math.min(cssW, cssH) / 2 - labelFont * 2.45) / 0.87 - pad
   );
 
-  let abilities = null;
-  if (phase === PHASE.CHAR_SELECT) {
-    /* ISSUE-20261028-19：动态角色读候选副本（加点后立刻反映），静态角色仍读常量 */
-    if (selectedCandidate) abilities = candidateAbilitiesOf(selectedCandidate.id);
-  } else if (player) {
-    abilities = player.abilities;
-  } else if (playerStats && playerStats.abilities) {
-    abilities = playerStats.abilities;
+  let abilities = forceAbilities || null;
+  if (!abilities) {
+    if (phase === PHASE.CHAR_SELECT) {
+      /* ISSUE-20261028-19：动态角色读候选副本（加点后立刻反映），静态角色仍读常量 */
+      if (selectedCandidate) abilities = candidateAbilitiesOf(selectedCandidate.id);
+    } else if (player) {
+      abilities = player.abilities;
+    } else if (playerStats && playerStats.abilities) {
+      abilities = playerStats.abilities;
+    }
   }
 
   ctx.strokeStyle = 'rgba(255,255,255,0.10)';
@@ -2760,9 +2741,9 @@ function drawRadar() {
   ctx.textBaseline = 'middle';
   /* ISSUE-20261028-19：选角阶段的可加点提示要跟随候选副本（预备干员有 5 点，前四人没有）。
    * 这里不用 canAllocateNow() 是为了不让 radar.js 依赖 panels.js 的加载顺序 —— 语义完全一致。 */
-  const canAlloc = (phase === PHASE.CHAR_SELECT)
+  const canAlloc = !forceAbilities && ((phase === PHASE.CHAR_SELECT)
     ? (candidatePointsLeft() > 0)
-    : !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR));
+    : !!(playerStats && playerStats.abilityPoints > 0 && (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR)));
   for (let i = 0; i < n; i++) {
     const k = ABILITY_ORDER[i];
     const ang = -Math.PI / 2 + (Math.PI * 2 * i) / n;
@@ -2782,7 +2763,7 @@ function drawRadar() {
     if (canAlloc) col = '#cfe6ff';           // 可加点时整体提亮，提示可点击
     ctx.fillStyle = col;
     ctx.fillText(ABILITY_FULL[k], lx, ly);
-    radarLabelHits.push({ k, x: lx, y: ly, r: labelFont });
+    if (recordHits) { (isChar ? charRadarLabelHits : radarLabelHits).push({ k, x: lx, y: ly, r: labelFont }); }
     // 可加点且未达上限：在属性名外画一圈金色方框，明确「点我加点」
     if (canAlloc && abilities && abilities[k] < ABILITY_CAP) {
       const tw = ctx.measureText(ABILITY_FULL[k]).width;
@@ -4381,7 +4362,10 @@ function mountVirtualPad() {
       '</div>' +
       '<div class="vpad-act">' +
         '<button class="vbtn" data-vact="wait" aria-label="等待"><span>⏳</span><span class="vnum" data-k="wait">0</span></button>' +
-        '<button class="vbtn" data-vact="attack" aria-label="攻击"><span>⚔️</span><span class="vnum" data-k="atk">0</span></button>' +
+        '<div class="vact-col">' +
+          '<button class="vbtn vbtn-reset" data-vact="reset" aria-label="重置路径"><span>↺</span></button>' +
+          '<button class="vbtn" data-vact="attack" aria-label="攻击"><span>⚔️</span><span class="vnum" data-k="atk">0</span></button>' +
+        '</div>' +
         '<button class="vbtn" data-vact="skill" aria-label="技能"><span>✦</span><span class="vlab" data-k="sp">0</span></button>' +
       '</div>' +
     '</div>';
@@ -4494,10 +4478,12 @@ function syncVirtualPad() {
   const waitBtn = vpadHostEl.querySelector('[data-vact="wait"]');
   const atkBtn = vpadHostEl.querySelector('[data-vact="attack"]');
   const spBtn = vpadHostEl.querySelector('[data-vact="skill"]');
-  /* 等待 / 攻击 / 技能是战斗语义，大厅里没有意义 → 保持禁用 */
+  const resetBtn = vpadHostEl.querySelector('[data-vact="reset"]');
+  /* 等待 / 攻击 / 技能 / 重置路径 是战斗语义，大厅里没有意义 → 保持禁用 */
   if (waitBtn) waitBtn.disabled = !planning;
   if (atkBtn) atkBtn.disabled = !planning;
   if (spBtn) spBtn.disabled = !planning;
+  if (resetBtn) resetBtn.disabled = !planning;
   /* ★ ISSUE-20261029-35：大厅里没有对局数据，三键数字清成「—」。
    * 注意不能只看 `!player` —— 回大厅时 player 还留着上一局的残留对象，
    * 直接读它会显示上一局的伤害骰 / 技力环（看起来像「还能用」，其实是脏数据）。 */
@@ -5534,6 +5520,14 @@ function handleKvAction(action) {
     if (playerPath.length < 1) { log('先在棋盘上规划路径，再在路径节点上设置技能节点。'); return; }
     toggleSkill(playerPath.length - 1);
     refreshBoardOnly();
+  } else if (action === 'reset') {
+    /* ★ ISSUE-20261029-36：虚拟按钮「重置路径」键（攻击键上方）—— 与键盘 X 等价。 */
+    if (playerPath.length > 1 || attackIndices.length > 0 || skillIndices.length > 0) {
+      playerPath = [{ x: player.x, y: player.y }];
+      attackIndices = [];
+      skillIndices = [];
+      refreshBoardOnly();
+    }
   } else if (action === 'range') {
     showRangeOverlay = !showRangeOverlay;
     log(showRangeOverlay ? '📐 显示攻击范围（蓝色地块）。' : '关闭攻击范围显示。');
@@ -5563,12 +5557,6 @@ function stepPathByDir(k) {
     playerPath.push({ x: nx, y: ny });
     refreshBoardOnly();
   }
-}
-
-function renderAbilityAllocator() {
-  if ((phase !== PHASE.PLANNING && phase !== PHASE.LEVELCLEAR) || playerStats.abilityPoints <= 0) return '';
-  // 六维图已移入抽屉：入口是角色卡下方的「属性」按钮（手机同样走这个按钮）
-  return `<div class="stat" style="color:#ffd700">剩余 ${playerStats.abilityPoints} 点属性未分配 · 点「属性」按钮加点</div>`;
 }
 
 /* 选角阶段的右侧面板：角色六维 + 技能说明 */
@@ -5656,33 +5644,10 @@ function updateStats() {
   const isRanged = playerIsRanged();   /* ISSUE-20261028-19：动态角色按六维现算，别读静态表 */
   const isFencer = selectedChar === 'fencer';
 
-  /* 角色卡：左六维图 / 右上 HP+技力 / 右下 2×2 仪表 */
-  const moveUsed = countMoveSteps(playerPath);
-  const atkNodes = attackIndices.length;
-  const skillNodes = skillIndices.length;
-  /* 角色只有一种伤害方式（攻击节点类型决定），只显示对应的那一个，另一格留空保持 2×2 */
-  /* 伤害格直接显示骰子文案（2d4+1 / 1d8+1），不再显示定值期望 —— 实际每次出手都要掷 */
-  const dmgVal = isRanged ? playerRangedDmgLabel() : playerMeleeDmgLabel();
-  const dmgProf = isRanged ? player.rangedProf : player.meleeProf;
-  /* 动作指示：本回合规划了几个动作（闪避 / 攻击 / 技能），上限 = BASE_ACTIONS_PER_TURN(2)（scout 奖励可 +1） */
-  const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
-  const actionUsed = planInfo.actions;
-  const actionMax = maxActionsThisTurn();
-  /* ★ ISSUE-20261029-34：动作标签按**实际结算顺序**渲染（plannedActionInfo.order）。
-   * 旧版固定按「闪避 → 攻击 → 技能」拼类型序，与真实结算（按路径步序）相反 ——
-   * 于是「原地先点攻击、再点等待（闪避）」在界面上显示成「闪避+攻击」。 */
-  const actionKinds = (planInfo.order || []).map(o =>
-    o.kind === 'dodge' ? '闪避' : (o.kind === 'attack' ? `攻击×${o.count}` : `技能×${o.count}`));
-  const actionLabel = actionKinds.length
-    ? `${actionKinds.join('+')}${actionMax > 1 ? ` ${actionUsed}/${actionMax}` : ''}`
-    : '—';
-  const kvGrid = renderKvGrid([
-    ['步数', `${moveUsed}/${player.move}`, moveUsed >= player.move ? 'hi' : '', 'wait'],
-    ['攻击', `${atkNodes}`, atkNodes > 0 ? 'on' : 'dim', 'attack'],
-    ['技能', `${skillNodes}`, skillNodes > 0 ? 'on' : (skillReadyInfo(playerPath).ready ? 'hi' : 'dim'), 'skill'],
-    [playerDmgLabel(), `${dmgVal}`, dmgProf ? 'prof' : '', 'range', showRangeOverlay],
-    ['动作', actionLabel, actionUsed > actionMax ? 'hi' : (actionUsed > 0 ? 'on' : 'dim')],
-  ]);
+  /* ★ ISSUE-20261029-36：对局内「步数 / 攻击 / 技能 / 远程伤害」4 UI 与「动作」整块移除 ——
+   * 4 UI 不再常驻侧栏；动作 UI 合并进「开始行动」按钮（见 renderControls / buildActionLabel）。
+   * 侧栏角色卡只保留名字 + 血条 + 技力，关键数值改由 ♟️ 角色面板弹窗查看。 */
+  const kvGrid = '';
   /* 技力槽：泥岩固定上限 5；阿米娅上限 = 感知；风笛上限 5（沿直线移动积累，规划时预览增量）；华法琳上限 5（捡血迹） */
   let spInfo = null;
   if (isFencer) spInfo = { cur: fencerSp, max: FENCER_SP_MAX };
@@ -5752,7 +5717,11 @@ function updateStats() {
   }
   if (playerShield > 0) badges.push(`<span class="badge white">🛡 护盾 ×${playerShield}</span>`);
   if (levelHpBonus > 0) badges.push(`<span class="badge teal">升级 +${levelHpBonus} HP</span>`);
-  /* 闪避 / 技能节点 / 动作冲突 提示 */
+  /* 闪避 / 技能节点 / 动作冲突 提示（与 buildActionLabel 同源；4 UI 已移除，但节点/冲突提示仍有用） */
+  const planInfo = (phase === PHASE.PLANNING) ? plannedActionInfo(playerPath, attackIndices, skillIndices) : null;
+  const actionUsed = planInfo ? planInfo.actions : 0;
+  const actionMax = maxActionsThisTurn();
+  const skillNodes = skillIndices.length;
   if (phase === PHASE.PLANNING && planInfo) {
     if (planInfo.skillCount > 0) {
       badges.push(`<span class="badge teal">✦ 技能节点 ×${planInfo.skillCount} · 到达才发动</span>`);
@@ -5782,12 +5751,49 @@ function updateStats() {
   if (isRanged) footParts.push(`射程 ${player.range}`);
   const foot = `<div class="mini">${footParts.join(' · ')}</div>`;
 
-  statsEl.innerHTML = `${badgeRow}${renderAbilityAllocator()}`;
+  statsEl.innerHTML = `${badgeRow}`;
   if (footEl) footEl.innerHTML = foot;
   // 手机圆钮的数值 / 技力环跟随状态刷新；属性抽屉开着时同步第一层文案
   if (typeof syncVirtualPad === 'function') syncVirtualPad();
-  if (typeof drawerIsOpen === 'function' && drawerIsOpen('stats')
-      && typeof renderAbilityDrawer === 'function') renderAbilityDrawer();
+  if (typeof drawerIsOpen === 'function' && drawerIsOpen('char')) renderCharPanel();
+  try { renderHud(); } catch (_) {}   // 行动按钮上方 HUD：姓名/等级/经验/血条（ISSUE-20261029-37）
+}
+
+/* ★ ISSUE-20261029-36：角色面板弹窗内容（名字 + 血条 + 六维图）。
+ * 选角阶段显示当前选中的候选角色；对局中显示当前玩家。六维图直接画到 #charRadarCanvas，
+ * 不污染 stats 抽屉的 #radarCanvas 命中区（drawRadar 的 forceCanvas 路径不记录 radarLabelHits）。 */
+function renderCharPanel() {
+  const nameEl = document.getElementById('charPanelName');
+  const hpEl = document.getElementById('charPanelHp');
+  const canvas = document.getElementById('charRadarCanvas');
+  if (!nameEl || !hpEl) return;
+  let name = '—', hp = 0, maxHp = 0, shield = 0, abilities = null;
+  if (phase === PHASE.CHAR_SELECT && selectedCandidate) {
+    const char = CHARACTERS[selectedCandidate.id];
+    const a = candidateAbilitiesOf(selectedCandidate.id);
+    name = `${char ? char.name : '?'} ${char ? char.icon : ''}`;
+    hp = a.con + BASE_HP_BONUS; maxHp = hp; abilities = a;
+  } else if (player) {
+    const charInfo = CHARACTERS[selectedChar] || null;
+    name = `${charInfo ? charInfo.name : '未知'} ${charInfo ? charInfo.icon : ''}`;
+    hp = player.hp; maxHp = player.maxHp; shield = playerShield; abilities = player.abilities;
+  }
+  nameEl.textContent = name;
+  const pct = maxHp > 0 ? Math.max(0, Math.min(100, hp / maxHp * 100)) : 0;
+  const shieldBar = shield > 0 ? `<div class="hp-shield" style="width:${Math.min(100, shield * 12)}%" title="护盾 ${shield} 层"></div>` : '';
+  hpEl.innerHTML = maxHp > 0
+    ? `<div class="hp-track ${hpStateClass(hp, maxHp)}"><div class="hp-fill-lg" style="width:${pct}%"></div>${shieldBar}<span class="hp-text"><i class="bar-lbl">HP</i>${hp} / ${maxHp}</span></div>`
+    : '';
+  if (canvas) {
+    try { drawRadar(canvas); } catch (_) {}   // 不传 forceAbilities → canAlloc 按 phase 自动判定，六维图标金色「可加点」方框
+  }
+  const hint = document.getElementById('charAllocHint');
+  if (hint) {
+    /* ★ 选角相位时 playerStats 还没建好，必须用 candidatePointsLeft()（pointsLeftNow() 已分相位）
+     * 否则预备干员在大厅那 5 点「剩余 N 点」提示永远为空，雷达也点不动。 */
+    const pts = pointsLeftNow();
+    hint.textContent = pts > 0 ? `剩余 ${pts} 点属性 · 点六维图上的属性名加点` : '';
+  }
 }
 
 function allocateAbilityPoint(abilityKey) {
@@ -5796,8 +5802,7 @@ function allocateAbilityPoint(abilityKey) {
   if (phase === PHASE.CHAR_SELECT) {
     if (!allocateCandidatePoint(abilityKey)) return;
     renderCharSelectStats();      /* 面板数值实时跟手 */
-    renderAbilityDrawer();
-    try { drawRadar(); } catch (_) {}
+    if (typeof drawerIsOpen === 'function' && drawerIsOpen('char')) renderCharPanel();
     return;
   }
   if (phase !== PHASE.PLANNING && phase !== PHASE.LEVELCLEAR) return;
@@ -5816,7 +5821,25 @@ function allocateAbilityPoint(abilityKey) {
     if (player && player.alive) player.hp = Math.min(player.hp, playerStats.maxHp);
   }
   if (player) syncPlayerFromStats();
-  refreshBoardOnly();
+  /* 升级加点直接在角色面板（♟️）六维图上点：刷新面板 + 全量重绘（下一关按钮随点数归零启用） */
+  if (typeof drawerIsOpen === 'function' && drawerIsOpen('char')) renderCharPanel();
+  /* 升级加点全部加完 → 自动收起角色面板，放行下一关（ISSUE-20261029-37） */
+  if (phase === PHASE.LEVELCLEAR && playerStats.abilityPoints <= 0 && typeof drawerClose === 'function') drawerClose();
+  render();
+}
+
+/* ★ ISSUE-20261029-36：动作 UI 合并进「开始行动」按钮。
+ * 框沿用 .start-btn（原本的绿色胶囊配色），内部文字换成动作标签，去掉「开始行动」四字。
+ * 标签按实际结算顺序（plannedActionInfo.order）拼：闪避 / 攻击×N / 技能×N，并附 已用/上限。 */
+function buildActionLabel() {
+  if (phase !== PHASE.PLANNING) return '—';
+  const planInfo = plannedActionInfo(playerPath, attackIndices, skillIndices);
+  const actionUsed = planInfo.actions;
+  const actionMax = maxActionsThisTurn();
+  const kinds = (planInfo.order || []).map(o =>
+    o.kind === 'dodge' ? '闪避' : (o.kind === 'attack' ? `攻击×${o.count}` : `技能×${o.count}`));
+  if (!kinds.length) return '未规划动作';
+  return `${kinds.join('+')}${actionMax > 1 ? ` ${actionUsed}/${actionMax}` : ''}`;
 }
 
 function updateStartBtn() {
@@ -5827,7 +5850,36 @@ function updateStartBtn() {
   const btn = (vpadSlot && vpadSlot.querySelector('.start-btn'))
     || controlsEl.querySelector('.start-btn')
     || (actionSlotEl ? actionSlotEl.querySelector('.start-btn') : null);
-  if (btn) btn.disabled = playerPath.length === 0;
+  if (btn) { btn.disabled = playerPath.length === 0; btn.textContent = buildActionLabel(); }
+}
+
+/* ★ ISSUE-20261029-37：行动按钮上方 HUD（姓名 / 等级 / 经验条 / 血条；不显示技力条）。
+ * HUD 与行动控件一起包进 .action-wrap，纵向堆叠 —— HUD 永远紧贴在行动按钮正上方。 */
+function buildHud() {
+  const hud = document.createElement('div');
+  hud.className = 'hud';
+  hud.id = 'hud';
+  hud.innerHTML =
+    '<div class="hud-line"><span class="hud-name">—</span><span class="hud-lv">Lv.1</span></div>' +
+    '<div class="hud-bar hud-xp"><div class="hud-xp-fill"></div></div>' +
+    '<div class="hud-bar hud-hp"><div class="hud-hp-fill"></div><span class="hud-hp-txt">0 / 0</span></div>';
+  return hud;
+}
+function renderHud() {
+  const hud = document.getElementById('hud');
+  if (!hud) return;
+  if (!player) { hud.style.display = 'none'; return; }
+  hud.style.display = '';
+  const charInfo = CHARACTERS[selectedChar] || null;
+  hud.querySelector('.hud-name').textContent = charInfo ? (charInfo.icon + ' ' + charInfo.name) : '未知';
+  hud.querySelector('.hud-lv').textContent = 'Lv.' + (heroLevel || 1);
+  const need = xpThresholdForLevel(heroLevel || 1);
+  const xpPct = need > 0 ? Math.max(0, Math.min(100, (xp / need) * 100)) : 0;
+  hud.querySelector('.hud-xp-fill').style.width = xpPct + '%';
+  const hp = player.hp, maxHp = player.maxHp;
+  const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, hp / maxHp * 100)) : 0;
+  hud.querySelector('.hud-hp-fill').style.width = hpPct + '%';
+  hud.querySelector('.hud-hp-txt').textContent = hp + ' / ' + maxHp;
 }
 
 function renderControls() {
@@ -5839,26 +5891,33 @@ function renderControls() {
   if (vpadSlot) vpadSlot.innerHTML = '';
   const vertical = document.body.classList.contains('layout-v');
   const btnHost = vpadSlot || ((vertical && actionSlotEl) ? actionSlotEl : controlsEl);
+  // 行动区外层：HUD（姓名/等级/经验/血条）紧贴行动按钮上方，纵向堆叠
+  const wrap = document.createElement('div');
+  wrap.className = 'action-wrap';
+  if (phase === PHASE.PLANNING || phase === PHASE.LEVELCLEAR || phase === PHASE.GAMEOVER) {
+    wrap.appendChild(buildHud());
+  }
   if (phase === PHASE.PLANNING) {
     const confirm = document.createElement('button');
-    confirm.className = 'start-btn';
-    confirm.textContent = '⚔️ 开始行动';
+    /* ★ ISSUE-20261029-36：去掉「开始行动」四字，按钮内部显示动作 UI，框沿用 .start-btn 配色 */
+    confirm.className = 'start-btn action-start-btn';
+    confirm.textContent = buildActionLabel();
     confirm.disabled = playerPath.length === 0;
     confirm.onclick = confirmAction;
-    btnHost.appendChild(confirm);
+    wrap.appendChild(confirm);
     const tip = document.createElement('div');
     tip.style.cssText = 'font-size:12px; color:#888; text-align:center; padding:2px; line-height:1.35; white-space:pre-wrap;';
     // 手机端不显示键盘快捷键（ISSUE-20261028-09 D），换成一行触摸说明
     tip.textContent = (typeof vpadMounted !== 'undefined' && vpadMounted)
-      ? '点棋盘移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能（双击脚下那格=原地施法）\n左下方向键移动 · 右下三键 = 等待 / 攻击 / 技能\n长按攻击键 = 看攻击范围'
+      ? '点棋盘移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能（双击脚下那格=原地施法）\n左下方向键移动 · 右下键 = 「↺重置」/ 等待 / 攻击 / 技能\n长按攻击键 = 看攻击范围'
       : 'WASD/点击移动 · 单击路径节点=攻击（点脚下那格=原地攻击）· 双击=技能（双击脚下那格=原地施法）\nE=攻击 · R=技能 · Q=等待 · V=攻击范围 · 空格确认 · X 重置路径\n右键路径格=技能节点 · 主动行动三选一：攻击 / 技能 / 闪避（第一个等待）';
-    controlsEl.appendChild(tip);
+    wrap.appendChild(tip);
   } else if (phase === PHASE.GAMEOVER) {
     const btn = document.createElement('button');
     btn.className = 'start-btn';
     btn.textContent = '重新开始';
     btn.onclick = () => initCharSelect();
-    btnHost.appendChild(btn);
+    wrap.appendChild(btn);
   } else if (phase === PHASE.LEVELCLEAR) {
     const tip = document.createElement('div');
     tip.style.cssText = 'font-size:13px; color:#ffd700; text-align:center; padding:4px;';
@@ -5866,15 +5925,15 @@ function renderControls() {
       tip.textContent = '升级！请选择一项奖励…';
     } else if (playerStats.abilityPoints > 0) {
       tip.textContent = `把 ${playerStats.abilityPoints} 点属性加完就能进下一关`;
-      /* 用户决策（16:00 #2/#3）：奖励选完后若还有属性点，自动弹出属性抽屉。
+      /* 属性抽屉已移除（ISSUE-20261029-37）：奖励选完后若还有属性点，自动弹出 ♟️ 角色面板加点。
          只在当前没有任何抽屉时弹，避免把玩家已经打开的面板顶掉。 */
       if (typeof drawerCurrent !== 'undefined' && !drawerCurrent) {
-        setTimeout(() => { if (phase === PHASE.LEVELCLEAR && playerStats.abilityPoints > 0 && !drawerCurrent) drawerOpen('stats'); }, 80);
+        setTimeout(() => { if (phase === PHASE.LEVELCLEAR && playerStats.abilityPoints > 0 && !drawerCurrent) drawerOpen('char'); }, 80);
       }
     } else {
       tip.textContent = `关卡通过！（本次未升级，经验 ${xp}/${xpThresholdForLevel(heroLevel)}）即将进入下一关…`;
     }
-    controlsEl.appendChild(tip);
+    wrap.appendChild(tip);
     // 未选奖励前不显示下一关按钮；选完奖励后若还有属性点，按钮禁用直到加完
     if (pendingLevelUps <= 0) {
       const btn = document.createElement('button');
@@ -5886,15 +5945,17 @@ function renderControls() {
         btn.textContent = '⬇️ 下一关';
         btn.onclick = proceedNextLevel;
       }
-      btnHost.appendChild(btn);
+      wrap.appendChild(btn);
     } else {
       // 保险：定时器万一被清掉，也不会卡在通关界面（已选过奖励 / 已进入下一关时不再弹）
       setTimeout(() => { if (phase === PHASE.LEVELCLEAR && pendingLevelUps > 0) openLevelUp(); }, 400);
     }
   }
+  btnHost.appendChild(wrap);
   controlsEl.dataset.phase = phase;
   /* 底栏面板里塞进 / 拿掉「开始行动」后高度会变，重新补一次让位高度 */
   try { if (typeof syncVpadInset === 'function') syncVpadInset(); } catch (_) {}
+  renderHud();
 }
 
 function syncControlsIfNeeded() {
@@ -5924,6 +5985,7 @@ function render(skipControls = false) {
   const bbox = getBoundingBox();
   updateStats();
   boardEl.style.gridTemplateColumns = `repeat(${bbox.maxX - bbox.minX + 1}, var(--cell))`;
+  boardEl.style.gridTemplateRows = `repeat(${bbox.maxY - bbox.minY + 1}, var(--cell))`;
   paintBoard();
   if (skipControls) return;
   renderControls();
@@ -7889,9 +7951,9 @@ function onLevelClear() {
 /* 通关闸门：若仍有点数未分配，停在 levelclear 并强制先加点；否则进入下一关 */
 function enterAllocGate() {
   if (playerStats.abilityPoints > 0) {
-    log('📌 还有属性点未分配，属性面板已打开，加完才能进入下一关。');
+    log('📌 还有属性点未分配，角色面板（♟️）已打开，点六维图上的属性名加点，加完才能进入下一关。');
     render();
-    drawerOpen('stats');           // 奖励选完后自动弹出属性抽屉（用户决策 16:00 #2/#3）
+    drawerOpen('char');           // 属性抽屉已移除（ISSUE-20261029-37）：改用 ♟️ 角色面板做六维加点
   } else {
     initLevel();
   }
