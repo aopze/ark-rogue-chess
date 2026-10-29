@@ -80,28 +80,27 @@ check('棋盘已渲染', cells.length > 0, cells.length + ' 格');
 check('角色选择界面有角色卡', doc.querySelectorAll('.candidate, .char-card, [data-char]').length > 0 ||
       doc.body.textContent.indexOf('机制') >= 0, 'body 长度 ' + doc.body.textContent.length);
 
-console.log('\n[3] 联机入口按 PVP 开关处置（ISSUE-20261029-27 起默认关闭）');
-// 人类 2026-10-29 04:0x 拍板「先关闭联机系统，PVP 搁置」。
-// 关闭不是删代码，而是 templates/game.html 里的常量 PVP_ENABLED = false：
-// 按钮留在 DOM 里但 hidden + display:none，且 #pvpMask 根本不会被创建。
+console.log('\n[3] 联机入口按 PVP 开关处置（ISSUE-20261029-26 起开启）');
+// 26 号起 PVP_ENABLED = true：设置面板里的「⚔️ 联机」可见，
+// pvpInjectUI() 在加载时即注入 #pvpMask（默认关闭），并生成 #pvpCreate / #pvpJoin。
 // 注：不能用 window.eval('PVP_ENABLED') —— jsdom 的 window.eval 看不到顶层 const
 // （实测 ReferenceError），改为直接读源码里的开关声明 + 用行为断言兜第二道。
-const pvpEnabled = /const PVP_ENABLED = false\s*;/.test(html);
+const pvpEnabled = /const PVP_ENABLED = true\s*;/.test(html);
 const pvpBtn = doc.querySelector('#setPvpBtn') || doc.querySelector('#pvpBtn');
-check('PVP 开关存在且当前是关闭（搁置中）', pvpEnabled === true, '源码里 PVP_ENABLED = false');
-check('「联机」按钮留在 DOM 但已隐藏',
-      !!pvpBtn && pvpBtn.hidden === true && pvpBtn.style.display === 'none',
+check('PVP 开关存在且当前是开启', pvpEnabled === true, '源码里 PVP_ENABLED = true');
+check('「联机」按钮可见（未隐藏）',
+      !!pvpBtn && pvpBtn.hidden !== true && pvpBtn.style.display !== 'none',
       pvpBtn ? ('hidden=' + pvpBtn.hidden + ' display=' + pvpBtn.style.display) : 'null');
-check('联机面板未被注入（#pvpMask 不存在）', doc.querySelector('#pvpMask') === null,
-      doc.querySelector('#pvpMask') ? '仍存在' : 'null');
-check('点隐藏按钮也打不开任何联机界面',
-      (pvpBtn && pvpBtn.click(), doc.querySelector('#pvpMask') === null));
+check('联机面板已注入且默认关闭（#pvpMask 存在、无 .open）',
+      !!doc.querySelector('#pvpMask') && !doc.querySelector('#pvpMask').classList.contains('open'));
+check('页面里有 #pvpCreate / #pvpJoin', !!doc.querySelector('#pvpCreate') && !!doc.querySelector('#pvpJoin'));
 
-console.log('\n[4] 关闭期的残留与可恢复性');
-check('页面里没有 #pvpCreate / #pvpJoin（连死按钮都不留）',
-      !doc.querySelector('#pvpCreate') && !doc.querySelector('#pvpJoin'));
+console.log('\n[4] 联机面板可打开 + 协议完整');
+check('点「联机」按钮打开联机面板',
+      (pvpBtn && pvpBtn.click(),
+        !!(doc.querySelector('#pvpMask') && doc.querySelector('#pvpMask').classList.contains('open'))));
 // 用 html 而不是 src：src 在 [6] 才声明（const 有 TDZ，这里提前用会 ReferenceError）
-check('源码仍完整保留联机协议调用（改开关即可恢复）',
+check('源码仍完整保留联机协议调用',
       /PVP_NET\.create\(/.test(html) && /PVP_NET\.join\(/.test(html));
 
 console.log('\n[5] 单人流程仍然能进入关卡（随机数种子化后回归）');

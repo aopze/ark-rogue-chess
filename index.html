@@ -48,17 +48,22 @@
   .dhead { flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:12px 12px 10px 56px;
     border-bottom:1px solid rgba(255,255,255,.08); justify-content:flex-end; }
   .dtitle { font-size:14px; font-weight:800; letter-spacing:1px; color:#ffd166; }
-  /* 角标尺寸对齐 ♟（棋盘左上格）：写死 36×36 是因为外壳读不到 iframe 里的 --cell；
-     与游戏内 .drawer-corner-x 保持同一套视觉语言（深底 / 细边 / 方角 / 同字重） */
+  /* ISSUE-20261029-44 第1/3项：账号面板关闭角标改成与棋盘角标同款绿色（原位角标、再按关闭）。 */
   .dcorner { position:absolute; left:10px; top:10px; z-index:2;
     width:36px; height:36px; padding:0; display:flex; align-items:center; justify-content:center;
-    border-radius:3px; border:1px solid #3a3a55; background:rgba(24,24,42,.9); color:#cfe6ff;
+    border-radius:3px; border:1px solid rgba(255,255,255,.28);
+    background:linear-gradient(135deg,#4ecdc4,#2ecc71); color:#fff;
     font-size:18px; line-height:1; cursor:pointer; font-family:inherit;
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.4); }
-  .dcorner:hover { background:rgba(48,48,72,.95); color:#fff; }
+    box-shadow:0 2px 8px rgba(46,204,113,.35), inset 0 0 0 1px rgba(0,0,0,.12); }
+  .dcorner:hover { filter:brightness(1.08); }
   .dcorner:active { transform:scale(.92); }
-  .dbody { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-    padding:12px; display:flex; flex-direction:column; gap:12px; }
+  /* ISSUE-20261029-44 第5项：两列布局——左 1/3 账号、右 2/3 排行榜（右列占满高、可滚动看更多名次）。 */
+  .dbody { flex:1 1 auto; min-height:0; overflow:hidden;
+    padding:10px; display:flex; flex-direction:row; gap:10px; }
+  .dcol-left { flex:0 0 34%; min-width:0; display:flex; flex-direction:column; gap:10px; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .dcol-left .acct-top { flex-wrap:wrap; }
+  .dcol-right { flex:1 1 auto; min-width:0; display:flex; flex-direction:column; gap:8px; overflow:hidden; }
+  .dcol-right ol#miniBoard { flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; }
 
   /* 账号卡 */
   .acct { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1);
@@ -143,37 +148,41 @@
 
 <div id="lobbyMask"></div>
 
-<!-- 左侧抽屉：① 我的账号 ② 排行榜 Top10 ③ 完整榜入口 -->
-<aside id="lobbyDrawer" tabindex="-1" aria-hidden="true" aria-label="账号与排行榜">
+<!-- ISSUE-20261029-44 第5项：面板内部两列——左 1/3 账号、右 2/3 排行榜（同屏更多名次） -->
+<aside id="lobbyDrawer" tabindex="-1" aria-hidden="true" aria-label="账号">
   <button id="lobbyCornerClose" class="dcorner" title="关闭">✕</button>
   <header class="dhead">
-    <span class="dtitle">账号与排行</span>
+    <span class="dtitle">账号</span>
   </header>
   <div class="dbody">
-    <div class="acct">
-      <div class="acct-top">
-        <div class="avatar" id="pAvatar">🦊</div>
-        <div class="acct-mid">
-          <div class="pnameLine" id="pNameLine">玩家</div>
-          <div class="pstats" id="pStats">尚未上榜</div>
+    <div class="dcol-left">
+      <div class="acct">
+        <div class="acct-top">
+          <div class="avatar" id="pAvatar">🦊</div>
+          <div class="acct-mid">
+            <div class="pnameLine" id="pNameLine">玩家</div>
+            <div class="pstats" id="pStats">尚未上榜</div>
+          </div>
+          <button id="pEdit" class="edit" title="编辑账号">编辑</button>
         </div>
-        <button id="pEdit" class="edit" title="编辑账号">编辑</button>
+        <div id="acctEdit" class="acct-edit" hidden>
+          <input id="pName" class="pname" maxlength="20" placeholder="例如 阿米娅1234" autocomplete="off" />
+          <button id="pSave" class="psave">保存</button>
+        </div>
+        <div id="pErr" class="perr" hidden></div>
+        <div class="acct-note">名字只能用<b>汉字或英文</b>，后面的数字是口令：只在你编辑时显示，<b>永远不会出现在排行榜上</b>。记住整串（如「阿米娅1234」），换设备输入同一串就能找回同一账号。</div>
       </div>
-      <div id="acctEdit" class="acct-edit" hidden>
-        <input id="pName" class="pname" maxlength="20" placeholder="例如 阿米娅1234" autocomplete="off" />
-        <button id="pSave" class="psave">保存</button>
-      </div>
-      <div id="pErr" class="perr" hidden></div>
-      <div class="acct-note">名字只能用<b>汉字或英文</b>，后面的数字是口令：只在你编辑时显示，<b>永远不会出现在排行榜上</b>。记住整串（如「阿米娅1234」），换设备输入同一串就能找回同一账号。</div>
-    </div>
+    </div><!-- /dcol-left -->
 
-    <div class="rankhd">
-      <span>🏆 排行榜 · Top 10</span>
-      <span class="meta" id="boardMeta"></span>
-    </div>
-    <ol id="miniBoard"></ol>
-    <div class="empty" id="boardEmpty" hidden>还没有人上榜<br>去玩一把，把名字留在上面 ✦</div>
-    <button id="btnFullRank" class="ghost">📊 查看完整排行榜</button>
+    <div class="dcol-right">
+      <div class="rankhd">
+        <span>🏆 排行榜</span>
+        <span class="meta" id="boardMeta"></span>
+      </div>
+      <ol id="miniBoard"></ol>
+      <div class="empty" id="boardEmpty" hidden>还没有人上榜<br>去玩一把，把名字留在上面 ✦</div>
+      <button id="btnFullRank" class="ghost">📊 查看完整排行榜</button>
+    </div><!-- /dcol-right -->
   </div>
 </aside>
 
@@ -253,7 +262,7 @@ var APP = {
 var MY_SCORE = null;
 
 // 构建号：每次发布 game.html 时同步改这里，iframe 用 ?v=BUILD 强制拿新版本
-var BUILD = '10291840';
+var BUILD = '10292133';
 
 var REPORT_URL_FALLBACK = '';
 var BOT_USER_FALLBACK = 'yu7_bot';
@@ -423,15 +432,24 @@ function publicName(raw){
   var stripped = s.replace(/\d{4,8}$/, '');
   return stripped || s;
 }
-/* 同名序号（ISSUE-20261028-10 风险 2 的可选缓解）：两个「阿米娅」在榜上显示 阿米娅 / 阿米娅 ·2。
- * 序号是公开可推算的，不是口令。 */
-function withDisplayNames(list){
-  var seen = {};
-  return list.map(function(u){
-    var n = publicName(u.name) || '匿名';
-    seen[n] = (seen[n] || 0) + 1;
-    return { u: u, disp: seen[n] > 1 ? (n + ' ·' + seen[n]) : n };
-  });
+/* ISSUE-20261029-44 第4项：按显示名合并同名账户（公开 leaderboard.json 只有显示名、无口令）。
+ * 口径：最高层、最高击杀、游玩次数累加；代表 id 取最高层那条。 */
+function mergeByName(entries){
+  var map = {}, order = [];
+  for (var i = 0; i < entries.length; i++){
+    var e = entries[i] || {};
+    var key = publicName(e.name) || '匿名';
+    var m = map[key];
+    if (!m){
+      m = map[key] = { id: e.id, name: key, level: (e.level||0), kills: (e.kills||0), runs: (e.runs||0) };
+      order.push(key);
+    } else {
+      if ((e.level||0) > m.level) { m.level = (e.level||0); m.id = e.id; }
+      if ((e.kills||0) > m.kills) m.kills = (e.kills||0);
+      m.runs += (e.runs||0);
+    }
+  }
+  return order.map(function(k){ return map[k]; });
 }
 
 // ===== 渲染账号卡 =====
@@ -458,11 +476,11 @@ function findMe(){
 
 // ===== 渲染迷你排行榜（只显示显示名）=====
 function renderMiniBoard(){
-  var raw = (APP.data && APP.data.entries) ? APP.data.entries.slice().sort(function(a,b){
+  var raw = (APP.data && APP.data.entries) ? APP.data.entries.slice() : [];
+  var list = mergeByName(raw).sort(function(a,b){
     if((b.level||0)!==(a.level||0)) return (b.level||0)-(a.level||0);
     return (b.kills||0)-(a.kills||0);
-  }) : [];
-  var list = withDisplayNames(raw);
+  });
   var ol = $('miniBoard'), empty = $('boardEmpty'), meta = $('boardMeta');
   if (!ol) return;
   ol.innerHTML = '';
@@ -473,13 +491,13 @@ function renderMiniBoard(){
     function p(n){ return n<10?'0'+n:''+n; }
     meta.textContent = '更新 ' + (dt.getMonth()+1) + '-' + p(dt.getDate()) + ' ' + p(dt.getHours())+':'+p(dt.getMinutes());
   }
-  list.slice(0,10).forEach(function(item,i){
-    var u = item.u;
-    var isMe = (APP.myId && String(u.id)===String(APP.myId)) || (APP.myName && item.disp === APP.myName);
+  /* ISSUE-20261029-44 第5项：不再截断到 10 条，右列可滚动看更多名次 */
+  list.forEach(function(u,i){
+    var isMe = (APP.myId && String(u.id)===String(APP.myId)) || (APP.myName && u.name === APP.myName);
     var li = document.createElement('li'); if(isMe) li.className='me';
     var rk = document.createElement('div'); rk.className='rk'; rk.textContent=(i+1);
     var who = document.createElement('div'); who.className='who';
-    var nm = document.createElement('div'); nm.className='nm'; nm.textContent = item.disp;
+    var nm = document.createElement('div'); nm.className='nm'; nm.textContent = u.name;
     if(isMe){ var tag=document.createElement('span'); tag.className='tag'; tag.textContent='我'; nm.appendChild(tag); }
     var sc = document.createElement('div'); sc.className='sc'; sc.textContent='击杀 '+(u.kills||0)+' · 挑战 '+(u.runs||1)+' 次';
     who.appendChild(nm); who.appendChild(sc);

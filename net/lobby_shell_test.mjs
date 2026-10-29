@@ -165,7 +165,10 @@ console.log('\n[5] 排行榜只显示显示名（老数据里带口令也要剥�
   ]}; renderMiniBoard();`);
   const names = Array.from(doc.querySelectorAll('#miniBoard .nm')).map((el) => el.textContent);
   check('榜上没有 4–8 位数字尾巴', !names.some((n) => /\d{4,8}/.test(n)), names.join(' | '));
-  check('同名给序号区分（阿米娅 ·2）', names.some((n) => n.indexOf('·2') >= 0), names.join(' | '));
+  // ISSUE-20261029-44 第4项：同名账户改为合并成一条（不再用 ·2 序号区分）
+  check('同名账户合并为一条（不再 ·2）',
+        names.filter((n) => n.indexOf('阿米娅') === 0).length === 1 && !names.some((n) => n.indexOf('·2') >= 0),
+        names.join(' | '));
   check('无数字的老名字原样显示', names.indexOf('雨') >= 0, names.join(' | '));
 }
 

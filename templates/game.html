@@ -226,24 +226,32 @@
        敌人绘制在角标之上，血条 / 词缀 / 意图不会被盖住（本号 §B 强制处理 1）。
      ★ 代价（人类明确接受）：这两格点不到、也走不上去；攻击 / 技能 / 闪避都是点路径节点，
        所以角落里的敌人照样能打（§B 强制处理 3）。 */
-  #setOpenBtn, #lobbyOpenBtn, #charOpenBtn {
+  #setOpenBtn, #lobbyOpenBtn, #charOpenBtn, #cornerExtra {
     position: absolute; top: var(--corner-y); z-index: var(--z-corner);
     display: flex; width: var(--cell); height: var(--cell);
     align-items: center; justify-content: center; padding: 0;
-    background: rgba(24,24,42,.9); color: #cfe6ff;
-    border: 1px solid #3a3a55; border-radius: 3px;
+    /* ISSUE-20261029-44 第1项：与「开始行动」(.start-btn) 同款绿色胶囊 */
+    background: linear-gradient(135deg, #4ecdc4, #2ecc71); color: #fff;
+    border: 1px solid rgba(255,255,255,.28); border-radius: 3px;
     font-size: calc(var(--cell) * 0.5); line-height: 1;
     cursor: pointer; touch-action: manipulation; font-family: inherit;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
-    transition: color .15s, border-color .15s, background .15s;
+    box-shadow: 0 2px 8px rgba(46,204,113,.35), inset 0 0 0 1px rgba(0,0,0,.12);
+    transition: filter .15s, box-shadow .15s, transform .12s;
   }
   #setOpenBtn { right: var(--corner-x); }
   #lobbyOpenBtn { left: var(--corner-x); }
-  /* ★ 角色面板按钮：地图右下格（ISSUE-20261029-36，人类 07:0x） */
+  /* ★ 角色面板按钮：地图右下格（ISSUE-20261029-36） */
   #charOpenBtn { top: auto; bottom: var(--corner-y); right: var(--corner-x); }
-  #setOpenBtn:hover, #lobbyOpenBtn:hover, #charOpenBtn:hover { background: rgba(48,48,72,.95); color: #fff; }
+  /* ★ ISSUE-20261029-44 第1项：第 4 角标（地图左下格），先留空占位，绿色，不接功能 */
+  #cornerExtra { top: auto; bottom: var(--corner-y); left: var(--corner-x); pointer-events: none; cursor: default; }
+  #setOpenBtn:hover, #lobbyOpenBtn:hover, #charOpenBtn:hover { filter: brightness(1.08); }
   #setOpenBtn:active, #lobbyOpenBtn:active, #charOpenBtn:active { transform: scale(.92); }
-  #setOpenBtn.on, #lobbyOpenBtn.on, #charOpenBtn.on { color: #ffd700; border-color: #6b5a1f; background: rgba(60,50,20,.92); }
+  /* ★ ISSUE-20261029-44 第3项：打开面板时角标浮到面板之上（z-index > --z-drawer），
+     图标变 ✕（drawerSyncChrome），再按一下关闭；不再使用面板内的独立关闭按钮。 */
+  #setOpenBtn.on, #lobbyOpenBtn.on, #charOpenBtn.on {
+    z-index: calc(var(--z-drawer) + 1);
+    box-shadow: 0 0 0 2px #fff inset, 0 2px 8px rgba(46,204,113,.5);
+  }
   /* 直开 game.html（无外壳）时 ♟ 由 chrome.js 置 hidden，不留死按钮 */
   #lobbyOpenBtn[hidden] { display: none; }
   /* 遮罩：全屏半透明，抽屉本体 z-index 更高所以露在上面 */
@@ -282,18 +290,8 @@
      所以抽屉滑进来时，视觉上就是「棋盘右上格那个 ⚙ 原地变成了 ✕」，点它即收起（.drawer 是 fixed，
      内部绝对定位的 top/right 与屏幕坐标同源）。
      属性/升级两个抽屉**不动**：它们的入口不在棋盘角上，没有「同一个位置」可对齐。 */
-  #drawerSettings .drawer-corner-x {
-    position: absolute; top: var(--corner-y); right: var(--corner-x); z-index: 2;
-    display: flex; width: var(--cell); height: var(--cell);
-    align-items: center; justify-content: center; padding: 0;
-    background: rgba(24,24,42,.9); color: #cfe6ff;
-    border: 1px solid #3a3a55; border-radius: 3px;
-    font-size: calc(var(--cell) * 0.5); line-height: 1;
-    cursor: pointer; touch-action: manipulation; font-family: inherit;
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
-    transition: color .15s, border-color .15s, background .15s;
-  }
-  #drawerSettings .drawer-corner-x:hover { background: rgba(48,48,72,.95); color: #fff; }
+  /* ISSUE-20261029-44 第3项：设置面板内独立关闭按钮已删除，
+     改由棋盘右上格的 ⚙ 角标本体（.on 时浮到面板上、变 ✕）关闭。 */
   /* =========================================================================
    * ★ 设置面板改为「覆盖棋盘格」（ISSUE-20261029-29，人类 2026-10-29 04:42）
    *   「设置按钮点开之后，弹窗改成覆盖棋盘格，相当于地图变成了显示设置的面板」。
@@ -316,8 +314,7 @@
     transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
   }
   #drawerSettings.on { opacity: 1; visibility: visible; transform: none; }
-  #drawerSettings .drawer-corner-x { top: 0; right: 0; }
-  #drawerSettings .drawer-corner-x:active { transform: scale(.92); }
+  /* ISSUE-20261029-44：.drawer-corner-x 已移除（见上） */
   /* =========================================================================
    * ★ 角色面板弹窗（ISSUE-20261029-36）：与设置面板同款「覆盖棋盘格」机制。
    * 正方形（9×9 棋盘 = 正方形），视觉上就是「地图原地变成角色面板」。
@@ -680,6 +677,8 @@
     <button id="lobbyOpenBtn" title="账号与排行" aria-label="账号与排行" aria-expanded="false">👤</button>
     <button id="setOpenBtn" title="设置" aria-label="设置" aria-expanded="false">⚙</button>
     <button id="charOpenBtn" title="角色面板" aria-label="角色面板" aria-expanded="false">♟️</button>
+    <!-- ISSUE-20261029-44 第1项：第 4 角标（地图左下格），先留空不接功能，仅与其余角标同款绿色占位 -->
+    <div id="cornerExtra" aria-hidden="true"></div>
     <!-- 选角厅「技能说明展开层」（ISSUE-20261029-29）：点角色后盖在棋盘中部（第 1 行 ~ 倒数第 2 行），
          出口所在的第一行不遮。放在 #boardWrap 里而不是 #board 里：paintBoard() 每次都 innerHTML
          重建 #board 那一层，放进去会被冲掉。位置由 layoutCharInfoSheet() 按格子矩形实算。 -->
@@ -708,8 +707,8 @@
     <span id="setVer" title="当前版本"></span>
     <span class="drawer-title">设置</span>
   </header>
-  <!-- 关闭 = 棋盘右上格那个位置/那个尺寸（原 ⚙ 的形状），点一下收起，见 CSS .drawer-corner-x -->
-  <button class="drawer-corner-x" data-drawer-close title="关闭设置">✕</button>
+  <!-- ISSUE-20261029-44 第3项：删掉面板内独立 ✕，改由棋盘右上格的 ⚙ 角标本体关闭
+       （打开时该角标浮到面板之上并变 ✕，再按一下收起）。 -->
   <div class="drawer-body">
     <div id="setBtns">
       <button id="setPvpBtn" title="联机对战">⚔️ 联机</button>
@@ -2170,7 +2169,9 @@ boardEl.addEventListener('pointerup', (e) => {
   if (isFreeMovePhase()) {
     const dragged = !!(freeMovePress && freeMovePress.moved);
     freeMovePress = null;
-    if (dragged) freeMoveClearTarget();
+    /* ISSUE-20261029-44 第2项：拖动跟随（含鼠标按住跟随）一松手就立即停；
+     * 纯点击未移动时 freeMoveIsFollowing() 为 false，保留「点击走到目标」。 */
+    if (dragged || freeMoveIsFollowing()) freeMoveClearTarget();
     return;
   }
   if (!dragging) return;

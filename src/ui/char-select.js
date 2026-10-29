@@ -294,6 +294,12 @@ function freeMoveClearTarget() {
   freeMoveTarget = null;
 }
 
+/* ISSUE-20261029-44 第2项：当前是否处于「跟随指针」的移动（拖动中）。
+ * 松开鼠标/手指时用它判断要不要立即停 —— 纯点击（follow=false）不算，保留点击补位。 */
+function freeMoveIsFollowing() {
+  return !!(freeMoveTarget && freeMoveTarget.follow);
+}
+
 function freeMoveKeyDown(k) {
   if (!freeMoveActive || !selectedCandidate) return false;
   if (!FREE_MOVE_KEYS.includes(k)) return false;

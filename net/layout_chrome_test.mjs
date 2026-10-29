@@ -256,7 +256,8 @@ console.log('\n[5] DLC 外壳（同源 iframe）接管真实行为');
   await sleep(120);
   check('#ghint 有文字后恢复显示（MutationObserver 同步）', gh.style.display === '',
     JSON.stringify(gh.style.display));
-  check('#ghint 被挪到右上角', gh.style.right === '8px' && gh.style.left === 'auto',
+  // jsdom 的 cssstyle 会丢弃 left:auto（读回空串），真实浏览器里是 'auto'；两者都算「已挪到右上角」。
+  check('#ghint 被挪到右上角', gh.style.right === '8px' && (gh.style.left === 'auto' || gh.style.left === ''),
     `left=${gh.style.left} right=${gh.style.right}`);
 
   check('外壳 showHint 被劫持（弹出的提示也会变短）', sw.showHint !== sw.__origShowHint);
