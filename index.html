@@ -1,39 +1,1875 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>方舟战棋</title>
-<!-- ============================================================================
-     ISSUE-20261029-45：本页已退化为纯入口跳转，不再承载任何业务。
-     ----------------------------------------------------------------------------
-     原 index.html 是「外壳」：Telegram SDK、账号体系、排行榜、账号抽屉、iframe 容器，
-     共 819 行。现在这些全部内联进 game.html（单文件），本页只剩跳转。
-
-     为什么还要留着它：线上静态站（bot 侧 E:\ark-review，由 cloudflared 隧道直供）
-     的默认文档就是 index.html，直接删掉会让 https://ark.arkroguelike.top/ 变成 404。
-
-     BUILD 的真值来源已迁到 build/version.json（本页不再有 var BUILD）。
-     ========================================================================= -->
 <style>
-  html, body { margin:0; height:100%; background:#1a1a2e; color:#eee;
-    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
-    display:flex; align-items:center; justify-content:center; font-size:14px; }
+/* ===== ISSUE-20261030-87 · PRTS 光标（自动生成，勿手改）===== */
+  :root {
+    /* --cur-src 是「只要这张图」（91 号的光标指引要拿它当 background 用），
+     * --cur-arrow / --cur-no 在它后面补热点坐标拼成完整的 cursor 值。 */
+    --cur-src: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAEU0lEQVR42u1WfUwbZRh/73rXO75WvtnGAmKmsvExBtk0iCMx2xLm9sdQI6BMESdmi8SBcZnD+O1WBsOyJXypgEAVSOyHkpZCAVec0Ja1RUprxGQwjAmMLBPCoLTv63ODf4yJiWmt//Akb65317vn9zy/3/N7D6HN2Ix/CBFCnBghCYNQ0Pqpn4NHKIxDTBJH0cksoiIphBi/AoBsEo4S7f+sqelCdGjYATGit8E11m8AaESJxUj0yFtl5RW/Tk1ZMvftPw4g4gVq4DblDwwUtD6Cp0WH7RMTtoWFhd8K8wuK4Foc7a9OQCKhC7uKT7x4zu12e5aWlu5crqp6lUV0DNwOQOvdYNb/+t90hWIQFQpCzBy32Qwul8ttNpn0QSx3iEd0MmgkAVoRA7SEAoLgDUAiX4MRCRUHi7mckZGRUY/HQ74fGjKEB4echqM6IXbHkxyi98Ztj00BMHGQORSeEfsUBJQk5oCKlwoL34MueNbW1rBxdHQWtIGtFot5Z/wDr5lMphtPZD5+PCkxMQOARCAfj60gyEgQ5FM2q9UOIMji4iL5aXwcj5nNt6/W1tqE31qN1qbRaBx7U1NTofxAnwKAFwaJEZVx4vkXqoYGB2+trKwQtVK5PKgfWIFzrFKq1lqam5cVCgVubWlpAO1E+8pBheQs9DMShPdoECMuO1VSMvnH3bsERhPL29pdA/16otVoVr/qkJPaT2WrrxQXywBABggz3BdUiGDeJGBCu3hKdGxnfEJF6xfNawP9/fhnh5P8YBjGba1fYnlHB/laLieymhpX5UWpqyAv/wLQlgLPh3grSAZUvnV79NbsWzMzjoXbC67v1OrpqzLZvRtjY2TcaiWTdjtxTE4SXW8vUSoUpL2tHTc0NLjeKC19G7oQteETXgHYxtHMgfn5+Vmnw2Hcwgc+B2NY8fqp02bQAhZGE4yKTE9Pk4mJCQLjivV6PQEtmLOysuK9BUCD+KJ4inmsV6vthCS/8Ax7FCh5Fvzh8hWZ7KYAAEaT2O12t8ViwcPDw1in0+GK8+dL6XVf8IoCir+vASbt3Yp3Ppibm8Pnzp6ti4uNfZMXsdKosPB+qNojgPjx+nVsNBpxX1/filarxS8XFeXQvhhHsLVA2BMerqqsfH9qagqPQouV3yjcH3/40b2SkycXu7u63MJYGq5dcxkMBtzY2DjW09Ozmr5nT+KGK3odLCg6piA/P7f60qXW7q7uO12dnbhPpyNWqxWbzWb8rVrtcDqdkyqVara8vPwTpVI5w1L3vYDxlRcEwmw/mJaUcgz2gN+B55smo3EZBOcROJdelNYYR41N9fX1nz+dm3tELpe3MDQd4q0A/yJGABEcxPM7knfvTmMpOi06InLf0Zwj2ZVS6TNlZ85kHj54MKGmuvpQQV7eQ3V1ddkURYl9vTMK1QgfIzx4bACswI0VAFk4YYVtCeUkEgmXnp7O+uvL6W90/V+JN2Mz/nX8CUZkzttopxFwAAAAAElFTkSuQmCC");
+    --cur-arrow: var(--cur-src) 10 7;
+    --cur-no: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADtUlEQVR42u1W709bVRg+92dpaSndhgHqqNNkMcqUMZvFJZv7og6+ORPBGGM2ddPEL1MrRBfdajLTZlAsEcuK95INUlubjNIftIPShsraOqJ1hjXjwqZ1TLLRUYZrofTe4yH6J9zWLOFJTk7yfnmf87zv+7wHgE1sYhMPEciKCoV04/5fsuMASCcmJt7/ztp3EDEoRyGs1ATK9jQ0ajNLS7+HxsdPkBiu+jdcOhDo5Zp+hjXxPF/gOG6wcXejurRNgKSXUtSLqVRqDiIMu4b1EpKSl8tk5AvPPFvWrFYXvSw4AUBdc1PTR4jEjUwmc7u1pbVFq1I9H//0s69carV2O0kpcIIgilcH1IwUwLRfm0y9qBR8en7+jv/48YiQSsFljycZ1usdO2pq91YoFGXF4oAhEjVVKtVbmYWFFRgKQWGWg/ctFmHF54O5yI+C8/Mvkq8eOqSVSiR4sVQoV5NU67hONwtnZuBcX1/+st//YMrxQ+FPu30lHQxCH1JCU6mSip78GDqvA7DFvm+fMfvb1cKCzVYoZDKC1+stzHGc4OroyC4jAlGDIbKzXKERfVSdAEhmDx9+bzWRuHfVYMzbkPT5fB5ms1kYvRwVrsR/EkbZfv6a1So4dLqRhjqNhqYJ8abDCEDVcsAfy7lcuSjDLpq7utbjsRj8NZGA7mE3tPaeg33mbvhzZydcRP1hO3ky8sZrrdWiEXgKAKXl6foP1uPxfNpu/7u5Vt3vdXv+EAQBoqGA82gaEgwLM3Y75Odm4SXdJzf21O/aKaolV+D4weQ56zQ/c52fOXMm8uZzWlt+bY1fX83BxUAA5pAiudFRmItG4YTBmK7Zsu1J0XYHDQBFAXxvwO2+dHtoaOl+PHYvdurUdV9Pz60CSsxPT8M7DgeMDQwK4QsDgtVgDD5SWfmomAqQNIbvnroy9ctNjoMcSrYUDkPu7NlVIZmEi0j6OOoF/4ifvzh0kW9vb/8SmZJSVCNCO6Hu2Nvv6LvN5muD58/DkMkE02NjcCUUElLB4AOfx7vGMmzG6XTyB/bvf0lKUxJxrRDZ8VZFZdO33/RMTU5O5kNjQTju9kAnwyTTd+/+1Wux3Gpra5tmWfamXCZ7giII0R0RpzCsWkbRB3Zs1xz5+MSH3YMXBiZZhgmMeH2d5i5zuPnlJqazo+N7KU1vLdbnZWMzSkiAKQmA1crpsseqt1VpGup3Pa4/ffpddU3tK0ePHG2hKVICSgDsP8vduAmZXE7TJK2kCFJZ8q/bJh46/APPPr9n/GtqkgAAAABJRU5ErkJggg==") 18 17;
+ }
+  /* 兜底：任何没写 cursor 的元素也走 PRTS 箭头（含 body 空白区） */
+  html, body { cursor: var(--cur-arrow), auto; }
+  /* ★ ISSUE-20261031-98 · Part B 的 F1「根级收敛」：cursor 是继承属性，全站只留上面这一条 +
+     下面这条表单控件覆盖，其余 23 条逐元素的 `cursor: var(--cur-arrow), auto;` 已全部删除。
+     为什么还留这一条：`<button>`（含 `<select>`/`<textarea>`）有 **UA 自带 cursor**，
+     UA 规则优先于继承 → 光靠 html/body 继承，按钮会退回原生箭头（F1 首轮实测抓到，
+     `#setOpenBtn` 等 10 个按钮 computed 从 url(...) 变成 default）。这一条把表单控件拉回 PRTS，
+     其子孙（`.vico`/`span`/`svg`）自动继承。`.grip`/`#dragHandle`(col-resize)、输入框(text) 是字面值，不受影响。
+     ⚠️ 红线：**不许再逐条往回加** —— 新增控件保持不写 cursor 即自动继承。 */
+  button, select, textarea { cursor: var(--cur-arrow), auto; }
+  /* ★ ISSUE-20261031-98 · 一键关掉 PRTS 自定义光标（设置面板的「光标」按钮）。
+     只重定义两个变量就够：全文件 31 条 cursor: 规则都走 var(--cur-arrow)/var(--cur-no)，
+     变量一变全体同时失效（custom property 天然向下继承），千万别逐条去改那 31 条。
+     #dragHandle / .grip（col-resize）、input（text）是字面值、不走变量 → 会自动存活。
+     ⚠️ 红线：不许动 --cur-src —— 91 号的教程指引 #tutCursor 拿它当 background 用，
+     本开关只关「玩家鼠标」，不关教程指引。 */
+  html.no-prts-cursor { --cur-arrow: default; --cur-no: not-allowed; }
+
+  * { box-sizing: border-box; }
+  :root { --cell: 50px; --unit-move-ms: 120ms;
+          /* ISSUE-20261031-113：统一格栅间距（地图格 + 分隔列 + UI 区共用同一模数）。
+             与 #board 的 gap:2px 保持一致，是「缝隙即格线」的唯一来源。 */
+          --gap: 2px;
+          /* ISSUE-20261029-21：角标相对 #boardWrap 的偏移（棋盘居中留下的边距），
+             updateCellSize() 会改写；无 JS 时退回 0，角标仍贴在容器角上不跑位。 */
+          --corner-x: 0px; --corner-y: 0px;
+          /* 地板色：.cell.empty 与 #floorFill 的格子共用，改一处两边同时变（别再写死第二份）。 */
+          --floor: #2d2d44;
+          /* ★ ISSUE-20261101-137：边框色。长边/短边取整后剩下的那几 px 露出 #game 的背景，
+             就是人类要的「纯色窄边，无格线」。别单独画 border —— 会和这条背景边叠成两层。 */
+          --frame: #0b0b14;
+          /* ★ 140：UI 尺度单位 —— 全部由 --cell 派生，格子一变 UI 整体跟着变。
+             「嵌入固定格子数量」的落实方式：面板占几格由 grid-area 决定，里面的字与间距
+             由这几个变量决定，于是不需要为任何分辨率单独写一套媒体查询。
+             ⚠️ 为什么带 clamp：纯比例在两头会崩 ——
+               · 手机竖屏（13 格塞进 390px，cell≈28）纯比例字号只有 7~8px，读不清；
+               · 4K 且系统缩放 100%（cell≈164）纯比例正文会到 46px，一屏放不下两行。
+             11 / 24 这两个端点是实测出来的可读区间，不是拍脑袋。 */
+          --u: clamp(11px, calc(var(--cell) * 0.28), 24px);      /* 正文 */
+          --u-sm: clamp(9.5px, calc(var(--cell) * 0.22), 18px);   /* 辅助信息 */
+          --u-lg: clamp(13px, calc(var(--cell) * 0.36), 30px);    /* 按钮 / 标题 */
+          --pad: calc(var(--cell) * 0.14);                        /* 面板内边距 */
+          --rad: calc(var(--cell) * 0.12); }                      /* 圆角（与格子同模数） */
+  body { font-family: system-ui, -apple-system, "HarmonyOS Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji"; background:#1a1a2e; color:#eee; margin:0; padding:0; height: 100vh; height: 100dvh; width: 100vw; overflow: hidden; display:flex; flex-direction:column; touch-action: manipulation; }
+  /* ★ ISSUE-20261101-137：顶栏已删（人类 02:12「去掉，格子从画面顶端开始」）。
+     原来这里有一条 18px 的标题行，把可用高度切掉 30 多 px，导致短边永远凑不满 13 格。
+     标题信息移到设置抽屉（见 #setVer / drawer-title），游戏内不再占纵向空间。 */
+  /* ISSUE-20261028-09 A：地图贴左（原来 justify-content:center 会在侧栏挤压下把地图推到中间，
+     左右都留白）；棋盘容器尺寸由 updateCellSize() 按「可用短边」写死，故 flex 不再增长。 */
+  #game { display:flex; gap:8px; padding: 8px 16px 16px 16px; flex-grow: 1; min-height: 0; justify-content:flex-start; }
+  /* 正方形棋盘：宽高都由 JS 设成同一个像素值（短边），aspect-ratio 只是无 JS 时的兜底。
+     不能用 flex-grow —— 一旦拉伸就会破坏 1:1。 */
+  #boardWrap { flex: 0 0 auto; display: flex; justify-content: center; align-items: center; position:relative; min-width: 0; min-height: 0; overflow: hidden; aspect-ratio: 1 / 1; }
+  /* ISSUE-18 B5：iOS Safari 长按会弹「拷贝/放大镜」，拖动跟随前必须关掉 callout */
+  #board { display:grid; grid-auto-rows: var(--cell); gap:2px; padding:0; border-radius:4px; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; position: relative; }
+  #unitLayer { position:absolute; inset:0; pointer-events:none; z-index:40; overflow:visible; }
+  #fxLayer { position:absolute; inset:0; pointer-events:none; overflow:visible; z-index:50; }
+  /* 正方形格子（ISSUE-20261028-09 A）：原来 height 是 calc(var(--cell) * 1.12)，
+     整块地图因此永远被竖向拉长；1:1 后地图才是正方。 */
+  .cell { width: var(--cell); height: var(--cell); display:flex; align-items:center; justify-content:center; font-size: calc(var(--cell) * 0.48); border-radius:2px; user-select:none; position:relative; overflow:hidden; }
+  .cell.empty { background: var(--floor, #2d2d44); }
+  .cell.void { background:transparent; pointer-events:none; }
+  .cell.wall { background:#4a4a5a; cursor: var(--cur-no), auto; border-radius:4px; }
+  /* ISSUE-20261028-10-B：粗圆岩 = Boss 落的动态墙。用暖褐 + 内描边和灰墙区分开，
+     但又不能比敌人/玩家更抢眼（它是地形，不是单位）。 */
+  .cell.rock { background:#6b5233; cursor: var(--cur-no), auto; border-radius:4px;
+    box-shadow: inset 0 0 0 1px rgba(255,206,140,.45); }
+  .cell.path { background:#3a5a8c; }
+  /* 闪避节点：第一次等待（蓝色描边 + 内部蓝调） */
+  .cell.dodge { box-shadow: inset 0 0 0 2px #7dd3fc; background:#2f5578; }
+  .cell.dodge.attack { box-shadow: inset 0 0 0 2px #7dd3fc, inset 0 0 0 999px rgba(192,57,43,.35); }
+  /* ISSUE-20261029-41：路径格朝向箭头 —— 指向「从这一格出发」的下一步方向。
+     放右上角（右下角是单位朝向指示、格中央是节点/图标），0.3 格大小、30% 不透明，不抢注意力。
+     四个方向靠旋转同一个向上三角实现，避免四套 border 组合写错。 */
+  .cell-dir { position:absolute; top:9%; right:9%; width:0; height:0; opacity:.3; pointer-events:none;
+    border-left: calc(var(--cell) * 0.13) solid transparent;
+    border-right: calc(var(--cell) * 0.13) solid transparent;
+    border-bottom: calc(var(--cell) * 0.22) solid #dbe4ff; }
+  .cell-dir.l { transform: rotate(-90deg); }
+  .cell-dir.r { transform: rotate(90deg); }
+  .cell-dir.d { transform: rotate(180deg); }
+  .cell.attack { background:#c0392b; }
+  .cell.attack.used { background:#5c2b29; }
+  /* 技能节点（右键设置）：紫色底 + 紫描边 + ✦ */
+  .cell.skill { background:#5b3a8c; box-shadow: inset 0 0 0 2px #c9a0ff; }
+  .cell.skill.used { background:#3d2a5c; }
+  .cell.attack.skill { background: linear-gradient(135deg, #c0392b 0 45%, #5b3a8c 55% 100%); box-shadow: inset 0 0 0 2px #c9a0ff; }
+  .cell.skill.dodge { box-shadow: inset 0 0 0 2px #c9a0ff, inset 0 0 0 4px #7dd3fc; }
+  /* 攻击范围：在地块上叠一层蓝色（与路径格 #3a5a8c 接近），不遮挡格子内容 */
+  .cell.in-range { box-shadow: inset 0 0 0 999px rgba(58,90,140,.25); }
+  .cell.in-range.attack, .cell.in-range.skill { box-shadow: inset 0 0 0 999px rgba(58,90,140,.25), inset 0 0 0 1px rgba(201,160,255,.65); }
+  .cell.item-cell { background: #4a1e2f; box-shadow: inset 0 0 10px #ff6b6b; }
+  /* ★ ISSUE-20261031-120：🍌 香蕉格 —— 与 ❤️ 同一套 item-pulse 壳，只换底色（暖黄），
+     让玩家一眼分出「这个回 1 血、那个回 3 血」。 */
+  .cell.banana-cell { background: #4a3d16; box-shadow: inset 0 0 10px #ffd166; }
+  .cell.blood-cell { background: #3d1515; }
+  /* ISSUE-20261031-118：骨头底色 —— 比血迹更暖更暗，避免和 🩸 的红混在一起 */
+  .cell.bone-cell { background: #3a3226; }
+  /* ISSUE-20261031-92（人类 00:1x「门的背景颜色和角标 UI 用一样的」）：
+   * 出口格底色统一成角标那套青绿 135° 渐变（与 #setOpenBtn/.start-btn 同款），
+   * 只把内部光晕从纯绿换成青绿，避免纯绿压青绿底色出现色阶断层。
+   * 不动 border / border-radius —— 棋盘网格由 .cell 统一控制。 */
+  .cell.exit-cell { background: linear-gradient(135deg, #4ecdc4, #2ecc71); box-shadow: inset 0 0 15px rgba(78,205,196,.85); }
+
+  /* ===== ISSUE-20261031-126：事件关卡的格子样式 =====
+   * 设计约束（人类拍板 9「纯空大地，只有外墙」）：
+   *   · 地板比战斗关**亮一点点、暖一点点**，进房间第一眼就能感到「这里不是战场」；
+   *   · 出口沿用 .exit-cell 同一套青绿渐变（开态）—— 锁态复用同一块底色但要「暗下去」，
+   *     所以用 filter 而不是换色：换色会让玩家以为那是两扇不同的门；
+   *   · ❓ 用脉冲动画，和奖励格 .item-pulse 同源，视觉上属「可交互物」这一族。 */
+  .cell.event-floor { background: #242a33; }
+  /* 锁着的门：同一扇门，只是暗 + 灰度 + 虚线框（不挂锁图标，见 buildBoardHtml 的注释） */
+  .cell.event-exit.locked {
+    background: linear-gradient(135deg, #4ecdc4, #2ecc71);
+    box-shadow: inset 0 0 15px rgba(78,205,196,.85), inset 0 0 0 2px rgba(0,0,0,.35);
+    filter: grayscale(.85) brightness(.42);
+  }
+  /* 开启的门：青绿渐变 + 呼吸光晕，和战斗关出口一模一样 */
+  .cell.event-exit.open {
+    background: linear-gradient(135deg, #4ecdc4, #2ecc71);
+    box-shadow: inset 0 0 15px rgba(78,205,196,.85);
+    animation: eventDoorPulse 1.8s ease-in-out infinite;
+  }
+  @keyframes eventDoorPulse {
+    0%, 100% { box-shadow: inset 0 0 15px rgba(78,205,196,.85); }
+    50%      { box-shadow: inset 0 0 26px rgba(120,255,220,1); }
+  }
+  /* ❓ 事件点：紫底 + 脉冲，与「可交互物」同族 */
+  .cell.event-obj { background: #3a2f52; box-shadow: inset 0 0 12px #a78bfa; }
+  .cell.event-obj svg { animation: eventObjPulse 1.6s ease-in-out infinite; }
+  @keyframes eventObjPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  /* 已用过：褪成地板色，图标压到 30% —— 让玩家一眼看出「这格没东西了」而又知道曾经有过 */
+  .cell.event-obj.used { background: #242a33; box-shadow: none; }
+  .cell.event-obj.used svg { opacity: .3; animation: none; }
+  /* 事件关操作区那行说明（替代「开始行动」按钮的位置） */
+  .event-tip { font-size: 13px; color: #9fb3c8; text-align: center; padding: 6px 4px; line-height: 1.5; border-radius: 8px;
+    background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.06); }
+  .cell.hitflash { animation: hitflash .35s ease-out; }
+  @keyframes hitflash { 0%{box-shadow: inset 0 0 0 40px rgba(255,80,80,.9);} 100%{box-shadow: inset 0 0 0 0 rgba(255,80,80,0);} }
+  .item-pulse { animation: itemPulse 1.5s ease-in-out infinite; display:inline-block; }
+  @keyframes itemPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+  /* 单位渲染（格内静态 .unit + 绝对定位 .unit-abs）共用同一套外观，避免两处分别维护。
+     ★ ISSUE-20261030-56：--stk-* 是「同格斜分」的参数，默认值 = 独占一格（等价于没有斜分），
+       只有 N>1 时才由 renderUnits 改成实际值 —— N=1 时下面那套 clip-path 一条都不匹配。 */
+  .unit, .unit-abs { display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; pointer-events:none; position:relative;
+    --stk-i: 0; --stk-n: 1; --stk-f: 1; --stk-dx: 0px; --stk-dy: 0px; }
+  .unit { width:100%; height:100%; }
+  .unit-abs { position:absolute; left:0; top:0; width:auto; height:auto; transition: transform var(--unit-move-ms) linear; will-change: transform; border-radius:2px; }
+  /* ★ ISSUE-20261030-56：图标 / 血条按 N 缩放（--stk-f 默认 1 → 单格单单位与改动前完全一致） */
+  .unit .icon, .unit-abs .icon { font-size: calc(var(--cell) * 0.60 * var(--stk-f)); line-height:1; display:flex; align-items:center; justify-content:center; }
+  .unit .icon.ghost-icon, .unit-abs .icon.ghost-icon { opacity: 0.7; filter: drop-shadow(0 0 5px #fff); }
+  /* ISSUE-20261030-90：Spine 动画层接管的单位，emoji 让位（保留占位符，布局与命中一律不变）。
+     只在 #spineCanvas 真的画上了才加这个 class —— 拿不到资源时永远不出现，玩法退化为原样。 */
+  .unit .icon.spine-hidden, .unit-abs .icon.spine-hidden { opacity: 0; }
+  /* ISSUE-20261030-64 · 矢量图标：尺寸 = 1em → 自动继承父级 font-size，
+   * 所以棋盘那条 calc(--cell)、抽屉里 .ico 的 26px、日志行字号都不用动一行。 */
+  .vico { width: 1em; height: 1em; display: inline-block; vertical-align: -0.15em; flex: 0 0 auto; }
+  /* 选角大厅角色（ISSUE-20261028-12）：连续坐标 + 绝对定位。
+     自由移动期间必须 transition:none —— 每帧写 transform 时若还有 transition，
+     会把每帧目标再缓动一次，出现拖尾/松手后还在滑。 */
+  .cand-unit { position:absolute; left:0; top:0; display:flex; align-items:center; justify-content:center;
+    transition:none; will-change:transform; pointer-events:none; border-radius:6px; }
+  .cand-unit .cand-icon { font-size: calc(var(--cell) * 0.60); line-height:1; display:flex; align-items:center; justify-content:center; }
+  .cand-unit.sel { outline:3px solid #f39c12; box-shadow: inset 0 0 15px rgba(243,156,18,0.55); }
+  /* ★ ISSUE-20261031-130：逐格移动「撞墙顿碰」（人类拍板 10：不动 + 轻微顿碰，纯视觉）。
+     动画必须挂在**内层 .cand-icon** 上：外层 .cand-unit 的 transform 是 freeMovePlace() 每帧写死的定位，
+     挂外层会被当场覆盖掉，看起来「抖一下」根本不会出现（issue R1 说的就是这个）。
+     位移量由 JS 写 --bx / --by（撞哪个方向就往反方向弹），坐标本身一个字节都不改。 */
+  .cand-unit .cand-icon.bump { animation: cand-bump 80ms ease-out; }
+  @keyframes cand-bump {
+    0%   { transform: translate(0, 0); }
+    40%  { transform: translate(var(--bx, 0px), var(--by, 0px)); }
+    100% { transform: translate(0, 0); }
+  }
+  /* 词缀 / 精英标记（ISSUE-20261028-05）：词缀做成右上角小标签，精英用金边 + 星标。
+     刻意不用 CSS filter 改图标色 —— 会把 emoji 与后续像素画（ISSUE-07）的色阶一起毁掉。 */
+  .affix-tag { position:absolute; top:0; right:0; display:flex; gap:1px; align-items:center;
+    font-size: calc(var(--cell) * 0.2); line-height:1; padding:1px 2px; border-radius:4px;
+    background: rgba(0,0,0,0.66); color:#ffd93d; font-weight:900; letter-spacing:0;
+    pointer-events:none; z-index:46; white-space:nowrap; }
+  .unit-abs.ua-elite { outline:2px solid #ffd700; outline-offset:-2px;
+    box-shadow: inset 0 0 10px rgba(255,215,0,0.45); }
+  .unit-abs.ua-elite .icon { text-shadow: 0 0 6px #ffd700; }
+  /* ★ ISSUE-20261030-56：血条同样按 N 缩放（不缩的话 N≥3 时血条比斜带还宽，会被 clip 掉一截） */
+  .unit .hp-bar, .unit-abs .hp-bar { width: calc(78% * var(--stk-f)); height: 3px; background: rgba(0,0,0,0.55); border-radius: 2px; margin-top: 1px; overflow: hidden; flex-shrink: 0; box-shadow: 0 0 2px rgba(0,0,0,0.6); }
+  .unit .hp-fill, .unit-abs .hp-fill { height: 100%; border-radius: 2px; transition: width 0.25s ease; }
+  .unit-abs.ua-player { outline:2px solid #4ecdc4; outline-offset:-2px; }
+  .unit-abs.ua-player.ua-charging { outline:3px solid #ffd700; outline-offset:-3px; box-shadow: inset 0 0 15px #ffd700; }
+  .unit-abs.ua-player.ua-attacked { outline:2px dashed #ffb86b; outline-offset:-2px; }
+  .unit-abs.ua-enemy { outline:2px solid #e74c3c; outline-offset:-2px; }
+  /* ISSUE-20261029-28：召唤出来的小队成员 = 友军，绿框，与玩家青框 / 敌人红框区分 */
+  .unit-abs.ua-squad { outline:2px solid #4ade80; outline-offset:-2px; box-shadow: inset 0 0 8px rgba(74,222,128,0.25); }
+  .unit-abs.ua-stunned { opacity: 0.55; filter: grayscale(0.35); }
+  .unit-abs.ua-stunned::after {
+    /* ISSUE-20261030-64：原来是 CSS content:'💫'（吃 emoji 字体，跨平台会变/变豆腐块）。
+       CSS 的 content 引用不到内联 <symbol>，所以这里用 data-URI 背景图 —— 同一套矢量，居中无缩放差异。
+       ★ ISSUE-20261031-103（人类 17:09「眩晕改成🌀」）：换成 Fluent Flat 的 cyclone。
+         顺带解决一个歧义 —— 闪避的图标这一步同时从 💨 改成 💫（dizzy），
+         若眩晕还留着 💫，两种状态在棋盘上就是同一个图形，玩家分不出来。 */
+    content: '';
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    width: calc(var(--cell) * 0.3);
+    height: calc(var(--cell) * 0.3);
+    background: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cg%20fill%3D%22none%22%3E%3Cpath%20d%3D%22M11.0796%202.73553C11.7779%203.59132%2011.6503%204.8512%2010.7945%205.54955C7.86908%207.93674%206%2011.5672%206%2015.64C6%2021.1654%2010.4746%2025.64%2016%2025.64C21.5254%2025.64%2026%2021.1654%2026%2015.64C26%2011.7746%2022.8654%208.64%2019%208.64C15.1346%208.64%2012%2011.7746%2012%2015.64C12%2017.8554%2013.7846%2019.64%2016%2019.64C18.2154%2019.64%2020%2017.8554%2020%2015.64C20%2015.0846%2019.5554%2014.64%2019%2014.64C18.4446%2014.64%2018%2015.0846%2018%2015.64C18%2016.7446%2017.1046%2017.64%2016%2017.64C14.8954%2017.64%2014%2016.7446%2014%2015.64C14%2012.8754%2016.2354%2010.64%2019%2010.64C21.7646%2010.64%2024%2012.8754%2024%2015.64C24%2020.0646%2020.4246%2023.64%2016%2023.64C11.5754%2023.64%208%2020.0646%208%2015.64C8%209.56543%2012.9254%204.64%2019%204.64C25.0746%204.64%2030%209.56543%2030%2015.64C30%2023.3746%2023.7346%2029.64%2016%2029.64C8.26543%2029.64%202%2023.3746%202%2015.64C2%2010.3128%204.45092%205.56326%208.26553%202.45045C9.12132%201.7521%2010.3812%201.87974%2011.0796%202.73553Z%22%20fill%3D%22%231345B7%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E") no-repeat center / contain;
+    animation: stunSpin 1.8s linear infinite;
+    pointer-events: none;
+    text-shadow: 0 0 4px #ffd700;
+ }
+  @keyframes stunSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* ===================================================================
+   * ★ ISSUE-20261030-56：同格多单位「斜向分格」
+   *
+   * 一格沿 45°（带方向左下→右上，即「x+y」恒定）切成 N 条斜带：
+   * 第 i 条覆盖 x+y ∈ [2i/N, 2(i+1)/N]（方格内 x+y 取值 0..2），
+   * 于是 N=2 就是「左上 / 右下」两块三角，玩家（i=0）永远在左上。
+   * 内容再由 --stk-dx/--stk-dy 平移到本带中心（偏移量由 renderUnits 按实测格宽算好写行内）。
+   *
+   * ★ N 硬上限 = 5（1 干员 + 4 成员，各不重复），所以 N=2..5 全部穷举，
+   *   不需要「+N 角标」之类的退化方案 —— 超过 5 的情况不存在。
+   * ★ data-stk / data-stk-i 只在 N>1 时由 JS 挂上（N=1 时 DOM 与改动前逐字节一致，
+   *   这是 §7-8 的回归底线：斜分逻辑必须走这个开关，不能在 N=1 时也挂 clip-path）。
+   * =================================================================== */
+  /* 斜带内：内容整体平移到自己那条带的中心（var 都给 0px 兜底 —— 万一 JS 没写行内值，
+     缺一个 var 会让整条 transform 变成 invalid at computed-value time，居中直接失效） */
+  .unit-abs[data-stk] .icon,
+  .unit-abs[data-stk] .hp-bar,
+  .unit-abs[data-stk] .affix-tag { transform: translate(var(--stk-dx, 0px), var(--stk-dy, 0px)); }
+  /* 朝向指示本来就带 translateX/Y(-50%)，只能整条重写（不能只加 translate，会覆盖原居中） */
+  .unit-abs[data-stk] .facing-ind.r, .unit-abs[data-stk] .facing-ind.l { transform: translate(var(--stk-dx, 0px), var(--stk-dy, 0px)) translateY(-50%); }
+  .unit-abs[data-stk] .facing-ind.d, .unit-abs[data-stk] .facing-ind.u { transform: translate(var(--stk-dx, 0px), var(--stk-dy, 0px)) translateX(-50%); }
+  /* N≥3：斜带太窄，朝向与词缀已经不可读 → 直接隐掉，只留描边颜色辨敌我（§4.2）。
+     !important 是必须的：renderUnits 会用行内 display:flex 把它们显示出来。 */
+  .unit-abs[data-stk="3"] .facing-ind, .unit-abs[data-stk="4"] .facing-ind, .unit-abs[data-stk="5"] .facing-ind,
+  .unit-abs[data-stk="3"] .affix-tag, .unit-abs[data-stk="4"] .affix-tag, .unit-abs[data-stk="5"] .affix-tag { display: none !important; }
+  /* --- N=2 --- */
+  .unit-abs[data-stk="2"][data-stk-i="0"] { clip-path: polygon(0% 0%, 100% 0%, 0% 100%); }
+  .unit-abs[data-stk="2"][data-stk-i="1"] { clip-path: polygon(100% 0%, 100% 100%, 0% 100%); }
+  /* --- N=3 --- */
+  .unit-abs[data-stk="3"][data-stk-i="0"] { clip-path: polygon(0% 0%, 66.67% 0%, 0% 66.67%); }
+  .unit-abs[data-stk="3"][data-stk-i="1"] { clip-path: polygon(0% 66.67%, 66.67% 0%, 100% 0%, 100% 33.33%, 33.33% 100%, 0% 100%); }
+  .unit-abs[data-stk="3"][data-stk-i="2"] { clip-path: polygon(100% 33.33%, 100% 100%, 33.33% 100%); }
+  /* --- N=4 --- */
+  .unit-abs[data-stk="4"][data-stk-i="0"] { clip-path: polygon(0% 0%, 50% 0%, 0% 50%); }
+  .unit-abs[data-stk="4"][data-stk-i="1"] { clip-path: polygon(0% 50%, 50% 0%, 100% 0%, 0% 100%); }
+  .unit-abs[data-stk="4"][data-stk-i="2"] { clip-path: polygon(100% 0%, 100% 50%, 50% 100%, 0% 100%); }
+  .unit-abs[data-stk="4"][data-stk-i="3"] { clip-path: polygon(100% 50%, 100% 100%, 50% 100%); }
+  /* --- N=5 --- */
+  .unit-abs[data-stk="5"][data-stk-i="0"] { clip-path: polygon(0% 0%, 40% 0%, 0% 40%); }
+  .unit-abs[data-stk="5"][data-stk-i="1"] { clip-path: polygon(0% 40%, 40% 0%, 80% 0%, 0% 80%); }
+  .unit-abs[data-stk="5"][data-stk-i="2"] { clip-path: polygon(0% 80%, 80% 0%, 100% 0%, 100% 20%, 20% 100%, 0% 100%); }
+  .unit-abs[data-stk="5"][data-stk-i="3"] { clip-path: polygon(100% 20%, 100% 60%, 60% 100%, 20% 100%); }
+  .unit-abs[data-stk="5"][data-stk-i="4"] { clip-path: polygon(100% 60%, 100% 100%, 60% 100%); }
+
+  /* 同格时的动作标记（✦ / 🎯 / 💨 / ⏳n）：画进**自己那条斜带**。
+     ★ z-index 41：必须高于 #unitLayer(40)，否则标记会被单位图标整个盖住
+       （#board 与 .cell 都是 position:relative + z-index:auto，不建层叠上下文，
+        所以这个 41 能直接和 40 比）；低于 #fxLayer(50)，浮字仍在最上层。
+     ★ 深色圆底是必要的：标记会压在图标中心，没有底衬会糊成一团。 */
+  .cell-mark { position:absolute; left:50%; top:50%; z-index:41; pointer-events:none; line-height:1;
+    display:flex; align-items:center; justify-content:center; white-space:nowrap;
+    /* 用 min-width 不用 width：⏳2 是两个字符，写死宽度会把第二个字符挤出圆底之外 */
+    min-width: calc(var(--cell) * 0.40 * var(--stk-f, 1)); height: calc(var(--cell) * 0.40 * var(--stk-f, 1));
+    padding: 0 calc(var(--cell) * 0.05 * var(--stk-f, 1));
+    font-size: calc(var(--cell) * 0.28 * var(--stk-f, 1));
+    background: rgba(6,8,14,0.74); border-radius: 999px; box-shadow: 0 0 3px rgba(0,0,0,.9);
+    text-shadow: 0 0 3px #000, 0 0 2px #000;
+    transform: translate(-50%,-50%) translate(var(--stk-dx, 0px), var(--stk-dy, 0px)); }
+  /* ★ ISSUE-20261030-74：同格多个动作的「同心方框」。外圈 = 最先放置的那件，内圈 = 最后放置的；
+   * 每圈线宽一致（均为 3px）；按类型配色：闪避=蓝 / 攻击=红 / 技能=紫（对应截图"先闪避→攻击→技能"）。
+   * 中心留白给单位本体（单位层 z40 < 本层 z41，框会压在图标之上但不挡中心观感）。 */
+  .act-frames { position:absolute; inset:0; z-index:41; pointer-events:none; }
+  .act-frames .af { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    border:3px solid #fff; border-radius:4px; box-sizing:border-box; }
+  .act-frames .af-dodge { border-color:#3aa0ff; }
+  .act-frames .af-attack { border-color:#ff5a5a; }
+  .act-frames .af-skill { border-color:#b06bff; }
+  .facing-ind { position: absolute; font-size: calc(var(--cell) * 0.2); color: rgba(255,255,255,0.55); text-shadow: 0 0 3px #000, 0 0 2px #000; line-height: 1; pointer-events: none; font-weight: 900; z-index: 2; }
+  .facing-ind.r { right: 1px; top: 50%; transform: translateY(-50%); }
+  .facing-ind.l { left: 1px; top: 50%; transform: translateY(-50%); }
+  .facing-ind.d { bottom: 0; left: 50%; transform: translateX(-50%); }
+  .facing-ind.u { top: 0; left: 50%; transform: translateX(-50%); }
+  .enemy-arrow { position:absolute; width: calc(var(--cell) * 0.4); height: calc(var(--cell) * 0.4); display:flex; align-items:center; justify-content:center; font-size: calc(var(--cell) * 0.3); font-weight:900; color:#ffd93d; background:rgba(0,0,0,0.6); border-radius:50%; text-shadow:0 0 4px #000, 0 0 6px #ffd93d; transform:translate(-50%,-50%); z-index:45; pointer-events:none; }
+  .bullet { position:absolute; width:12px; height:12px; border-radius:50%; background:#ffe66d; box-shadow:0 0 10px 3px #ffd93d, 0 0 22px 6px rgba(255,217,61,.5); transform:translate(-50%,-50%); z-index:20; }
+  .bullet.crit { background:#ff4500; box-shadow:0 0 12px 4px #ff4500, 0 0 26px 8px rgba(255,69,0,.6); width:14px; height:14px; }
+  .bullet.alien { background:#a55eea; box-shadow:0 0 10px 3px #a55eea, 0 0 22px 6px rgba(165,94,234,.5); width:14px; height:14px; }
+  /* ISSUE-20261031-114 · 阿米娅音符弹道：去掉圆点底，改 Fluent Flat SVG。
+     尺寸靠 font-size 一处控制 —— iconTag 输出的是 .vico，宽高都是 1em。
+     ★ .bullet.crit 已经把 width/height 写成 14px、background 写成红底，这里必须全部覆盖回来。 */
+  .bullet.note { width:auto; height:auto; border-radius:0; background:none; box-shadow:none;
+                 font-size:20px; line-height:1; filter:drop-shadow(0 0 5px rgba(255,225,130,.9)); }
+  .bullet.note.crit { width:auto; height:auto; background:none; font-size:23px;
+                      filter:drop-shadow(0 0 7px rgba(255,90,70,1)) drop-shadow(0 0 14px rgba(255,69,0,.6)); }
+  .float-text { position:absolute; font-weight:900; font-size:20px; text-shadow:0 0 6px #000, 0 0 2px #000; pointer-events:none; z-index:30; transform:translate(-50%,-50%); white-space:nowrap; }
+  .float-text.crit { font-size:26px; color:#ffd700 !important; text-shadow:0 0 10px #ff4500, 0 0 4px #000; }
+  .float-text.crosskill { font-size:26px; color:#ff4500 !important; text-shadow:0 0 12px #ff4500, 0 0 4px #000, 0 0 2px #000; letter-spacing:2px; }
+  .ring-fx { position:absolute; width:46px; height:46px; border:4px solid #fff; border-radius:50%; transform:translate(-50%,-50%); z-index:25; }
+  .slash-fx { position:absolute; width:52px; height:52px; z-index:26; transform:translate(-50%,-50%); }
+  .slash-fx::before, .slash-fx::after { content:''; position:absolute; left:50%; top:50%; width:6px; height:46px; background:linear-gradient(180deg,#fff,#ffb86b); border-radius:4px; transform:translate(-50%,-50%) rotate(45deg); box-shadow:0 0 8px #ffb86b; }
+  .slash-fx::after { transform:translate(-50%,-50%) rotate(-45deg); }
+  /* 侧栏收窄（ISSUE-20261028-09 B）：六维图搬进抽屉后，侧栏只剩角色卡与日志占位，
+     再留 33vw 会把棋盘挤成小方块。 */
+  #sidebar { width: clamp(280px, 28vw, 450px); flex-shrink: 0; display:flex; flex-direction:column; gap:8px; height: 100%; min-height: 0; overflow: hidden; }
+  #dragHandle { flex: 0 0 16px; align-self: stretch; cursor: col-resize; position: relative; user-select: none; touch-action: none; }
+  /* 细分隔线（颜色加深） */
+  #dragHandle::before { content: ""; position: absolute; left: 50%; top: 6px; bottom: 6px; width: 2px; transform: translateX(-50%); background: #10101e; border-radius: 2px; }
+  /* 中间竖胶囊 */
+  #dragHandle .grip { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 9px; height: 50px; border-radius: 6px; background: linear-gradient(180deg, #34334d, #2d2d44); box-shadow: 0 0 0 1px rgba(0,0,0,.5), 0 2px 6px rgba(0,0,0,.45); transition: background .15s, box-shadow .15s; }
+  /* 胶囊上的细小抓握点 */
+  #dragHandle .grip::before, #dragHandle .grip::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); width: 3px; height: 3px; border-radius: 50%; background: rgba(220,226,255,.55); }
+  #dragHandle .grip::before { top: 16px; }
+  #dragHandle .grip::after { bottom: 16px; }
+  #dragHandle:hover .grip, #dragHandle.dragging .grip { background: linear-gradient(180deg, #3f3e5c, #353552); box-shadow: 0 0 0 1px rgba(150,160,210,.45), 0 2px 8px rgba(0,0,0,.5); }
+  /* 侧栏角色卡 #hero 已整块删除（ISSUE-20261029-38）：信息并入「行动按钮上方 HUD」 */
+  #radarWrap { display: flex; align-items: center; justify-content: center; }
+  /* 六维图搬进抽屉后可以画大一点：抽屉宽 min(360px,86vw)，减 padding 后仍有余量 */
+  #radarCanvas { display: block; width: min(268px, 74vw); height: min(268px, 74vw); touch-action: manipulation; }
+  /* ★ ISSUE-20261101-137：HUD 的字号与间距全部改为由 --cell 派生。
+     换算基准 = 21 格栅时代（cell≈50px），14px ↔ var(--u)=0.28cell、12px ↔ var(--u-sm)=0.22cell，
+     所以换到任何分辨率，观感比例都与老版一致，不用再写一套媒体查询。 */
+  .hero-top { display:flex; align-items:baseline; gap:calc(var(--cell) * 0.1); flex-wrap:wrap; padding-right:calc(var(--cell) * 1.12); }
+  .hero-name { font-size:var(--u); font-weight:900; color:#4ecdc4; letter-spacing:calc(var(--cell) * 0.02); white-space:nowrap; }
+  /* 等级：紧贴名字右侧（金色），用于替代原先画在六维图中心的 Lv */
+  .hero-lv-gold { font-size:var(--u-sm); font-weight:900; color:#ffd700; letter-spacing:.5px; white-space:nowrap; text-shadow:0 0 6px rgba(255,215,0,.25); }
+  .hero-lv { font-size:var(--u-sm); font-weight:800; color:#8a8aa5; white-space:nowrap; margin-left:auto; }
+  /* ===== 货币：金币（ISSUE-20261030-80；2026-10-31 17:03 人类 TG msg 101「源石锭→金币」）=====
+   * 图标 = 图标系统的 coin（🪙 = Fluent Emoji Flat 矢量，`icons.js` 的 `#ico-coin`），
+   * 由 `iconify(CURRENCY_ICON)` 渲染 —— 与全站其它 UI 图标同一套，一处注册、处处复用。
+   *
+   * ★ 历史（别照着老注释改回去）：这枚徽章原先内联了一整段 40×35「源石锭」PNG 的
+   *   base64（CSS 变量 `--coin-src`，源图 issue/yuanshiding_icon.svg），
+   *   当时的理由是「原图自带抗锯齿噪点，重光栅化只有 ≈80% 相似」。
+   *   货币改名为「金币」后，那张锭子在语义上已经错了（玩家看到锭子却被告知是金币），
+   *   所以整段 base64 与 `--coin-src` 一并删除，改走矢量图标：
+   *     ① 与其它图标风格一致，任意缩放不糊；② 少 ~1.5 KB base64；
+   *     ③ 以后换图标只改 `icons.js`，不用再碰 CSS。
+   *   ⚠️ 工具/apply_coin_icon.py（负责把 PNG 刷进那段 base64）自此**没有目标可写**，
+   *      不要为了「让它能跑」把 base64 加回来。
+   */
+  /* 货币单元钉在窗口**顶部右上角**：#hud 与 #charTop 吃的是同一份 HTML（ISSUE-42），
+   * 各自定位到自己那个角落 —— .hero-top 已预留位置，标签文字不会钻到它下面。
+   * ★ ISSUE-20261101-151（人类 19:40「金币UI占据2格」）：宽度从「由内容撑开」改成**钉死 2 格**。
+   *   定位方式仍是 absolute + top/right（currency_test 的两条硬断言依赖它，不许改成 flex 成员），
+   *   只是把宽度写死并让内容居中 —— 金币是「永久驻留」的读数，给它固定面积比随位数抖动更稳。 */
+  .hero-coin { position:absolute; top:calc(var(--cell) * 0.06); right:calc(var(--cell) * 0.08); z-index:2;
+    display:inline-flex; align-items:center; justify-content:center; gap:calc(var(--cell) * 0.05);
+    width:calc(var(--cell) * 2 - var(--gap)); height:calc(var(--cell) * 0.34); padding:0 calc(var(--cell) * 0.09) 0 calc(var(--cell) * 0.03);
+    box-sizing:border-box; border-radius:calc(var(--cell) * 0.18);
+    background:rgba(31,201,169,.10); border:1px solid rgba(31,201,169,.40); }
+  .hero-coin.bump { animation:coinBump .32s ease; }
+  @keyframes coinBump { 0%{transform:scale(1)} 40%{transform:scale(1.22)} 100%{transform:scale(1)} }
+  /* 15px 方框装矢量图标。直接命中 svg，不用 .vico 的 1em + negative vertical-align
+   * （那套在 line-height:1 的窄行里会偏 1~2px）。 */
+  .coin-ico { display:block; width:calc(var(--cell) * 0.3); height:calc(var(--cell) * 0.3); }
+  .coin-ico svg { display:block; width:calc(var(--cell) * 0.3); height:calc(var(--cell) * 0.3); }
+  .coin-num { font-size:var(--u-sm); font-weight:900; line-height:1; color:#1FC9A9; letter-spacing:.5px;
+    font-variant-numeric:tabular-nums; text-shadow:0 0 6px rgba(31,201,169,.35); }
+  /* ★ ISSUE-20261101-151（人类 19:40）：**血条厚度 = 一格的一半**。
+     旧值 0.26·cell 是「细横线」的观感，人类要求它占住半格 —— 血量是本作最需要一眼读到的数值，
+     0.5·cell（cell=80 时 40px）足够塞下 HP 文字与护盾条，同时仍留出经验条的位置。
+     ⚠️ .hp-text 的 line-height 必须跟着改（见下方 .hp-text），否则文字会贴顶不居中。 */
+  .hp-track { position:relative; height:calc(var(--cell) * 0.5); border-radius:calc(var(--cell) * 0.14); background:#101019; box-shadow:inset 0 0 0 1px #34344f; overflow:hidden; }
+  .hp-fill-lg { display:block; height:100%; border-radius:calc(var(--cell) * 0.14); background:linear-gradient(90deg,#2ecc71,#4ecdc4); transition:width .25s ease; }
+  .hp-track.warn .hp-fill-lg { background:linear-gradient(90deg,#e67e22,#f1c40f); }
+  .hp-track.danger .hp-fill-lg { background:linear-gradient(90deg,#c0392b,#e74c3c); }
+  .hp-track.danger { box-shadow:inset 0 0 0 1px rgba(231,76,60,.75), 0 0 8px rgba(231,76,60,.25); }
+  .hp-text { position:absolute; inset:0; display:block; text-align:center; line-height:calc(var(--cell) * 0.5); font-size:var(--u-sm); font-weight:900; letter-spacing:.5px; text-shadow:0 0 3px #000,0 0 2px #000; }
+  /* ★ ISSUE-20261101-151：**技力条整条删除**（人类 19:40「删掉技力条」）。
+     技力改由行动 UI 的技能键（.act-key.skill 的 .ak-sp 等分块）承担 ——
+     那里能同时表达「有几格 / 亮到第几格」，比一条连续百分比条更贴近回合制读法。
+     .sp-* 四条规则随之删除，不留「还在但没人用」的死样式。 */
+  /* 条内标签（HP / SP）：半透明字母，位于数值左侧 */
+  .bar-lbl { font-style:normal; opacity:.5; font-weight:700; letter-spacing:.5px; margin-right:3px; }
+  /* ---- 经验条：方形无圆角（「方形=信息」，ISSUE-20261028-10） ---- */
+  .xp-track { position:relative; width:100%; height:4px; background:#101019; box-shadow:inset 0 0 0 1px #3a3550; overflow:hidden; }
+  .xp-fill { display:block; height:100%; background:linear-gradient(90deg,#8a6b1f,#ffd700); transition:width .25s ease; }
+  /* ---- 护盾（药枚）：血条内右侧叠一段白条，每层 12% ---- */
+  .hp-shield { position:absolute; top:0; bottom:0; right:0; border-radius:0 7px 7px 0;
+    background:linear-gradient(90deg, rgba(255,255,255,.35), rgba(255,255,255,.92));
+    box-shadow:0 0 6px rgba(255,255,255,.55); transition:width .25s ease; pointer-events:none; }
+  .hp-shield::after { content:''; position:absolute; left:0; top:0; bottom:0; width:1px; background:rgba(255,255,255,.95); }
+
+  /* ---- 升级奖励选择（全屏遮罩） ---- */
+  .lv-mask { position:fixed; inset:0; z-index:900; display:flex; align-items:center; justify-content:center;
+    padding:16px; background:rgba(4,6,12,.82); backdrop-filter:blur(3px); }
+  .lv-panel { width:min(900px,100%); max-height:90vh; overflow:auto; background:#12121c;
+    border:1px solid #2f2f4a; border-radius:14px; padding:18px 18px 20px;
+    box-shadow:0 18px 60px rgba(0,0,0,.65), 0 0 0 1px rgba(255,215,0,.12) inset; }
+  .lv-head { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+  .lv-title { font-size:20px; font-weight:900; color:#ffd700; letter-spacing:1px; }
+  .lv-lv { font-size:13px; font-weight:900; color:#8fe28a; }
+  .lv-sub { font-size:12px; color:#8f95a8; margin:6px 0 14px; line-height:1.6; }
+  .lv-cards { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
+  .lv-card { position:relative; background:#171724; border:1px solid #33334d; border-radius:12px;
+    padding:14px 13px; transition:transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+    display:flex; flex-direction:column; gap:4px; text-align:left; color:inherit; font:inherit; }
+  .lv-card:hover { transform:translateY(-3px); border-color:#ffd700; box-shadow:0 10px 24px rgba(255,215,0,.16); }
+  .lv-card:active { transform:translateY(-1px); }
+  .lv-card .ico { font-size:26px; line-height:1.1; }
+  .lv-card .nm { font-size:14px; font-weight:900; color:#fff; letter-spacing:.5px; }
+  .lv-card .ds { font-size:12px; color:#a9b0c2; line-height:1.5; }
+  .lv-card .own { margin-top:auto; padding-top:8px; font-size:11px; color:#7f8698; }
+  .lv-card .own b { color:#ffd700; }
+  @media (max-width:760px) {
+    .lv-cards { grid-template-columns:1fr; gap:9px; }
+    .lv-panel { padding:14px; border-radius:12px; }
+    .lv-title { font-size:17px; }
+    .lv-card { display:grid; grid-template-columns:auto minmax(0,1fr); column-gap:10px; row-gap:2px; align-items:center; }
+    .lv-card .ico { grid-row:1 / span 3; font-size:22px; }
+    .lv-card .nm, .lv-card .ds, .lv-card .own { grid-column:2; }
+    .lv-card .own { padding-top:2px; }
+ }
+  .chip { font-size:11px; font-weight:700; padding:0 7px; border-radius:9px; background:#2c2c47; color:#c3c3da; white-space:nowrap; line-height:1.6; }
+  .chip.teal { background:#0f3a38; color:#4ecdc4; }
+  .chip.gold { background:#453609; color:#ffd700; }
+  .chip.green { background:#20380f; color:#8fe28a; }
+  #stats { flex: 1 1 auto; min-height: 0; overflow-y: auto; display:flex; flex-direction:column; gap:6px; }
+  #footBar { flex-shrink:0; }
+  /* 竖屏：把「开始行动」按钮放到六维图上方（横屏时按钮仍在底部 #controls） */
+  #actionSlot { display: none; }
+  body.layout-v #actionSlot { display: block; flex: 0 0 auto; }
+  body.layout-v #actionSlot .start-btn { width: 100%; }
+  #controls { flex-shrink: 0; display:flex; flex-direction:column; gap:8px; min-height: 90px; }
+  #controls:empty { min-height: 0; }
+  /* =========================================================================
+   * 抽屉体系（ISSUE-20261028-09 G）
+   * 设计语言：方形 = 信息 · 圆形 = 交互（仅手机）· 浮层 = 从右侧滑入的侧边栏。
+   * 旧的 #logPanel「可拖动悬浮窗」整体废除 —— 不允许凭空悬浮，也没有拖动位置记忆。
+   * z-index 一律收敛成变量，禁止各处硬编码（--z-corner 是地图角标专用：30，必须低于单位层 40）。
+   * ========================================================================= */
+  /* ★ ISSUE-20261101-152：--z-vpad 已随手机虚拟圆钮底栏一起删除。 */
+  :root { --z-corner: 30; --z-mask: 1100; --z-drawer: 1101; }
+  /* 地图角标（ISSUE-20261029-21 · B 方案「叠层」；20261029-36 增角色面板）：
+     ⚙ 设置 → 棋盘右上格；👤 账号与排行 → 棋盘左上格；♟️ 角色面板 → 棋盘右下格。尺寸 = 恰好一个格子（var(--cell)），
+     随格子缩放；两者共用同一套样式（大小 / 圆角 / 配色 / 高亮态 / aria）。
+     --corner-x / --corner-y 由 updateCellSize() 算出：#board 在 #boardWrap 里居中，
+     四周可能各剩几像素，角标要贴的是「棋盘」的角而不是容器的角。
+     ★ z-index 必须低于 #unitLayer(40)，且单位层本身 pointer-events:none —— 站在角落的
+       敌人绘制在角标之上，血条 / 词缀 / 意图不会被盖住（本号 §B 强制处理 1）。
+     ★ 代价（人类明确接受）：这两格点不到、也走不上去；攻击 / 技能 / 闪避都是点路径节点，
+       所以角落里的敌人照样能打（§B 强制处理 3）。 */
+  #setOpenBtn, #lobbyOpenBtn, #charOpenBtn, #rewardOpenBtn {
+    position: absolute; top: var(--corner-y); z-index: var(--z-corner);
+    display: flex; width: var(--cell); height: var(--cell);
+    align-items: center; justify-content: center; padding: 0;
+    /* ISSUE-20261029-44 第1项：与「开始行动」(.start-btn) 同款绿色胶囊 */
+    background: linear-gradient(135deg, #4ecdc4, #2ecc71); color: #fff;
+    border: 1px solid rgba(255,255,255,.28); border-radius: 3px;
+    font-size: calc(var(--cell) * 0.5); line-height: 1; touch-action: manipulation; font-family: inherit;
+    box-shadow: 0 2px 8px rgba(46,204,113,.35), inset 0 0 0 1px rgba(0,0,0,.12);
+    transition: filter .15s, box-shadow .15s, transform .12s;
+ }
+  #setOpenBtn { right: var(--corner-x); }
+  #lobbyOpenBtn { left: var(--corner-x); }
+  /* ★ 角色面板按钮：地图右下格（ISSUE-20261029-36） */
+  #charOpenBtn { top: auto; bottom: var(--corner-y); right: var(--corner-x); }
+  /* ★ ISSUE-20261030-84：第 4 角标（地图左下格）从纯占位接成 **📟 奖励与事件入口**。
+     原来这条是 `pointer-events: none; cursor: default`（44 号留的空位），现在必须可点。 */
+  #rewardOpenBtn { top: auto; bottom: var(--corner-y); left: var(--corner-x); }
+  /* 「有事等你」高亮：**不要复用 .on** —— 三个开放态的 .on 会把角标抬到面板之上并变成 ✕，
+     那是「面板已打开」的语义；📟 要表达的是「有奖励没领」，两回事。 */
+  #rewardOpenBtn.has-pending {
+    box-shadow: 0 0 0 2px #ffd700, 0 2px 12px rgba(255,215,0,.55);
+    animation: rewardPulse 1.2s ease-in-out infinite;
+ }
+  @keyframes rewardPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.28); } }
+  #setOpenBtn:hover, #lobbyOpenBtn:hover, #charOpenBtn:hover { filter: brightness(1.08); }
+  #setOpenBtn:active, #lobbyOpenBtn:active, #charOpenBtn:active { transform: scale(.92); }
+  /* ★ ISSUE-20261029-44 第3项：打开面板时角标浮到面板之上，图标变 ✕，再按一下关闭。
+     三个角标共用这套「打开态」：
+       · 设置面板 z = --z-drawer(1101)、角色/联机面板 z = --z-drawer(1101)、账号面板 z = --z-lobby(1201)
+     角标打开态 z 必须高于「最高的那块面板」(1201)，所以取 1202 —— 这样 👤 账号角标在
+     #lobbyDrawer(1201) 之上、⚙/♟ 在各自面板(1101)之上都能浮出来当 ✕。同时低于完整排行榜
+     (#rankPanel --z-fullrank 1500) 与 toast(1900)。
+     ★ 账号面板本来有一枚「面板内的独立关闭按钮」#lobbyCornerClose，因它用棋盘相对坐标
+       (--corner-x/--corner-y) 定位、与面板实际位置错位，长期对不齐；现在改为与设置面板同款
+       —— 角标原地变 ✕ 关闭（位置不变），删掉那枚独立按钮。 */
+  #setOpenBtn.on, #lobbyOpenBtn.on, #charOpenBtn.on {
+    z-index: 1202;
+    box-shadow: 0 0 0 2px #fff inset, 0 2px 8px rgba(46,204,113,.5);
+ }
+  /* 直开 game.html（无外壳）时 ♟ 由 chrome.js 置 hidden，不留死按钮 */
+  #lobbyOpenBtn[hidden] { display: none; }
+  /* 遮罩：全屏半透明，抽屉本体 z-index 更高所以露在上面 */
+  #drawerMask {
+    position: fixed; inset: 0; z-index: var(--z-mask);
+    background: rgba(0,0,0,.45); opacity: 0; pointer-events: none;
+    transition: opacity .22s ease-out;
+ }
+  #drawerMask.on { opacity: 1; pointer-events: auto; }
+  /* 抽屉本体：统一从右侧滑入 220ms ease-out，宽度 min(360px,86vw) */
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: var(--z-drawer);
+    width: min(360px, 86vw); display: flex; flex-direction: column;
+    background: #15151f; border-left: 1px solid #33334f;
+    box-shadow: -12px 0 32px rgba(0,0,0,.5);
+    transform: translateX(100%); transition: transform .22s ease-out;
+    will-change: transform; overflow: hidden;
+ }
+  .drawer.on { transform: translateX(0); }
+  .drawer-head {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+    padding: 10px 10px 10px 12px; border-bottom: 1px solid rgba(255,255,255,.07);
+    background: #1b1b2a;
+ }
+  .drawer-title { font-size: 13px; font-weight: 900; color: #cfe6ff; letter-spacing: 1px; white-space: nowrap; }
+  .drawer-x {
+    flex: 0 0 auto; margin-left: auto; width: 30px; height: 30px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 7px;
+    font-size: 14px; line-height: 1; font-family: inherit;
+ }
+  .drawer-x:active { transform: scale(.94); }
+  /* ★ 设置面板专用关闭按钮（2026-10-29 人类 01:42 指令）：
+     「删掉面板里那个小 ✕，改成和 ⚙ 入口按钮同位置、同尺寸的关闭按钮，再按一下关闭，标题挪到顶部右侧」。
+     尺寸/圆角/配色/边框全部照抄 #setOpenBtn（var(--cell)），位置也用同一套 --corner-x / --corner-y，
+     所以抽屉滑进来时，视觉上就是「棋盘右上格那个 ⚙ 原地变成了 ✕」，点它即收起（.drawer 是 fixed，
+     内部绝对定位的 top/right 与屏幕坐标同源）。
+     属性/升级两个抽屉**不动**：它们的入口不在棋盘角上，没有「同一个位置」可对齐。 */
+  /* ISSUE-20261029-44 第3项：设置面板内独立关闭按钮已删除，
+     改由棋盘右上格的 ⚙ 角标本体（.on 时浮到面板上、变 ✕）关闭。 */
+  /* =========================================================================
+   * ★ 设置面板改为「覆盖棋盘格」（ISSUE-20261029-29，人类 2026-10-29 04:42）
+   *   「设置按钮点开之后，弹窗改成覆盖棋盘格，相当于地图变成了显示设置的面板」。
+   * 旧行为：从屏幕右侧滑入的 360px 宽抽屉，地图还露在左边。
+   * 新行为：面板直接盖在棋盘那块正方形上（--board-* 由 JS 按 #board 的实时矩形写入），
+   *   视觉上就是「地图原地变成了设置面板」，关掉后地图原样露出来。
+   * ★ 显隐机制必须换掉：原 .drawer 靠 translateX(100%) 平移到屏幕外收起，
+   *   而现在面板左边缘在棋盘位置，向右平移 100% 会正好盖住右侧栏 —— 收起=盖住别的东西。
+   *   所以这里改用 opacity + visibility 淡入淡出（ID 选择器优先级高于 .drawer.on，覆盖安全）。
+   * ★ 关闭按钮也从「对齐屏幕上的棋盘角」改成「对齐面板自己的右上角」：
+   *   面板现在就是棋盘那块，top/right 归零即与 ⚙ 原位重合。
+   * ========================================================================= */
+  #drawerSettings {
+    top: var(--board-top, 0); left: var(--board-left, 0);
+    right: auto; bottom: auto;
+    width: var(--board-w, min(360px, 86vw));
+    height: var(--board-h, 100%);
+    max-width: none; border-left: 1px solid #33334f; border-radius: 0; box-shadow: none;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
+ }
+  #drawerSettings.on { opacity: 1; visibility: visible; transform: none; }
+  /* ISSUE-20261029-44：.drawer-corner-x 已移除（见上） */
+  /* =========================================================================
+   * ★ 角色面板弹窗（ISSUE-20261029-36）：与设置面板同款「覆盖棋盘格」机制。
+   * 正方形（9×9 棋盘 = 正方形），视觉上就是「地图原地变成角色面板」。
+   * 显隐同样用 opacity + visibility（ID 选择器优先级高于 .drawer.on，覆盖平移）。
+   * 内容：顶部 = 名字；名字下 = 血条；左下 = 六维图；右下 = 空出一栏。无属性按钮。
+   * ========================================================================= */
+  #drawerChar {
+    top: var(--board-top, 0); left: var(--board-left, 0);
+    right: auto; bottom: auto;
+    width: var(--board-w, min(360px, 86vw));
+    height: var(--board-h, 100%);
+    max-width: none; border-left: 1px solid #33334f; border-radius: 0; box-shadow: none;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
+ }
+  #drawerChar.on { opacity: 1; visibility: visible; transform: none; }
+  /* =========================================================================
+   * ★ 联机大厅面板（ISSUE-20261029-46）：与设置 / 角色面板**同一套**「覆盖棋盘」机制
+   *   —— 位置尺寸全靠 --board-top / --board-left / --board-w / --board-h
+   *   （由 src/ui/drawer.js#syncBoardOverlayRect 按 #board 的实时矩形写入，别另起炉灶），
+   *   显隐同样用 opacity + visibility（ID 选择器优先级高于 .drawer.on 的平移）。
+   *   布局：上面 = 玩家昵称（**直接取账号昵称**，不让玩家再填一套）／
+   *         中间 = 房间号输入栏／左下 = 建房、右下 = 加入。
+   * ========================================================================= */
+  #drawerOnline {
+    top: var(--board-top, 0); left: var(--board-left, 0);
+    right: auto; bottom: auto;
+    width: var(--board-w, min(360px, 86vw));
+    height: var(--board-h, 100%);
+    max-width: none; border-left: 1px solid #33334f; border-radius: 0; box-shadow: none;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
+ }
+  #drawerOnline.on { opacity: 1; visibility: visible; transform: none; }
+  /* =========================================================================
+   * ★ ISSUE-20261030-84（人类 2026-10-30 20:4x 拍板）：升级奖励 / 收藏品 / 关卡事件
+   *   三块面板也改成「覆盖棋盘格」，与设置 / 角色 / 联机面板**同一套**机制（照抄 #drawerChar）。
+   *   需求原文：「选择收藏品的面板和触发事件的面板都改成在地图窗口弹出，和设置面板/角色面板一样」；
+   *   并拍板「三个都改」，入口统一收进左下 📟（#rewardOpenBtn）。
+   *   位置尺寸全靠 --board-top / --board-left / --board-w / --board-h（src/ui/drawer.js
+   *   #syncBoardOverlayRect 按 #board 实时矩形写入）；显隐用 opacity + visibility
+   *   （ID 选择器优先级高于 .drawer.on 的 translateX，覆盖安全）。
+   * ========================================================================= */
+  #drawerLevelUp, #drawerRelic, #drawerEvent {
+    top: var(--board-top, 0); left: var(--board-left, 0);
+    right: auto; bottom: auto;
+    width: var(--board-w, min(360px, 86vw));
+    height: var(--board-h, 100%);
+    max-width: none; border-left: 1px solid #33334f; border-radius: 0; box-shadow: none;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .18s ease-out, transform .18s ease-out, visibility .18s;
+ }
+  #drawerLevelUp.on, #drawerRelic.on, #drawerEvent.on { opacity: 1; visibility: visible; transform: none; }
+  /* 列数按**容器**宽度自适应，不用媒体查询：面板宽度现在跟棋盘走，与屏幕宽度脱钩，
+   * `@media (max-width:760px)` 那套断点在这里会失效（宽屏 + 窄棋盘时 3 列硬塞进 360px 会挤压破版）。 */
+  #drawerLevelUp .lv-cards, #drawerRelic .lv-cards, #drawerEvent .lv-cards {
+    grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+ }
+  /* =========================================================================
+   * ★ ISSUE-20261028-14 教程提示条（#tutBar）
+   *   为什么不做进 log()：手机竖屏下日志面板在视口外，新手根本看不到 → 等于没提示。
+   * ========================================================================= */
+  /* ===== ISSUE-20261030-91 · 教程 HUD 三件套 =====
+   * 人类 2026-10-30 23:4x：
+   *   「现在的弹窗说明几乎完全遮住了地图，弹窗面板可以保留：PC 端[贴合顶部] /
+   *     移动端[贴合角色面板顶部]，可以短暂遮挡地图，但教程关不要用这个弹窗说明文字。
+   *     教程关地图是固定的，可以用地图显示文字…下面 4×9 的区域用来说明。」
+   *
+   * → 于是拆成三块，各管一件事：
+   *   #tutBar    顶部 chip：只剩「教程 3/6 · 基础操作」一行，不再放说明文字，也不挡点击。
+   *   #tutText   叠在地图 y=6..9（4×9）上的说明区：**说明文字都在这里**，顶部一排方向键（← 上一步 / → 下一步）。
+   *   #tutCursor 会平滑移动的光标指引：指向本步该点/该去的那一格。
+   * 位置全部由 JS 按 getCellEl() 的实时矩形算（tutorialZoneRect / cellCenter），
+   * 手算 gap 像素必错 —— 棋盘是 grid + 2px gap，且 --cell 会随窗口变。 */
+  #tutBar {
+    /* ★ ISSUE-20261101-137：原来 left:50% 是「视口居中」，铺满格栅之后视口中心落在
+       地图与 UI 的交界上，chip 直接飞到 UI 面板头顶把提示条盖住（教程关实测）。
+       改成跟棋盘走：--tut-chip-x / --tut-chip-top 由 updateCellSize() 按 #boardWrap 的
+       实时矩形写入，棋盘在哪它就在哪，转屏/缩放自动跟。 */
+    position: fixed; left: var(--tut-chip-x, 50%); transform: translateX(-50%);
+    top: var(--tut-chip-top, 8px);
+    z-index: 1090; width: auto; max-width: 92vw;
+    background: rgba(24,24,40,.94); border: 1px solid rgba(255,215,0,.75); border-radius: 999px;
+    padding: 5px 14px; color: #ffd700; font-size: 12px; font-weight: 800; white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    /* 一条 chip 横在棋盘顶沿也会吃掉点击（教程里玩家要不停点格子），必须穿透。 */
+    pointer-events: none;
+ }
+  #tutBar[hidden] { display: none; }
+  /* 4×9 说明区：半透明，底下的格子/单位仍透得出来（人类要「不遮挡全部地图」） */
+  #tutText {
+    position: absolute; z-index: 60; display: flex; flex-direction: column;
+    justify-content: center; gap: 6px; padding: 10px 12px;
+    background: linear-gradient(180deg, rgba(14,14,24,.72), rgba(14,14,24,.90));
+    border: 1px solid rgba(255,215,0,.55); border-radius: 10px;
+    color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.45);
+    opacity: 0; transition: opacity .25s ease;
+    /* 说明区盖在棋盘下半部分：除按钮外全部穿透，否则「点不到下面那几行格子」 */
+    pointer-events: none;
+ }
+  #tutText.on { opacity: 1; }
+  #tutText .tut-step { font-size: 11px; font-weight: 800; color: #ffd700; letter-spacing: .5px; }
+  #tutText .tut-body { font-size: 12.5px; line-height: 1.5; overflow: auto; }
+  /* ★ ISSUE-教程导航：上一步 / 下一步（方向键图标 ← / →），位于说明区顶部、说明文字上方。
+   * 两个按钮都恢复可点（pointer-events:auto），其余说明区仍穿透，否则吃不到下面的格子。 */
+  #tutText .tut-nav { display: flex; gap: 8px; margin-bottom: 2px; }
+  #tutText .tut-nav button {
+    flex: 0 0 auto; width: 34px; height: 30px; padding: 0; box-sizing: border-box;
+    border: 1px solid rgba(255,215,0,.6); border-radius: 8px; background: rgba(255,215,0,.16);
+    color: #ffd700; font-size: 18px; font-weight: 900; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    /* ISSUE-20261030-87 口径：可点元素一律走 PRTS 箭头变量，不许留裸的系统手型光标 */
+    font-family: inherit; pointer-events: auto; touch-action: manipulation;
+ }
+  #tutText .tut-nav button:active { transform: scale(.94); }
+  #tutText .tut-nav button:disabled {
+    /* 同 87 号：禁用态走禁行图（与全局 button:disabled / .ab-plus:disabled / .cell.wall 同口径） */
+    opacity: .35; cursor: var(--cur-no), auto; background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.2); color: #aaa;
+ }
+  /* 门禁要求：下一步按钮必须可点（兼容旧 .tut-next 选择器，样式交给 .tut-nav button） */
+  #tutText .tut-next { pointer-events: auto; }
+  #tutText .tut-next:active { transform: scale(.96); }
+  /* 光标指引：用 87 号的 PRTS 箭头本体（-cur-src 只有图，不带 hotspot），
+   * 靠 transform 平移 → 浏览器能走合成层，移动是平滑的而不是跳格。 */
+  #tutCursor {
+    position: absolute; z-index: 61; width: 26px; height: 26px; left: 0; top: 0;
+    background: var(--cur-src) center/contain no-repeat;
+    filter: drop-shadow(0 0 6px rgba(255,215,0,.95)) drop-shadow(0 2px 3px rgba(0,0,0,.6));
+    transform: translate(-999px, -999px);
+    transition: transform .55s cubic-bezier(.34, 1.2, .4, 1), opacity .2s ease;
+    opacity: 0; pointer-events: none;
+    /* 轻微上下浮动，和「静止的箭头」区分开：它是在指，不是在摆 */
+    will-change: transform;
+ }
+  #tutCursor.on { opacity: 1; }
+  #tutCursor::after {
+    content: ''; position: absolute; inset: -6px; border-radius: 50%;
+    border: 2px solid rgba(255,215,0,.55); animation: tutCursorPulse 1.5s ease-out infinite;
+ }
+  @keyframes tutCursorPulse {
+    0%   { transform: scale(.55); opacity: .9; }
+    100% { transform: scale(1.35); opacity: 0; }
+ }
+  /* ★ ISSUE-教程：教程某步需要「按开始行动」时，给开始行动按钮套一圈脉动高亮，
+   * 替代棋盘上的格子光标（按钮不在棋盘内，用 #tutCursor 指不到它）。 */
+  .start-btn.tut-point-start {
+    box-shadow: 0 0 0 3px #ffd700, 0 0 14px #ffd700 !important;
+    animation: tutStartPulse 1.1s ease-in-out infinite;
+    outline: none;
+ }
+  @keyframes tutStartPulse {
+    0%, 100% { box-shadow: 0 0 0 3px #ffd700, 0 0 8px #ffd700; }
+    50%      { box-shadow: 0 0 0 5px #ffd700, 0 0 20px #ffd700; }
+ }
+  @media (max-width: 640px) {
+    /* 手机：chip 贴角色面板上沿（棋盘下沿），说明区字号收一点，别挤爆 4 行 */
+    #tutBar { font-size: 11px; padding: 4px 11px; }
+    #tutText { padding: 8px 10px; gap: 4px; }
+    #tutText .tut-body { font-size: 11.5px; line-height: 1.45; }
+    #tutCursor { width: 22px; height: 22px; }
+ }
+  /* ===== ISSUE-20261030-86 · 调试标注层 tooltip =====
+   * 只有 ?debug=1 时 src/ui/debug_names.js 才会创建这个节点，正式局它不存在。
+   * pointer-events:none 是硬要求：它跟着光标走，一旦吃掉事件就等于「光标被这个提示框冻住」。 */
+  #debugNameTip {
+    position: fixed; z-index: 4000; max-width: 66vw;
+    padding: 5px 9px; border-radius: 7px;
+    background: rgba(10,10,18,.95); border: 1px solid #4ecdc4;
+    color: #cfe6ff; font-size: 11.5px; line-height: 1.35; font-family: inherit;
+    box-shadow: 0 4px 14px rgba(0,0,0,.6);
+    pointer-events: none;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+ }
+  #debugNameTip .dn-name { font-weight: 800; color: #4ecdc4; }
+  #debugNameTip .dn-sel { font-size: 10.5px; color: #9aa4c0;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .online-body { flex: 1 1 auto; min-height: 0; padding: 12px 14px 4px;
+    display: flex; flex-direction: column; gap: 10px; }
+  .online-nick { flex: 0 0 auto; text-align: center; font-size: 13px; font-weight: 800;
+    color: #cfe6ff; padding: 8px 10px; border-radius: 10px;
+    background: linear-gradient(135deg,#26263f,#1c1c2d); border: 1px solid #33334f; }
+  .online-nick b { color: #ffd166; }
+  .online-mid { flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-height: 0; }
+  #onlineRoomIn { width: 100%; max-width: 280px; padding: 12px 14px; border-radius: 10px;
+    border: 1px solid #33385f; background: #12142a; color: #e8e8f0; font-size: 20px;
+    font-family: inherit; font-weight: 900; letter-spacing: 5px; text-align: center;
+    text-transform: uppercase; box-sizing: border-box; }
+  #onlineStatus { flex: 0 0 auto; min-height: 18px; font-size: 12px; color: #9aa0c0;
+    line-height: 1.6; text-align: center; word-break: break-all; }
+  /* 左下「建房」/ 右下「加入」：两端对齐，中间留空 */
+  .online-foot { flex: 0 0 auto; display: flex; justify-content: space-between; gap: 10px;
+    padding: 10px 12px 14px; }
+  .online-btn { flex: 0 0 44%; padding: 12px 0; border-radius: 10px; font-size: 14px;
+    font-weight: 800; font-family: inherit; }
+  #onlineCreate { background: #2d6cdf; border: 1px solid #2d6cdf; color: #fff; }
+  #onlineJoin { background: #2a2e52; border: 1px solid #3a3f6e; color: #e8e8f0; }
+  .online-btn:active { transform: scale(.97); }
+  /* =========================================================================
+   * ★ ISSUE-20261031-128（合作闯关）：大厅三件套 —— 模式选择 / 座位表 / 开始按钮
+   *   全部挂在既有 #drawerOnline 里，不新开面板：#drawerOnline 已经解决了
+   *   「覆盖棋盘 + 矩形同步 + 开合焦点」这三件事，新开一个抽屉要再抄一遍。
+   * ========================================================================= */
+  .online-modes { flex: 0 0 auto; display: flex; gap: 8px; }
+  .online-mode { flex: 1 1 0; padding: 9px 0; border-radius: 9px; font-size: 13px;
+    font-weight: 800; font-family: inherit;
+    background: #1c1f38; border: 1px solid #333a62; color: #9aa0c0; }
+  .online-mode.on { background: #234a86; border-color: #4b8dff; color: #fff; }
+  .online-room { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+    gap: 8px; overflow: auto; }
+  .or-head { font-size: 13px; color: #9aa0c0; text-align: center; }
+  .or-head b { color: #ffd166; font-size: 18px; letter-spacing: 3px; }
+  .or-count { margin-left: 8px; color: #8ee6c8; font-weight: 800; }
+  .or-slots { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .or-slot { display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+    border-radius: 9px; background: #1a1c30; border: 1px solid #2e3358; font-size: 13px; }
+  .or-slot .who { flex: 1 1 auto; color: #e8e8f0; font-weight: 700; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .or-slot .seat { flex: 0 0 auto; color: #6f7699; font-size: 11px; }
+  .or-slot.me { border-color: #4b8dff; background: #1b2a45; }
+  .or-slot.empty { color: #5b6187; font-style: italic; border-style: dashed; }
+  .or-hint { font-size: 12px; color: #9aa0c0; line-height: 1.6; text-align: center; }
+  .or-start { flex: 0 0 100%; background: #1f8f5f; border: 1px solid #2fbf7f; color: #fff; }
+  /* 选角厅里的联机入口格 🌐（ISSUE-20261029-46），与出口格 🚪 同款「入口」观感 */
+  .cell.online-cell { background: #2d6cdf; box-shadow: inset 0 0 15px #6ea8ff; }
+  /* ★ ISSUE-20261031-94（v2）：教程入口 = **(4,7)~(6,9) 的 3×3 区域，只显示一个大图标**。
+     渲染只落在**中心格**（代码 (5,2)），靠 overflow:visible + 绝对定位覆盖层画出连续的 3×3 面板 ——
+     9 格各画一个 🎓 就成了「九宫格贴纸」，不是大图标。
+     ⚠️ 尺寸必须是 cell*3 + gap*2：`#board` 的 gap 是 2px，3 格之间有 2 道缝。
+        只写 cell*3 会让面板比实际区域窄 4px，四周露出 1px 的灰缝，看着像没对齐。
+     ⚠️ z-index 必须抬起来：格子按 DOM 顺序绘制，中心格(5,2) 排在同行的 (6,2) 和下一行之前，
+        不抬 z-index 的话右/下两格的底色会盖住溢出的面板。 */
+  .cell.tut-cell { background: transparent; }
+  .cell.tut-core { z-index: 3; overflow: visible; }
+  .cell.tut-core::before {
+    content: ''; position: absolute; left: 50%; top: 50%;
+    width: calc(var(--cell) * 3 + 4px); height: calc(var(--cell) * 3 + 4px);
+    transform: translate(-50%, -50%);
+    /* ★ 人类 2026-10-31 15:3x 拍板 **B 方案**：原来是实心紫渐变（#7b5cff→#b06cff + 内发光），
+       一整块 3×3 亮紫比选角/🚪 还抢眼。现在改成 30% 半透明底 + 2px 紫描边 ——
+       仍能一眼看出「这是一个整体按钮」，但不再压过棋盘本身。
+       之所以不选更暗的 C/D：🎓 本体是深紫（#321B41），压在深底上会糊（见 CHANGELOG 的对比图）。 */
+    background: rgba(123,92,255,.30);
+    box-shadow: inset 0 0 0 2px rgba(176,108,255,.85);
+    border-radius: 8px; pointer-events: none;
+  }
+  /* 大图标本体：跟着覆盖层居中。pointer-events:none 让点击穿透到下面 9 个格子，
+     由 game.html 的 pointerdown 用 selTutInZone() 统一判定（整块都能点）。 */
+  .cell.tut-core .tut-big {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    line-height: 1; pointer-events: none; z-index: 1; display: block;
+  }
+  .cell.tut-core .tut-big .vico { width: calc(var(--cell) * 1.75); height: calc(var(--cell) * 1.75); }
+  /* ★ ISSUE-20261031-95：Alt 就地编辑的视觉反馈。只在按住 Alt 且 debugMode 时由 JS 加 class，
+     正式玩家永远看不到。cursor:text 不受 98 号光标铁律约束（那条禁的是 pointer/default/not-allowed）。 */
+  html.ark-alt-edit * { cursor: text !important; }
+  .ark-txt-editing { outline: 2px dashed #7fd1ff; outline-offset: 2px;
+    background: rgba(127,209,255,.14); border-radius: 4px; }
+  /* 联机房间地图：底行那 5 个「房间码格」（代码 y = ROWS-1，x = 3..7），一格一位数字 */
+  .cell.code-cell { background: #1b1e3a; box-shadow: inset 0 0 0 2px #ffd166;
+    font-size: calc(var(--cell) * 0.56); font-weight: 900; color: #ffd166; }
+  /* ✕ 已删除（ISSUE-20261029-42）：点面板外部或 Esc 关闭 */
+  /* 角色面板内部：上 = 角色信息（与 HUD 同源）／下 = 左六维 · 右 BUFF 池 */
+  .char-body { gap: 10px; padding: 10px; }
+  .char-top { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px;
+    padding: 8px 10px 8px 8px; border-radius: 10px;
+    background: linear-gradient(135deg,#26263f,#1c1c2d); border: 1px solid #33334f; position: relative; }
+  /* ISSUE-20261030-74 ②：六维图上方的 AC / 熟练两个圆角方框（人类：样式照角色卡，别用纯文本） */
+  /* ISSUE-20261031-52：AC / 熟练方框变窄（不再各占半行，改为内容自适应宽度）变短（更矮、字号更小），给六维图腾出空间 */
+  .char-stats-row { display:flex; gap:8px; justify-content:center; padding:0 2px 4px; flex:0 0 auto; }
+  .char-stat-box { flex:0 0 auto; min-width:84px; max-width:120px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    min-height:32px; padding:2px 6px; border-radius:10px; border:1px solid rgba(255,255,255,.16);
+    background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.02));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+  .char-stat-label { font-size:10px; color:#9aa0c0; letter-spacing:.5px; }
+  .char-stat-val { font-size:16px; font-weight:700; color:#e8ebff; line-height:1.1; }
+  /* ISSUE-20261031-52：六维图所在列加宽（1.7fr vs 1fr），右下 BUFF 池列相应变窄 → 雷达明显放大 */
+  .char-grid { display: grid; grid-template-columns: 1.7fr 1fr; gap: 10px; align-items: stretch; flex: 1 1 auto; min-height: 0; }
+  .char-radar { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; min-height: 0; }
+  .char-radar canvas { display: block; width: 100%; max-width: 100%; height: auto; aspect-ratio: 1 / 1; touch-action: manipulation; }
+  .char-alloc { font-size: 11px; font-weight: 800; color: #ffd700; text-align: center; min-height: 14px; line-height: 14px; }
+  /* 右下：升级 BUFF 奖励池（层数常驻可见） */
+  .char-relics { display: flex; flex-direction: column; gap: 5px; min-width: 0; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .char-relics-title { font-size: 11px; font-weight: 900; color: #8a8aa5; letter-spacing: 1px; flex: 0 0 auto; }
+  .char-relic { display: flex; align-items: center; gap: 6px; padding: 4px 7px; border-radius: 6px;
+    background: #20202f; box-shadow: inset 0 0 0 1px #33334d; flex: 0 0 auto; }
+  .char-relic .ico { font-size: 15px; line-height: 1; flex: 0 0 auto; }
+  .char-relic .nm { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 800; color: #cdd3e2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .char-relic .ct { flex: 0 0 auto; font-size: 12px; font-weight: 900; color: #ffd700; }
+  /* ISSUE-20261028-06：收藏品栏要能「查看到描述」，不能只把 desc 塞进 title 里让人去 hover ——
+   * 手机端根本没有 hover，验收要的是「一个面板里全部看到（含图标与描述）」。 */
+  .char-relic { flex-wrap: wrap; }
+  .char-relic .ds { flex: 1 0 100%; font-size: 10px; line-height: 1.4; color: #8f95a8; padding-left: 21px; }
+  /* ISSUE-20261030-63：原来这四个类是 pvpInjectUI() 运行时注入的。旧房间面板整套删掉之后，
+   *   联机结算浮层（pvpShowResult）就没样式可吃 → 搬家到主样式表，内容一个字没改。 */
+  .pvp-result{position:fixed;inset:0;z-index:10001;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,8,20,.92);font-family:inherit}
+  .pvp-result-card{background:#1b1e3a;border:1px solid #2f3460;border-radius:14px;padding:26px 30px;text-align:center}
+  .pvp-result-title{font-size:26px;font-weight:700;margin-bottom:8px}
+  .pvp-result-sub{color:#9aa0c0;font-size:13px;margin-bottom:18px}
+  .pvp-result-card button{padding:10px 18px;border-radius:8px;border:1px solid #3a3f6e;background:#2a2e52;
+    color:#e8e8f0;font-size:14px;font-family:inherit}
+  .char-relics-empty { padding: 10px 8px; border-radius: 6px; border: 1px dashed #33334d;
+    font-size: 11.5px; color: #6f6f8a; text-align: center; }
+  /* ISSUE-20261030-59：右下格复用给「属性说明卡」时的容器样式。
+   * 内文 .ab-info-name / .ab-info-val / .ab-info-desc / .ab-back 沿用抽屉时代留下的类名，
+   * 这里只补容器与「属性名 / 当前值」那一行 —— 不新增字体与配色。 */
+  .ab-info-card { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .ab-info-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex: 0 0 auto; }
+  .ab-info-cap { font-weight: 700; color: #8a8aa5; }
+  /* 标题靠右：右侧要给那个格子大小的关闭按钮让出位置（不然会压在标题上） */
+  .drawer-head.head-end { justify-content: flex-end; padding-right: calc(var(--corner-x) + var(--cell) + 8px); }
+  .drawer-body {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 10px 12px 16px; display: flex; flex-direction: column; gap: 10px;
+ }
+  /* 二层（属性说明卡）：在同一个抽屉容器内再滑一层，不新开浮层 */
+  .drawer-layer {
+    position: absolute; inset: 0; z-index: 2; background: #15151f;
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform .2s ease-out;
+ }
+  .drawer-layer.on { transform: translateX(0); }
+  /* 「+1」加点：方形按钮（方形 = 信息块里的操作），不用圆形 */
+  .ab-plus { padding: 6px 14px; font-size: 14px; font-weight: 900; border-radius: 6px;
+    background: #ffd166; color: #3a2a00; border: 0; font-family: inherit; }
+  .ab-plus:disabled { background: #3a3a4d; color: #7e7e97; cursor: var(--cur-no), auto; }
+  .ab-info-name { font-size: 15px; font-weight: 900; color: #4ecdc4; letter-spacing: 1px; }
+  .ab-info-val { font-size: 12px; color: #c3c3da; }
+  .ab-info-val b { color: #ffd700; font-size: 14px; }
+  .ab-info-desc { font-size: 12.5px; line-height: 1.65; color: #d5d5e6; }
+  .ab-info-desc code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+    background: #232338; color: #9fe6ff; padding: 1px 5px; border-radius: 4px; }
+  .ab-back { align-self: flex-start; padding: 5px 12px; font-size: 12px; font-weight: 700;
+    background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 6px; font-family: inherit; }
+  /* 属性抽屉里的雷达图 + 剩余点数行 */
+  #statsDrawerRadar { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  #abilityPointsRow { font-size: 12px; color: #ffd700; font-weight: 800; text-align: center; min-height: 16px; }
+  /* 六维图入口（方形信息块按钮） */
+  #statsOpenBtn { flex: 0 0 auto; width: 100%; padding: 6px 8px; font-size: 12px; font-weight: 800;
+    background: #232338; color: #cfe6ff; border: 1px solid #3a3a55; border-radius: 7px; font-family: inherit; touch-action: manipulation; }
+  #statsOpenBtn:active { transform: scale(.97); }
+  #statsOpenBtn.on { color: #ffd700; border-color: #6b5a1f; }
+  body.layout-v #statsOpenBtn { max-width: 760px; margin: 0 auto; }
+  /* 升级奖励在窄抽屉里：三选一改竖排（360px 宽放不下三列）。
+   * ★ ISSUE-20261030-84：升级/收藏品/事件三块已改成「覆盖棋盘」，宽度 = 棋盘宽（桌面 400~800px），
+   *   这条单列覆盖对它们就是多余的（横向空间被浪费）。改用 :not() 排掉这三块，
+   *   它们走上面那条 `repeat(auto-fit, minmax(148px,1fr))`。其余仍为右侧窄条的抽屉保持原样。 */
+  .drawer:not(#drawerLevelUp):not(#drawerRelic):not(#drawerEvent) .lv-cards { grid-template-columns: 1fr; gap: 9px; }
+  .drawer .lv-card { display: grid; grid-template-columns: auto minmax(0,1fr); column-gap: 10px; row-gap: 2px; align-items: center; }
+  .drawer .lv-card .ico { grid-row: 1 / span 3; font-size: 22px; }
+  .drawer .lv-card .nm, .drawer .lv-card .ds, .drawer .lv-card .own { grid-column: 2; }
+  .drawer .lv-card .own { padding-top: 2px; }
+  /* ---- 布局模式：layout-h 地图左/UI右（桌面默认）；layout-v 地图上/UI下（竖版） ---- */
+  body.layout-v #game { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; }
+  /* 竖版：宽度撑满，高度由 updateCellSize() 按「宽度 vs 剩余高度」的短边写死（正方形）；
+     短边可能小于可用宽，此时居中而不是贴左。 */
+  body.layout-v #boardWrap { width: 100%; flex: 0 0 auto; min-height: 96px; align-self: center; }
+  /* 竖版顺序：角色卡 → 属性入口 → 状态 → 底栏 → 开始行动（胶囊）→ 方向键/三键 → 其它按钮。
+     「开始行动」要落在拇指区（就在方向键上方），不能留在侧栏顶部够不着。 */
+  body.layout-v #sidebar { display: flex; flex-direction: column; }
+  body.layout-v #statsOpenBtn{ order: 2; }
+  body.layout-v #stats       { order: 3; }
+  body.layout-v #footBar     { order: 4; }
+  body.layout-v #actionSlot  { order: 5; }
+  body.layout-v #controls    { order: 7; }
+  body.layout-v #sidebar { width: 100%; max-width: 100%; height: auto; flex: 1 1 auto; min-height: 0; }
+  body.layout-v #sidebar > * { width: 100%; max-width: 760px; margin-left: auto; margin-right: auto; }
+  /* 竖版中间的可上下拖动分隔条（横线 + 横胶囊），与横版竖线呼应 */
+  /* 竖版拖动条已废弃（ISSUE-20261028-09 硬约束 5）：正方形总是最大，高度不再由用户拖动决定。
+     横版竖分隔条保留（侧栏宽度仍可拖）。 */
+  body.layout-v #dragHandle { display: none; }
+  #logBar { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 8px; font-size: 12px; font-weight: 800; color: #9a9ab5; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,.06); user-select: none; touch-action: none; }
+  #logTitle { flex: 0 0 auto; white-space: nowrap; }
+  /* P0.1-1：版本号，页内可查。位置在标题栏「设置」右侧（小字）。
+   * 隐藏调试开关的触发点（连点 5 次）：绝不能有任何"这里可点"的暗示，
+   * 故不保留 cursor:pointer/下划线/高亮；并加 user-select:none + touch-action:manipulation
+   * 避免连点选中文字 / 移动端双击缩放吞掉快速连点（ISSUE-20261028-11 A6）。 */
+  #setVer { flex: 1 1 auto; min-width: 0; font-size: 10px; font-weight: 700; letter-spacing: .3px;
+    color: #7c80a0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  #logBar button { padding: 2px 6px; font-size: 12px; line-height: 1.1; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 5px; touch-action: manipulation; }
+  #logBar button:hover { background: #3a3a5c; color: #fff; }
+  /* ---- 「设置」面板：联机 / 重开 / 旋转 三按钮一行（ISSUE-20261029-22 删掉「↩ 选角」，列数同步由 4 改 3） ---- */
+  /* auto-fit：按钮数量变了自动等分（ISSUE-20261029-27 关掉联机后只剩 2 个，
+     写死 repeat(3,1fr) 会在右边空一整格）。 */
+  #setBtns { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  #setBtns button { padding: 7px 2px; font-size: 11.5px; line-height: 1.1; font-weight: 700; white-space: nowrap; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 6px; touch-action: manipulation; font-family: inherit; }
+  #setBtns button:hover { background: #3a3a5c; color: #fff; }
+  #setBtns button:active { transform: scale(.96); }
+  /* ★ ISSUE-20261028-14：教程重看列表（点「📖 教程」展开）。
+     与 #setBtns 同款按钮样式，但一行一个课名，方便中文标题不挤成两行。 */
+  #tutReplayList { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 6px; border-bottom: 1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.02); }
+  #tutReplayList[hidden] { display: none; }
+  #tutReplayList button { padding: 8px 10px; font-size: 12px; line-height: 1.2; font-weight: 700; text-align: left; background: #2c2c47; color: #cfe6ff; border: 1px solid #44445f; border-radius: 6px; touch-action: manipulation; font-family: inherit; }
+  #tutReplayList button:hover { background: #3a3a5c; color: #fff; }
+  #tutReplayList button:active { transform: scale(.98); }
+  #tutReplayList .tut-replay-hint { font-size: 11px; line-height: 1.4; color: #9aa4c0; font-weight: 500; padding: 2px 2px 4px; }
+  /* 日志在抽屉里自己滚动（旧版是悬浮窗内固定 38vh） */
+  #log { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 8px 4px 10px; font-size: 12.5px; line-height: 1.55; color: #ddd; white-space: pre-wrap; contain: content; }
+  /* ---- 日志按类型着色，提升可读性 ---- */
+  #log .logline { white-space: pre-wrap; padding: 2px 0 2px 8px; border-left: 3px solid transparent; margin: 1px 0; }
+  #log .log-sep { min-height: 6px; border-left-color: transparent; }
+  #log .log-info { color: #d3d3e6; }
+  #log .log-damage { color: #ff9e7a; border-left-color: #7a3a20; }
+  #log .log-kill { color: #ff6b6b; font-weight: 700; border-left-color: #ff6b6b; }
+  #log .log-skill { color: #ffd76b; border-left-color: #b9912f; }
+  #log .log-dodge { color: #7fe3ff; border-left-color: #2f8fb9; }
+  #log .log-heal { color: #8ff0a4; border-left-color: #2f9b54; }
+  #log .log-warn { color: #ffd166; border-left-color: #b9912f; }
+  #log .log-buff { color: #ff9ad5; border-left-color: #b94f8f; }
+  #log .log-sys { color: #cfe6ff; font-weight: 800; border-left-color: #4ecdc4; background: rgba(78,205,196,.10); margin: 5px 0 3px; padding: 4px 0 4px 8px; border-radius: 0 4px 4px 0; }
+  button { padding:10px 12px; font-size:14px; border:none; border-radius:4px; background:#4ecdc4; color:#111; font-weight:bold; touch-action: manipulation; }
+  button:disabled { background:#555; color:#999; cursor: var(--cur-no), auto; }
+  .stat { font-size:13px; line-height:1.45; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  /* 仪表小格 .kv-* / 状态徽章 .badge* / .chip.buff 已全部作废：
+     ISSUE-20261029-38 把 SP 条下那排徽章整排删掉，ISSUE-20261029-42 的 BUFF 池改用 .char-relic。 */
+  .mini { font-size:11px; color:#7e7e97; line-height:1.5; }
+  /* ---- 技能卡（选角色） ---- */
+  .card { background:#26263c; border:1px solid #34344f; border-radius:8px; padding:9px 11px; }
+  .card-title { font-size:14px; font-weight:900; color:#4ecdc4; margin-bottom:4px; }
+  .card-meta { font-size:12px; color:#a8a8c0; margin-bottom:7px; }
+  .tips { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:4px; }
+  .tips li { position:relative; padding-left:11px; font-size:12px; line-height:1.5; color:#d5d5e6; }
+  .tips li::before { content:''; position:absolute; left:2px; top:7px; width:4px; height:4px; border-radius:50%; background:#4ecdc4; }
+  .tips .tip-k { color:#4ecdc4; font-weight:700; }
+  .tips .tip-k.skill { color:#ffd700; }
+  .ability-btn { padding:1px 6px; font-size:12px; border-radius:3px; background:#4ecdc4; color:#111; margin-left:2px; border:none; font-weight:bold; }
+  .start-btn { width: 100%; padding: calc(var(--cell) * 0.22) var(--pad); font-size: var(--u-lg); background: linear-gradient(135deg, #4ecdc4, #2ecc71); color: #fff; border-radius: var(--rad); box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3); transition: all 0.2s; font-weight: 900; letter-spacing: calc(var(--cell) * 0.03); }
+  /* ★ ISSUE-20261029-36：开始行动按钮内部改为显示「动作 UI」，去掉「开始行动」四字。
+   * 框沿用 .start-btn 的绿色胶囊配色。
+   * ★ ISSUE-20261030-77：内部不再是文字，改成一排棋盘格大小的小方块（见下方 .apips）。 */
+  .action-start-btn { letter-spacing: .5px; font-size: var(--u-lg); padding: calc(var(--cell) * 0.18) var(--pad); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* =========================================================================
+   * ISSUE-20261030-77（人类 17:20）：动作 UI 删掉全部文本，改小方块。
+   * 方块边长 = var(--apip) —— 由 JS 在 updateCellSize() 里算，**恒等于 --cell（一格）**。
+   *   · ISSUE-20261101-137 起取消「桌面封顶 22px」：UI 改成 11×11 大格栅后，
+   *     方块与棋盘格同边长才是「嵌在格子里」的本义，再封顶会让 4K 上的模数断掉。
+   * 不允许在 CSS 里写死 px：--apip 与 --cell 同源，棋盘缩放时一起跟。
+   * 变量缺失时 fallback 回 --cell（首次渲染早于 updateCellSize 的瞬间）。
+   * ========================================================================= */
+  .apips-host { display: flex; align-items: center; justify-content: center; padding: calc(var(--cell) * 0.08); min-height: var(--cell); box-sizing: border-box; white-space: normal; overflow: visible; text-overflow: clip; }
+  /* 结算中：按钮不可点，但格子必须留着 —— 否则「做一件亮一格」执行到一半就看不见了 */
+  .apips-host.is-resolving { background: #2a2a3d; box-shadow: none; }
+  .apips { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 3px; width: 100%; }
+  .apip { width: var(--apip, var(--cell)); height: var(--apip, var(--cell)); flex: 0 0 auto; box-sizing: border-box;
+          border-radius: 3px; background: var(--pc, #3a3a4e); box-shadow: inset 0 0 0 1px rgba(0,0,0,.35);
+          display: flex; align-items: center; justify-content: center;
+          font-size: calc(var(--apip, var(--cell)) * .42); font-weight: 900; line-height: 1; color: #fff;
+          text-shadow: 0 1px 2px rgba(0,0,0,.55);
+          transition: background .15s ease, box-shadow .15s ease; }
+  /* 规划态：空心描边 = 「已经排上了，还没花出去」，与执行态的实心一眼可分 */
+  .apip.plan { background: transparent; box-shadow: inset 0 0 0 2px var(--pc, #6b6b85); }
+  /* ★ ISSUE-20261029-37：行动按钮上方 HUD（姓名/等级/经验条/血条）。不显示技力条。 */
+  /* =========================================================================
+   * ISSUE-20261029-38（人类 15:41 / 15:52）：全屏只留**一块**角色面板。
+   * 位置沿用「行动按钮正上方」，外观逐项照抄原侧栏 #hero 卡（不再是半透明黑底 + 白字）：
+   *   卡底 linear-gradient(135deg,#26263f,#1c1c2d) / 1px #33334f / 圆角 10px
+   *   名字 14px 900 #4ecdc4 · 等级 12px 900 #ffd700 · 经验 4px 方形金色
+   *   HP 13px 圆角三态 · SP 10px 圆角蓝渐变（满技力发光）
+   * ★ 内部标记全部复用 .hero-* / .xp-* / .hp-* / .sp-*，所以角色面板（♟️）顶部
+   *   （ISSUE-20261029-42）能直接复用同一份 HTML —— 禁止为面板另写一套标记。
+   * ========================================================================= */
+  .action-wrap { width: 100%; max-width: none; margin: 0 auto; display: flex; flex-direction: column; align-items: stretch; gap: calc(var(--cell) * 0.08); }
+  .hud { display: flex; flex-direction: column; justify-content: space-between; gap: calc(var(--cell) * 0.06); padding: calc(var(--cell) * 0.1) calc(var(--cell) * 0.12) calc(var(--cell) * 0.1) calc(var(--cell) * 0.1); background: linear-gradient(135deg,#26263f,#1c1c2d); border: 1px solid #33334f; border-radius: var(--rad); box-sizing: border-box; position: relative; }
+  .hud:empty { display: none; }
+  .start-btn:active:not(:disabled) { transform: scale(0.97); }
+  .start-btn:disabled { background: #444; box-shadow: none; color: #777; letter-spacing: normal; }
+  @media (max-width: 760px) {
+    h1 { display: none; }
+    /* 竖屏：棋盘尺寸/位置由宽度+宽高比锁定，下方 UI 高度变化不会再顶动地图 */
+    #game {
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      padding: 4px;
+      gap: 6px;
+ }
+    #boardWrap {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1;
+      flex: none;
+ }
+    #dragHandle { display: none; }
+    /* 手机端布局模式：layout-h 左右分栏 / layout-v 上下堆叠 */
+    body.layout-h #game { display: flex; flex-direction: row; align-items: stretch; gap: 6px; padding: 4px; }
+    body.layout-h #boardWrap { width: auto; height: auto; aspect-ratio: auto; max-height: none; flex: 1 1 55%; }
+    body.layout-h #sidebar { width: 45%; flex: 0 0 45%; height: 100%; max-height: none; }
+    body.layout-h #dragHandle { display: none; }
+    body.layout-h #radarCanvas { width: 104px; height: 104px; }
+    /* ★ ISSUE-20261030-66：竖版手机「地图始终最大 = 宽度吃满屏幕」（人类 05:14 拍板）。
+       棋盘宽度锁定后，总高可能超过视口 → 这里允许 #game 内部纵向滚动兜底，
+       而不是让 body 的 overflow:hidden 把棋盘下沿切掉。
+       ISSUE-20261101-152：虚拟底栏删除后没有浮层要躲，--vpad-h 不复存在，滚到底就是底。 */
+    body.layout-v #game { display: flex; flex-direction: column; gap: 6px; padding: 4px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+    /* 竖屏正方形：高度由 updateCellSize() 按「宽度 vs 剩余高度」写死 */
+    body.layout-v #boardWrap { width: 100%; height: auto; aspect-ratio: 1 / 1; flex: 0 0 auto; }
+    body.layout-v #dragHandle { display: none; }
+    body.layout-v #sidebar { width: 100%; height: auto; max-height: none; flex: 1 1 auto; min-height: 210px; }
+    body.layout-v #sidebar > * { max-width: 100%; }
+    #sidebar {
+      width: 100%;
+      height: 100%;
+      max-height: none;
+      min-height: 0;
+      gap: 5px;
+      padding-bottom: 4px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+ }
+    #hero { padding: 5px 8px 5px 6px; gap: 4px; border-radius: 8px; }
+    #radarCanvas { width: 150px; height: 150px; }
+    #heroInfo { gap: 3px; }
+    #heroKv .kv { padding: 3px 2px; }
+    #heroKv .kv b { font-size: 9px; }
+    #heroKv .kv span { font-size: 13px; }
+    /* ★ ISSUE-20261101-137：这里原来给手机单独压了一套字号（hero-name 12px / hp-text 9px …），
+       现在 --u 自带 clamp 下限（11px），格子驱动已经覆盖手机场景，
+       再留着这套硬编码会在小屏上把 UI 压得比格子还小，故整段删除。 */
+    #stats {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+ }
+    #stats .stat {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      word-break: break-word;
+ }
+    .kv span { font-size: 12px; }
+    .kv b { font-size: 9px; }
+    .mini { font-size: 10px; }
+    .card { padding: 7px 9px; border-radius: 7px; }
+    .card-title { font-size: 12px; margin-bottom: 3px; }
+    .card-meta { font-size: 11px; margin-bottom: 5px; }
+    .tips { gap: 3px; }
+    .tips li { font-size: 11px; line-height: 1.42; }
+    #controls {
+      flex: 0 0 auto;
+      flex-direction: column;
+      gap: 4px;
+      min-height: auto;
+ }
+    #controls .start-btn { padding: 12px; font-size: 15px; }
+    .float-text { font-size:16px; }
+    .float-text.crit { font-size:20px; }
+    .float-text.crosskill { font-size:20px; }
+    .unit .hp-bar, .unit-abs .hp-bar { height: 2px; }
+ }
+
+  /* =========================================================================
+   * ★ ISSUE-20261101-152（人类 2026-11-01 20:43）：「删掉手机端的圆形按钮，整个底栏都删掉」。
+   * 这里原来是手机虚拟圆钮底栏 #vpadHost（fixed 浮层：顶部开始行动 + 左下方向圆钮 +
+   * 右下 等待 / 重置 / 攻击 / 技能 圆钮 + 技力环），整块连同 --vpad-h 高度补偿已删除。
+   * 桌面与手机现在共用同一套 UI：11x11 格栅里的攻击 / 技能 / 闪避方形键（ISSUE-151）
+   * + 操作格里的「开始行动」；手机移动 = 直接在棋盘上点击 / 拖拽。
+   * 不要再把圆钮加回来：形状规则「方形 = 信息 · 圆形 = 交互（仅手机）」里的「圆形」
+   * 那一支随之作废，全站只剩方格与胶囊。
+   * ========================================================================= */
+
+  /* =========================================================================
+   * 选角厅「技能说明展开层」（ISSUE-20261029-29）
+   * 盖在棋盘中部（第 1 行 ~ 倒数第 2 行）：出口所在的第一行、角色所在的最后一行都留在外面，
+   * 否则玩家既看不见出口、也看不见自己走到哪。内容超出高度可滚轮 / 触摸滑动。
+   * z-index 45：高于 #unitLayer(40)（说明展开时角色还没动，不存在盖住角色的问题），
+   *            低于 #fxLayer(50) 与抽屉遮罩(1100)，不挡浮字与抽屉。
+   * ========================================================================= */
+  #charInfoSheet { position: absolute; z-index: 45; box-sizing: border-box;
+    overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y;
+    background: rgba(15,15,29,.96); border: 1px solid rgba(255,255,255,.13); border-radius: 8px;
+    padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,.55);
+    font-size: 12.5px; line-height: 1.6; color: #d5d5e6; }
+  #charInfoSheet[hidden] { display: none; }
+  .cis-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .cis-ico { font-size: 22px; line-height: 1; }
+  .cis-name { font-size: 15px; font-weight: 900; color: #4ecdc4; letter-spacing: 1px; }
+  .cis-hint { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #7e7e97; white-space: nowrap; }
+  .cis-desc { font-size: 12.5px; color: #c3c3da; margin-bottom: 7px; }
+  .cis-tips { gap: 5px; }
+  /* ===================================================================
+     ISSUE-20261029-45：账号与排行榜（原 index.html 外壳，已内联进单文件）
+     -------------------------------------------------------------------
+     为什么内联：外壳与游戏之间原有 3 条 postMessage、1 处直接读 iframe DOM、
+     1 处注入脚本轮询顶层变量 phase/level/enemies、1 处反向劫持父文档 UI。
+     隔离早已名存实亡，合并后全部消失；角标位置也能直接用 --corner-x/--cell，
+     不再需要「量 iframe 里 #lobbyOpenBtn 的 rect 再换算坐标系」那套补丁。
+
+     ★ 全部选择器以 #arkUi 作用域：避开与游戏重名的 .empty/.ghost/.tag/.lv/.nm。
+     ★ z-index 并入游戏 --z-* 变量族（1200 起），不再自建 80/90/9999/10000。
+     ★ 滚动条：显式接管 webkit 伪元素，消除系统默认白色滚动条。
+     =================================================================== */
+  #arkUi { --z-lobbyMask: 1200; --z-lobby: 1201; --z-fullrank: 1500; }
+
+  #arkUi #lobbyMask { position:fixed; inset:0; z-index:var(--z-lobbyMask);
+    background:rgba(0,0,0,.45); opacity:0; pointer-events:none; transition:opacity .2s ease-out; }
+  #arkUi #lobbyMask.on { opacity:1; pointer-events:auto; }
+
+  #arkUi #lobbyDrawer { position:fixed; left:0; top:0; bottom:0; z-index:var(--z-lobby);
+    width:min(360px, 86vw); display:flex; flex-direction:column; outline:none;
+    background:#14142b; border:1px solid rgba(255,255,255,.12);
+    box-shadow:12px 0 32px rgba(0,0,0,.5);
+    opacity:0; visibility:hidden; transform:scale(.985);
+    transition:opacity .18s ease-out, transform .18s ease-out, visibility .18s; }
+  #arkUi #lobbyDrawer.on { opacity:1; visibility:visible; transform:none; }
+
+  /* ★ ISSUE-20261030-7x：账号面板关闭改成「角标原地变 ✕」（与设置面板 ⚙ 同款），
+     不再用面板内独立关闭按钮（那枚用棋盘相对坐标定位、与面板错位、长期对不齐）。
+     关闭角标 = 棋盘 👤 角标本体，样式已由 #lobbyOpenBtn 的通用角标规则覆盖，无需重复。 */
+
+  #arkUi .dhead { flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:9px 12px 8px calc(var(--cell) + 8px);
+    border-bottom:1px solid rgba(255,255,255,.08); }
+  #arkUi .dtitle { font-size:13px; font-weight:800; letter-spacing:.5px; color:#ffd166; }
+  #arkUi .dhead .meta { font-size:10.5px; color:#7d83a8; font-weight:400; white-space:nowrap; }
+
+  /* 榜单主体：唯一滚动容器（面板内只显示排行榜，不再有左栏账号卡） */
+  #arkUi .dbody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;
+    padding:6px 8px; -webkit-overflow-scrolling:touch;
+    overflow-anchor:none;
+    scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.22) transparent; }
+  #arkUi .dbody::-webkit-scrollbar { width:6px; height:6px; }
+  #arkUi .dbody::-webkit-scrollbar-track { background:transparent; }
+  #arkUi .dbody::-webkit-scrollbar-thumb { background:rgba(255,255,255,.22); border-radius:3px; }
+  #arkUi .dbody::-webkit-scrollbar-thumb:hover { background:rgba(255,255,255,.34); }
+  #arkUi .dbody::-webkit-scrollbar-corner { background:transparent; }
+
+  /* 每项压缩：原 ≈62px/项（padding 8+8 + nm 13.5 + sc 11 + margin 6）→ 现 ≈38px，
+     竖屏 390x844 下至少 8 名完整可见（AC-7）。 */
+  #arkUi #miniBoard { list-style:none; margin:0; padding:0; }
+  #arkUi #miniBoard > li { display:flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07);
+    border-radius:8px; padding:5px 7px; margin-bottom:4px; min-height:38px; }
+  #arkUi #miniBoard > li.me { border-color:#3ddc84;
+    box-shadow:0 0 0 1px rgba(61,220,132,.28) inset; background:rgba(61,220,132,.07); }
+  #arkUi .rk { width:19px; height:19px; flex:0 0 19px; border-radius:50%; display:flex;
+    align-items:center; justify-content:center; font-size:10.5px; font-weight:700;
+    background:rgba(255,255,255,.08); color:#9aa0c0; font-variant-numeric:tabular-nums; }
+  #arkUi #miniBoard > li:nth-child(1) .rk { background:#ffd166; color:#3a2a00; }
+  #arkUi #miniBoard > li:nth-child(2) .rk { background:#cfd6e6; color:#2c3244; }
+  #arkUi #miniBoard > li:nth-child(3) .rk { background:#d9a066; color:#3a2400; }
+  #arkUi .who { flex:1 1 auto; min-width:0; display:flex; align-items:baseline; gap:5px; }
+  #arkUi .nm { font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden;
+    text-overflow:ellipsis; min-width:0; flex:0 1 auto; }
+  #arkUi li.me .nm { color:#3ddc84; }
+  #arkUi .sc { font-size:10px; color:#7d83a8; white-space:nowrap; flex:0 0 auto; }
+  #arkUi .lv { font-size:11.5px; font-weight:700; color:#ffd166; white-space:nowrap;
+    flex:0 0 auto; font-variant-numeric:tabular-nums; }
+  @media (max-width:420px) { #arkUi .sc { display:none; } }
+
+  /* 自己那行的 [编辑]：取代原 [我] 徽标（ISSUE-20261029-45） */
+  #arkUi .meEdit { flex:0 0 auto; padding:3px 8px; font-size:10.5px; font-weight:700;
+    border-radius:6px; background:rgba(61,220,132,.16); color:#7ef0ab;
+    border:1px solid rgba(61,220,132,.45); font-family:inherit;
+    touch-action:manipulation; }
+  #arkUi .meEdit:active { transform:scale(.94); }
+
+  /* 编辑抽屉：展开在「自己那一行」下方（不是弹窗、不换屏） */
+  #arkUi #miniBoard > li.editRow { display:block; padding:7px 8px 9px; margin:-1px 0 4px;
+    border-radius:0 0 8px 8px; background:rgba(61,220,132,.05);
+    border-color:rgba(61,220,132,.28); border-top:0; }
+  #arkUi .edline { display:flex; gap:6px; align-items:center; }
+  #arkUi .pname { flex:1 1 auto; min-width:0; background:rgba(0,0,0,.3);
+    border:1px solid rgba(255,255,255,.16); color:#fff; border-radius:8px;
+    padding:7px 9px; font-size:12.5px; font-weight:600; outline:none; font-family:inherit; }
+  #arkUi .pname:focus { border-color:#3ddc84; }
+  #arkUi .psave { flex:0 0 auto; background:#3ddc84; color:#06301c; border:0; border-radius:8px;
+    padding:7px 11px; font-size:12px; font-weight:800; font-family:inherit; }
+  #arkUi .psave:active { transform:scale(.96); }
+  #arkUi .perr { margin-top:5px; font-size:11px; color:#ff8a8a; line-height:1.5; }
+  #arkUi .ednote { margin-top:6px; font-size:10.5px; color:#7d83a8; line-height:1.55; }
+  #arkUi .ednote b { color:#ffd166; font-weight:700; }
+
+  /* 未上榜时的编辑入口（榜单底部一行，点开同一套编辑抽屉） */
+  #arkUi #miniBoard > li.setRow { display:block; padding:0; border-style:dashed;
+    border-color:rgba(255,255,255,.18); }
+  #arkUi #btnSetName { display:block; width:100%; padding:9px; background:none; border:0;
+    color:#9aa0c0; font-size:12px; font-family:inherit; touch-action:manipulation; }
+
+  #arkUi .dfoot { flex:0 0 auto; padding:7px 8px 9px; border-top:1px solid rgba(255,255,255,.08); }
+  #arkUi .ghost { display:block; width:100%; background:rgba(255,255,255,.06); color:#cfd2ff;
+    border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:8px;
+    font-size:12px; font-weight:600; font-family:inherit; }
+  #arkUi .ghost:active { transform:scale(.98); }
+  #arkUi .empty { text-align:center; color:#9aa0c0; padding:24px 10px; font-size:12px; line-height:1.7; }
+
+  /* 顶部提示条 / toast / 完整排行榜浮层 */
+  #arkUi #hint { position:fixed; left:0; right:0; top:0; z-index:calc(var(--z-fullrank) + 1);
+    padding:8px 12px; font-size:12.5px; line-height:1.5; font-family:inherit;
+    background:#8a5a00; color:#fff; text-align:center; }
+  #arkUi #hint.ok { background:#1f6f3f; }
+  #arkUi #hint.hide { display:none; }
+  #arkUi #toast { position:fixed; left:50%; bottom:14%; transform:translateX(-50%);
+    z-index:calc(var(--z-fullrank) + 1); max-width:86%; padding:11px 15px; border-radius:10px;
+    font-size:13px; line-height:1.6; background:rgba(0,0,0,.86); color:#fff;
+    text-align:center; display:none; white-space:pre-line; }
+  /* ISSUE-20261030-72：游戏内「📊 查看完整排行榜」按钮 + #rankPanel 全屏浮层已删除
+     （完整榜仍以独立页 leaderboard.html 存在，抽屉内的 #miniBoard 顶部预览保留）。
+     --z-fullrank 变量名沿用，现在只是 #hint / #toast 的最高层基准。 */
+
+  /* =========================================================================
+   * ISSUE-20261101-137：★ 全平台铺满格栅（人类 2026-11-01 02:12 拍板，取代 113 的固定 21×11）。
+   *
+   * 三条铁律（改之前先读）：
+   *   ① **横版格子边长只由短边决定**：cell = 短边 / 13。不是「取能塞下的最大值」，
+   *      是「横版短边必须正好 13 格」—— 换任何屏幕，横版短边永远是 13 个格子。
+   *      （★ ISSUE-20261101-154：**竖版例外** —— 竖版改为「宽正好 11 格、高正好 22 行」
+   *       两条同时约束取小，见 computeGridFit 的竖版分支。）
+   *   ② **长边一直填格子**：能放几格放几格（16:9 桌面 = 25 格、21:9 = 30 格），
+   *      放不满的零头不铺格线，直接留成 --frame 色的窄边（人类选「纯色窄边，无格线」）。
+   *   ③ **UI 与地图都是 11×11，等大，且两边直接相邻**（人类 02:22「UI 改成固定 11 格*11 格，
+   *      和地图一样大」+ ISSUE-20261101-154「删掉中间的格子，两边并在一起」）。
+   *      横屏 22 = 11 地图 + 11 UI（无分隔列）；短边 13 = 1 + 11 + 1，上下各一圈地板格。
+   *
+   * 所以整块内容 = **22×13 的格栅（横版）/ 11×22（竖版）**，多出来的行/列全是地板格。
+   * 尺寸全部由 updateCellSize() 写成 CSS 变量，这里只负责把它们用起来 ——
+   * 本段**不允许**再出现任何写死的格数（22 / 11 / 9）或像素值。
+   * ========================================================================= */
+  #game {
+    display: grid !important;
+    grid-template-columns: repeat(var(--gcols, 22), var(--cell)) !important;
+    grid-template-rows: repeat(var(--grows, 13), var(--cell)) !important;
+    gap: var(--gap) !important;
+    /* ★ place-content:center 就是「余量并入边框」的实现本体：
+       格栅按整数格尺寸居中，四周剩下那几 px 露出 #game 的背景 → 天然一条无格线窄边。
+       不要再单独画 border，会与这条背景边叠成两层。 */
+    place-content: center !important;
+    background: var(--frame, #0b0b14) !important;
+    /* ★ ISSUE-20261101-138 → ISSUE-20261101-152：底部那圈留白原本是给手机虚拟圆钮底栏
+       （position:fixed 浮层）让位的补偿，靠 JS 实测高度写进 --vpad-h。底栏删除后没有浮层要躲，
+       --vpad-h 也不再有人写 → 四边一律 0，格子从画面顶端铺到底端（与这条规则的初衷一致）。 */
+    padding: 0 !important;
+    width: 100% !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+  }
+  #boardWrap {
+    /* 位置（第几行到第几行 / 第几列到第几列）由 JS 按横竖屏写入，别在这里写死 */
+    grid-column: var(--bx1, 1) / var(--bx2, 12) !important;
+    grid-row: var(--by1, 2) / var(--by2, 13) !important;
+    width: auto !important;
+    height: auto !important;
+    aspect-ratio: auto !important;
+    flex: none !important;
+    overflow: hidden !important;
+  }
+  /* =========================================================================
+   * ISSUE-20261031-131：全屏地板层（人类 23:18「中间部分用地图的地板格填充，
+   * 现在全屏幕本质都是地图，只是角色到不了 UI 那边，因为有墙」）。
+   *
+   * UI 区在 113 里只是**空着的格位**，于是露出 #game 的 #000 —— 中间那条黑竖条就是这么来的。
+   * 这层把 UI 区铺满与 .cell.empty 同色的格子，全屏读起来是一整张地图：
+   *   · 与地图同一套模数（repeat(整数格) / gap: var(--gap)），格子与地图格严格对齐；
+   *   · pointer-events:none —— 不进任何命中测试，点击/拖拽/选角判定一律不受影响；
+   *   · z-index:0 且在 DOM 最前 → 永远在 #boardWrap 与 #sidebar 之下，
+   *     UI 面板（#stats / #controls）照旧不透明地盖在上面，只有面板之间那 2px 缝隙透出地板。
+   *   · 不写死像素：尺寸只由 --cell / --gap 决定，跟着 updateCellSize() 变。
+   * ========================================================================= */
+  #floorFill {
+    /* 铺满整个格栅：地板圈、超宽屏多出来的闲置格，全靠这一层兜住，
+       否则会露出 #game 的 --frame 边框色，读起来像画面被裁过。 */
+    grid-column: 1 / -1 !important;
+    grid-row: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: repeat(var(--gcols, 22), var(--cell)) !important;
+    grid-template-rows: repeat(var(--grows, 13), var(--cell)) !important;
+    gap: var(--gap) !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+  }
+  /* ★ 反面教训：网格项一旦带 z-index 就会**自成一层**，z-index:0 也高于 z-index:auto 的兄弟。
+     第一次实现只给 #floorFill 写了 z-index:0，结果地板直接盖住了 #sidebar 的整块面板。
+     #sidebar（与地板重叠）必须显式抬到它上面。
+     #boardWrap 不用抬 —— 它跟地板根本不重叠，
+     而它自己是 position:relative，天然画在非定位内容之上。 */
+  #sidebar { z-index: 1 !important; }
+  #floorFill > i {
+    display: block !important;
+    background: var(--floor, #2d2d44) !important;
+    border-radius: 2px;
+  }
+  /* =========================================================================
+   * ISSUE-20261031-127：UI 区按格拼装（人类 22:03「格栅做了吗，现在版本看不到」）。
+   *
+   * 113 只把 #sidebar 拉成 9 列宽，它自己是**透明**的、内部还是 flex 流式子块，
+   * 于是右侧 9×11 = 99 格一个面板都没有 → 直接露出 #game 的 #000，
+   * 观感仍是「左边一张地图 + 右边一片黑」。
+   *
+   * 这里把 #sidebar 变成第二块棋盘：11 列 × 11 行（140 号改成与地图等大），子块各占整数格，
+   * 面板**不透明**，缝隙只来自相邻面板之间恰好一个 --gap。
+   * ★ 禁止改成「铺格线」（repeating-linear-gradient / 半透明底格）——
+   *   113 §一-3 与人类 16:06 原话「盖住格栅，全屏棋盘的感觉是通过 UI 之间的拼接实现的」
+   *   已明确否掉那条路线，做了也会被打回。
+   * ========================================================================= */
+  #sidebar {
+    /* 位置由 JS 按横竖屏写入（横屏在地图右侧、竖屏在地图下方），别在这里写死。
+       ISSUE-20261101-154：分隔列删除后横屏从第 12 列起（地图 1–11 + UI 12–22）。 */
+    grid-column: var(--sx1, 12) / var(--sx2, 23) !important;
+    grid-row: var(--sy1, 2) / var(--sy2, 13) !important;
+    display: grid !important;
+    /* ★ 11×11，与地图等大（人类 02:22 拍板）。这块网格必须与 #board 同模数，
+       否则 UI 面板的边线跟棋盘格对不上，「整屏一张棋盘」的观感当场断掉。
+       UI 宽度恒 11 列、高度 11 行或 8 行（掉信息格），行列数走变量不写死。 */
+    grid-template-columns: repeat(var(--scols, 11), var(--cell)) !important;
+    grid-template-rows: repeat(var(--srows, 11), var(--cell)) !important;
+    gap: var(--gap) !important;
+    width: auto !important;
+    height: auto !important;
+    max-width: none !important;
+    flex: none !important;
+    overflow: visible !important;
+    background: none !important;
+    padding: 0 !important;
+  }
+  /* =========================================================================
+   * ★ ISSUE-20261101-144：UI 四单元格化 —— 状态 11×3 / 信息 11×3 / 操作 11×5。
+   *
+   * 人类 2026-11-01 15:48 原话：「就像 Excel 表格一样，每个 UI 都是由格子组成的，
+   * 逻辑上就不可能脱离格子，UI 相当于合并了的单元格」。
+   *
+   * 三条硬规则，违反任意一条偏差立刻回来：
+   *   ① 面板自己**不许**有 padding / border —— 它们占布局、吃掉格高，内部再用 1fr 均分
+   *      就会逐行累积（137 起正是这样，实测底部少 0.28·cell + 2px ≈ ⅓ 格）。要边框用 inset 阴影。
+   *   ② 面板内部也必须是 repeat(整数格) 网格，子元素全部写整数 grid-area。
+   *   ③ 三块之间的分隔就是 --gap 缝隙露出地板色（人类 16:0x 拍板「正常格子间的分隔」）。
+   *
+   * 尺寸校验：3 + 3 + 5 = 11 行；段内 gap 2+2+4 = 8，段间 2 个，合计 10 = 11 行的全部 gap。
+   * 所以三块严丝合缝，不需要任何额外间隔行。
+   * ========================================================================= */
+  #sidebar > #stats,
+  #sidebar > #info,
+  #sidebar > #controls {
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    background: #14141f !important;
+    border-radius: var(--rad) !important;
+    overflow: hidden !important;
+    display: grid !important;
+    grid-template-columns: repeat(11, var(--cell)) !important;
+    gap: var(--gap) !important;
+  }
+  /* 状态格：行 1–3（11×3） */
+  #sidebar > #stats {
+    grid-area: 1 / 1 / 4 / -1 !important;
+    grid-template-rows: repeat(3, var(--cell)) !important;
+  }
+  /* 信息格：行 4–6（11×3） */
+  #sidebar > #info {
+    grid-area: 4 / 1 / 7 / -1 !important;
+    grid-template-rows: repeat(3, var(--cell)) !important;
+  }
+  /* 操作格：行 7–11（11×5） */
+  #sidebar > #controls {
+    grid-area: 7 / 1 / -1 / -1 !important;
+    grid-template-rows: repeat(5, var(--cell)) !important;
+  }
+  /* 状态格内部：3 行固定分工 —— 行1 名称/等级/金币，行2 HP，行3 SP + 经验。
+     内容仍由 heroInnerHtml 生成（全屏只有一份角色信息标记），这里只负责摆进整数格。
+     选择器特意带 #sidebar > #stats 前缀 —— 抽屉里的 #charTop 不受影响。 */
+  /* ★ ISSUE-20261101-151：状态格三行的分工被人类重排 ——
+       行1 = 名称 / 等级 / 金币；行2 = **加粗到半格的 HP**；行3 = **贴 HP 正下方的经验**。
+     HP 用 align-self:end 贴住行 2 的底边、XP 用 align-self:start 贴住行 3 的顶边，
+     两者之间只剩一道 --gap —— 视觉上就是「经验紧贴血条下沿」。
+     这样不必把 HP 与 XP 包进一个 wrapper：heroInnerHtml 仍是「一份平铺 HTML」，
+     抽屉里的 #charTop 也跟着自动变成同一套排法（ISSUE-42 的单源约定不破）。 */
+  #sidebar > #stats > .hero-top {
+    grid-area: 1 / 1 / 2 / -1 !important;
+    align-self: center !important; margin: 0 !important;
+    /* 金币现在钉死 2 格宽（ISSUE-151），右内边距必须整体让开它，
+       否则名字一长就从金币底下穿过去（旧值 0.12 格是「金币由内容撑宽」时代的算法）。 */
+    padding: 0 calc(var(--cell) * 2.2) 0 calc(var(--cell) * 0.12) !important;
+    /* ★ ISSUE-20261101-144：**必须是定位上下文**。货币单元 .hero-coin 是 position:absolute，
+       144 之前它挂在 .hud 上（.hud 自带 position:relative），HUD 并进状态格后若无 positioning
+       ancestor，金币会退到初始包含块 → 飘到视口右上角。门禁 currency_test 就是这么抓到的。 */
+    position: relative !important;
+  }
+  #sidebar > #stats > .hp-track { grid-area: 2 / 1 / 3 / -1 !important; align-self: end !important; margin: 0 !important; }
+  #sidebar > #stats > .xp-track { grid-area: 3 / 1 / 4 / -1 !important; align-self: start !important; margin: 0 !important; }
+  /* 技力条规则已删（ISSUE-151「删掉技力条」）。状态格里不再有 .sp-track 这个节点，
+     写着的 grid-area 只会变成「指向不存在元素」的死规则 —— 一并清掉。 */
+  /* 关卡 tag（.hero-lv）改由信息格显示，状态格里不再重复 */
+  #sidebar > #stats .hero-lv { display: none !important; }
+  /* 选角厅说明 / 加点行：占满整格，超了自己滚 */
+  #sidebar > #stats > .mini,
+  #sidebar > #stats > .pts-line {
+    grid-column: 1 / -1 !important; grid-row: 1 / -1 !important;
+    overflow-y: auto !important;
+    padding: calc(var(--cell) * 0.1) calc(var(--cell) * 0.14) !important;
+    font-size: var(--u) !important; line-height: 1.5 !important;
+  }
+  /* 信息格内部：行1 关卡标题，行2–3 场景提示 */
+  #sidebar > #info > * { grid-column: 1 / -1 !important; padding: 0 calc(var(--cell) * 0.12) !important; }
+  #sidebar > #info > .info-title {
+    grid-row: 1 / 2 !important; align-self: center !important;
+    font-size: var(--u) !important; font-weight: 900 !important; color: #4ecdc4 !important;
+    white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important;
+  }
+  #sidebar > #info > .info-tip {
+    grid-row: 2 / -1 !important; align-self: center !important;
+    font-size: var(--u-sm) !important; line-height: 1.4 !important; color: #b9b9cc !important;
+    overflow-y: auto !important;
+  }
+  /* 操作格内部：整块 5 行就是「开始行动」按钮（人类 15:48「操作单元格:显示开始按钮 11×5」）。
+     动作方块画在按钮内部（.apips，ISSUE-77），不是独立占位 —— 所以这里只有一条 grid-area。
+     按钮高度 = 5·cell + 4·gap，正好填满操作格，不留缝也不溢出。 */
+  #sidebar > #controls > .start-btn,
+  #sidebar > #controls > .apips-host { grid-area: 1 / 1 / -1 / -1 !important; margin: 0 !important; }
+  /* 提示行（事件关 / 通关说明）：独占操作格时铺满 5 行；和按钮同时存在时占顶部 2 行、按钮接下面 3 行 */
+  #sidebar > #controls > .tip {
+    grid-area: 1 / 1 / 3 / -1 !important;
+    overflow-y: auto !important; align-self: center !important; text-align: center !important;
+    padding: calc(var(--cell) * 0.1) !important; font-size: var(--u) !important; line-height: 1.45 !important;
+  }
+  #sidebar > #controls > .tip:only-child { grid-area: 1 / 1 / -1 / -1 !important; }
+  #sidebar > #controls > .tip ~ .start-btn { grid-area: 3 / 1 / -1 / -1 !important; }
+  /* =========================================================================
+   * ★ ISSUE-20261101-151（人类 19:40）：操作格**前两行** = 攻击 / 技能 / 闪避 三个方形键。
+   *
+   * 列分配逐字照人类的排法（11 列必须刚好用完，写错一格整块就偏）：
+   *   空1 / 攻击2 / 空1 / 技能3 / 空1 / 闪避2 / 空1  =  1+2+1+3+1+2+1 = 11（刚好用完）
+   *   注意：这里不许打勾号等任何裸字形 —— 图标铁律要求 UI 图标一律走 Fluent 矢量 sprite，
+   *     templates/game.html 里出现一个裸 emoji / 符号，icons_and_ui_fix 立刻红（本条曾经踩过）。
+   * 三键一律 2 行高（攻击 2×2 / 技能 3×2 / 闪避 2×2），剩余 3 行给「开始行动」按钮。
+   *
+   * 为什么是方形整数格、而不是手机那套圆钮：手机底栏是 fixed 浮层、空间不受格子约束；
+   * 这块 UI 是 11×11 格栅的一部分，只有整数格矩形才和棋盘对得上（144 的三条硬规则）。
+   *
+   * 配色取 ACTION_PIP_COLOR（src/ui/action-pips.js）的 attack / skill / dodge ——
+   * 与棋盘上的动作标记同色：红=攻击、紫=技能、青=闪避，键上看到的颜色到棋盘仍是同一套。
+   * ========================================================================= */
+  #sidebar > #controls > .act-key {
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: calc(var(--cell) * 0.03);
+    box-sizing: border-box; min-width: 0; min-height: 0; overflow: hidden;
+    /* ★ 三键内边距必须**完全一致**：技力条是绝对定位浮在底部，不参与 flex，
+       所以技能键不需要额外的下内边距 —— 一旦给了，它的图标/文字就比另两键低一截。
+       （第一版正是给了 0.26·cell，三键图标不在同一水平线上，肉眼可见。） */
+    padding: calc(var(--cell) * 0.06) 0;
+    font-family: inherit; color: #e8e8f5;
+    border: none; border-radius: calc(var(--cell) * 0.1);
+    transition: background .15s, box-shadow .15s;
+  }
+  /* 形状分配：整数格矩形（攻击 2×2 / 技能 3×2 / 闪避 2×2） */
+  #sidebar > #controls > .act-key.atk   { grid-area: 1 / 2 / 3 / 4  !important; background: rgba(255,90,90,.13);   box-shadow: inset 0 0 0 1px rgba(255,90,90,.60); }
+  #sidebar > #controls > .act-key.skill { grid-area: 1 / 5 / 3 / 8  !important; background: rgba(176,107,255,.13); box-shadow: inset 0 0 0 1px rgba(176,107,255,.60); }
+  #sidebar > #controls > .act-key.dodge { grid-area: 1 / 9 / 3 / 11 !important; background: rgba(34,211,238,.13);  box-shadow: inset 0 0 0 1px rgba(34,211,238,.60); }
+  /* 有了三键，开始行动按钮整体下移 2 行、占 3–5 行。
+     没有三键的相位（选角 / 事件 / 通关 / 结束）保持 144 的「11×5 满块」不变。 */
+  #sidebar > #controls.has-keys > .start-btn { grid-area: 3 / 1 / -1 / -1 !important; }
+  /* 键内三段内容（图标 / 中文名 / 数值）按 2 格高的可用面积配比。
+     ★ 字号走 clamp：下限保证**手机窄屏仍可读**（390 视口下 cell≈28，纯 calc 会把标签压到 6px），
+       上限保证大屏不夸张。中段仍跟 --cell 缩放 —— 延续 144「UI 与格子同模数」的约定。 */
+  #sidebar > #controls > .act-key .ak-ico { font-size: clamp(13px, calc(var(--cell) * 0.46), 42px); line-height: 1; }
+  #sidebar > #controls > .act-key .ak-lbl {
+    font-size: clamp(9px, calc(var(--cell) * 0.21), 16px); line-height: 1;
+    font-weight: 700; opacity: .80; letter-spacing: .5px;
+  }
+  #sidebar > #controls > .act-key .ak-num {
+    font-size: clamp(9px, calc(var(--cell) * 0.19), 15px); font-weight: 900; line-height: 1;
+    font-variant-numeric: tabular-nums; opacity: .95;
+  }
+  /* 已排进路径 → 键点亮（攻击节点 / 技能节点 / 闪避步各占一件动作预算） */
+  #sidebar > #controls > .act-key.atk.on   { background: rgba(255,90,90,.32);   box-shadow: inset 0 0 0 2px rgba(255,90,90,.95),   0 0 8px rgba(255,90,90,.35); }
+  #sidebar > #controls > .act-key.skill.on { background: rgba(176,107,255,.32); box-shadow: inset 0 0 0 2px rgba(176,107,255,.95), 0 0 8px rgba(176,107,255,.35); }
+  #sidebar > #controls > .act-key.dodge.on { background: rgba(34,211,238,.32);  box-shadow: inset 0 0 0 2px rgba(34,211,238,.95),  0 0 8px rgba(34,211,238,.35); }
+  #sidebar > #controls > .act-key:disabled { background: #23233a; box-shadow: inset 0 0 0 1px #33334d; color: #6a6a85; }
+  #sidebar > #controls > .act-key:disabled .ak-sp i.on { background: rgba(120,150,200,.30); box-shadow: none; }
+  /* 技力等分块（人类 19:40「技能的技力显示在技能的框上，按照比例等分」）：
+     段数 = spMax，横向等分；点亮段 = 当前技力。坐在技能键底部一条，不挡图标与数字。 */
+  #sidebar > #controls > .act-key .ak-sp {
+    position: absolute; left: calc(var(--cell) * 0.1); right: calc(var(--cell) * 0.1);
+    bottom: calc(var(--cell) * 0.08);
+    display: flex; gap: 2px; height: calc(var(--cell) * 0.16);
+  }
+  #sidebar > #controls > .act-key .ak-sp i {
+    flex: 1 1 0; min-width: 0; border-radius: 1px;
+    background: rgba(120,150,200,.22);
+    transition: background .18s, box-shadow .18s;
+  }
+  #sidebar > #controls > .act-key .ak-sp i.on {
+    background: linear-gradient(180deg,#7fd9ff,#3f86ff);
+    box-shadow: 0 0 5px rgba(110,190,255,.85);
+  }
+  /* ★ 人类 16:0x：方屏空间不够时**优先移除信息面板** —— 不缩地图、不缩格子。
+     移除后操作格从第 4 行接上，占满剩下 8 行。 */
+  body.no-info #sidebar > #info { display: none !important; }
+  body.no-info #sidebar > #controls {
+    grid-area: 4 / 1 / -1 / -1 !important;
+    grid-template-rows: repeat(8, var(--cell)) !important;
+  }
+  #dragHandle { display: none !important; }
+  /* ★ ISSUE-20261101-145：下载截断兜底卡片。**仅在异常时**由 </head> 前的看门狗插入，
+     正常打开时 DOM 里不存在该节点，因此不影响布局，也不会被门禁的结构遍历算成棋盘格/面板元素。 */
+  #bootRetry { position:fixed; inset:0; z-index:99999; display:flex; align-items:center; justify-content:center;
+    background:#0b0b14; color:#eee; padding:24px; box-sizing:border-box;
+    font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  #bootRetry .br-card { max-width:420px; width:100%; text-align:center; box-sizing:border-box;
+    background:#14141f; border:1px solid #2a2a3f; border-radius:14px; padding:26px 22px;
+    box-shadow:0 12px 40px rgba(0,0,0,.55); }
+  #bootRetry .br-ico { font-size:34px; line-height:1; margin-bottom:12px; }
+  #bootRetry .br-t { font-size:17px; font-weight:900; color:#ffd166; margin-bottom:10px; }
+  #bootRetry .br-s { font-size:13px; line-height:1.75; color:#a9a9c0; margin-bottom:20px; }
+  /* 不写 cursor：button 已有全局 `cursor: var(--cur-arrow), auto`（98 号光标铁律禁 pointer）。 */
+  #bootRetry .br-b { display:block; width:100%; padding:12px 16px; font-size:15px; font-weight:900;
+    color:#08131a; background:linear-gradient(135deg,#4ecdc4,#2ecc71); border:0; border-radius:10px;
+    font-family:inherit; }
+  #bootRetry .br-b:active { transform:scale(.98); }
 </style>
-<meta http-equiv="refresh" content="0;url=game.html">
+</head>
+<!-- ★ ISSUE-20261101-145：下载截断看门狗（**不依赖主脚本**）。
+     主脚本内联在 <body> 末尾（约 1.3 MB）。一旦下载中途断开，内联脚本会因为块注释/字符串被截断而
+     **语法错误 → 整段不执行**，页面只剩静态骨架（4 个角标 + 空面板）= 玩家眼里的「黑屏」。
+     本段位于 </head> 前（产物内约 100 KB 处），几乎不可能被截断：
+       · 正常：主脚本画出 121 格后，定时器发现 #board 有子元素 → 立即返回，**DOM 零改动**；
+       · 异常：先自动重载一次（穿透缓存），仍失败才显示提示卡片。
+     不要把判定改成依赖主脚本，那等于没有兜底。 -->
 <script>
-  /* 必须带上 search 与 hash：
-     · hash 里可能有 #tgWebAppData=... —— 丢掉它 Telegram SDK 就拿不到 initData，
-       身份会从「tg user id」退化成「网页游客设备 id」，成绩会记到另一条记录上。
-     · search 是一些外部入口带的缓存穿透参数，一并透传无害。 */
-  (function () {
-    var q = location.search || '';
-    var h = location.hash || '';
-    location.replace('game.html' + q + h);
-  })();
+(function () {
+  var RETRY_KEY = 'ark_boot_retry';
+  var handled = false;
+
+  /* 主脚本**第一件事**就是给 window.__ARK_VERSION__ 赋值（见产物内 `P0.1-1 冻结基线`）。
+     它存在 ⇔ 内联主脚本至少完整解析并开始执行 → 不是被截断，看门狗一律不插手。
+     ★ 不要退回「检查 #board 有没有格子」：jsdom 门禁里棋盘常常是空的（还没进关、或在测空态），
+       那会让 8 s 定时器误判，进而调 location.replace —— jsdom 不支持导航，会以
+       `jsdomError: Not implemented: navigation` 污染「无未捕获异常」断言（本次踩过）。 */
+  function mainScriptRan() {
+    return !!window.__ARK_VERSION__;
+  }
+
+  function reloadOnce() {
+    try {
+      if (sessionStorage.getItem(RETRY_KEY) === '1') return false;
+      sessionStorage.setItem(RETRY_KEY, '1');
+      var u = location.href.split('#')[0];
+      var h = location.hash || '';
+      location.replace(u + (u.indexOf('?') < 0 ? '?' : '&') + '_reload=1' + h);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function showCard() {
+    if (handled || mainScriptRan() || !document.body) return;
+    handled = true;
+    var d = document.createElement('div');
+    d.id = 'bootRetry';
+    d.setAttribute('data-debug-name', '\u52a0\u8f7d\u5931\u8d25\u63d0\u793a');
+    d.innerHTML = '<div class="br-card">' +
+      '<div class="br-ico">\u26a0\ufe0f</div>' +
+      '<div class="br-t">\u9875\u9762\u6ca1\u6709\u52a0\u8f7d\u5b8c\u6574</div>' +
+      '<div class="br-s">\u591a\u534a\u662f\u7f51\u7edc\u4e2d\u65ad\uff0c\u53ea\u4e0b\u5230\u4e86\u9875\u9762\u7684\u4e00\u90e8\u5206\u3002<br>' +
+      '\u70b9\u4e0b\u9762\u7684\u6309\u94ae\u91cd\u65b0\u52a0\u8f7d\u4e00\u6b21\u901a\u5e38\u5c31\u597d\u4e86\u3002</div>' +
+      '<button type="button" class="br-b" id="bootRetryBtn">\u91cd\u65b0\u52a0\u8f7d</button>' +
+      '</div>';
+    document.body.appendChild(d);
+    var btn = document.getElementById('bootRetryBtn');
+    if (btn) btn.onclick = function () { location.reload(); };
+  }
+
+  function onFail() {
+    if (mainScriptRan()) return;
+    if (reloadOnce()) return;
+    showCard();
+  }
+
+  /* ① 语法错误是最强信号：内联主脚本被截断时必定抛 SyntaxError，不必等 8 s 定时器。
+     addEventListener 与 window.onerror 两个都挂：实测前者对内联脚本的解析期错误收不到，
+     后者能立刻拿到（不冲突，重复触发由 onFail 的 mainScriptRan() 兜住）。 */
+  function looksLikeSyntaxError(m) {
+    return /SyntaxError|Unexpected end of input|Unexpected token/i.test(m);
+  }
+  window.addEventListener('error', function (e) {
+    if (looksLikeSyntaxError(String((e && e.message) || ''))) setTimeout(onFail, 60);
+  });
+  window.onerror = function (msg) {
+    if (looksLikeSyntaxError(String(msg || ''))) setTimeout(onFail, 60);
+    return false;
+  };
+
+  /* ② 兜底定时器：线上完整下载约 4 s，8 s 后棋盘仍是空的就判定没起来。 */
+  setTimeout(onFail, 8000);
+
+  /* ③ 成功路径清掉重试标记，免得下次真出问题时连自动重载的机会都没有。 */
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (!mainScriptRan()) return;
+      try { sessionStorage.removeItem(RETRY_KEY); } catch (e) {}
+    }, 1200);
+  });
+})();
 </script>
 </head>
+
 <body>
-  <div>正在进入游戏…</div>
+
+<!-- ★ ISSUE-20261101-137：顶栏已删除（人类 02:12 拍板「去掉，格子从画面顶端开始」）。
+     原来这里是 <div id="topbar"><h1>方舟战棋</h1></div>，占掉约 30px 高度，
+     直接破坏了「短边正好 13 格」的前提。不要再加回来 —— 标题进设置抽屉。 -->
+<div id="game">
+  <!-- ISSUE-20261031-131：全屏地板层。21×11 格栅里地图只占第 1–11 列，第 12 列（分隔列）和
+       第 13–21 列（UI 区）原本是空的 → 直接露 #game 的 #000，于是中间有一条黑竖条。
+       人类 2026-10-31 23:18：「中间部分用地图的地板格填充，现在全屏幕本质都是地图，
+       只是角色到不了 UI 那边，因为有墙」。
+       所以这层用与 .cell.empty 完全同色同尺寸的格子铺满第 12–21 列：
+       放在 DOM 最前（在 #boardWrap / #sidebar 之下）、pointer-events:none，
+       UI 面板照旧盖在上面，面板之间那 2px 缝隙里透出来的就是地板格。
+       格子由 buildFloorFill() 建，只建一次。 -->
+  <div id="floorFill" aria-hidden="true"></div>
+  <div id="boardWrap" data-debug-name="棋盘区（含角标）">
+    <div id="board" data-debug-name="棋盘格"></div>
+    <div id="unitLayer" data-debug-name="单位层（角色 / 敌人）"></div>
+    <div id="fxLayer" data-debug-name="特效层（浮字 / 血条）"></div>
+    <!-- 地图角标（ISSUE-20261029-21）：👤 左上格 / ⚙ 右上格 / ♟️ 右下格，尺寸 = 一格。
+         不能放进 #board —— paintBoard() 每帧都 innerHTML 重刷那一层，角标会被冲掉。 -->
+    <button id="lobbyOpenBtn" title="账号与排行" aria-label="账号与排行" aria-expanded="false">👤</button>
+    <button id="setOpenBtn" data-debug-name="⚙ 设置角标" title="设置" aria-label="设置" aria-expanded="false">⚙</button>
+    <button id="charOpenBtn" data-debug-name="♟️ 角色角标" title="角色面板" aria-label="角色面板" aria-expanded="false">♟️</button>
+    <!-- ISSUE-20261030-84：第 4 角标（地图左下格）接上功能 —— 📟 = 升级奖励 / 收藏品 / 关卡事件
+         三块面板的统一入口。有奖励待领取时高亮（.has-pending），点一下按「加点 → 收藏品 → 事件」
+         顺序继续往下走（复用 afterClearGate，天然幂等，不另写分支）。 -->
+    <button id="rewardOpenBtn" data-debug-name="📟 奖励角标" title="奖励与事件" aria-label="奖励与事件" aria-expanded="false">📟</button>
+    <!-- 选角厅「技能说明展开层」（ISSUE-20261029-29）：点角色后盖在棋盘中部（第 1 行 ~ 倒数第 2 行），
+         出口所在的第一行不遮。放在 #boardWrap 里而不是 #board 里：paintBoard() 每次都 innerHTML
+         重建 #board 那一层，放进去会被冲掉。位置由 layoutCharInfoSheet() 按格子矩形实算。 -->
+    <div id="charInfoSheet" hidden></div>
+  </div>
+  <div id="dragHandle" title="拖动调整地图与右侧UI的比例"><span class="grip"></span></div>
+  <div id="sidebar" data-debug-name="右侧栏">
+    <!-- ★ ISSUE-20261101-144：四单元格化。状态 11×3 + 信息 11×3 + 操作 11×5 = 11 行，
+         与地图 11×11 等大；三块之间只用 --gap 缝隙分隔（人类 15:48「就像 Excel」）。
+         #actionSlot / #footBar 已删除：一个自 137 起只清空不填充、一个自 97 起永远空，
+         留着就是两个「没有 grid-area 的自动流隐患」—— 当初 HUD 飘到 y=790 正是这个坑。
+         以后往 #sidebar 里加东西，**必须**先给它分配整数 grid-area（或进某一块的内部网格）。 -->
+    <div id="stats" data-debug-name="状态格（11×3）"></div>
+    <div id="info" data-debug-name="信息格（11×3）"></div>
+    <div id="controls" data-debug-name="操作格（11×5）"></div>
+  </div>
+</div>
+
+<!-- 设置抽屉的开关 ⚙ 已搬进棋盘右上格（ISSUE-20261029-21），见 #boardWrap 内的角标 -->
+
+<!-- 抽屉遮罩：点一下关闭当前抽屉 -->
+<div id="drawerMask" data-debug-name="抽屉遮罩"></div>
+
+<!-- ★ ISSUE-20261028-14 教程提示条：**独立于日志面板**。
+     日志在手机竖屏下多半在视口外，新手看不到等于没提示；这条固定在棋盘下方居中。 -->
+<div id="tutBar" hidden></div>
+
+<!-- ① 设置抽屉（原 #logPanel 悬浮窗：⚔️联机 / ⟲重开 / ⟳旋转 + 战斗日志） -->
+<section class="drawer" id="drawerSettings" data-drawer="settings" aria-hidden="true">
+  <header class="drawer-head head-end">
+    <span id="setVer" title="当前版本"></span>
+    <span class="drawer-title">设置</span>
+  </header>
+  <!-- ISSUE-20261029-44 第3项：删掉面板内独立 ✕，改由棋盘右上格的 ⚙ 角标本体关闭
+       （打开时该角标浮到面板之上并变 ✕，再按一下收起）。 -->
+  <div class="drawer-body">
+    <div id="setBtns">
+      <button id="logResetBtn" title="重开游戏（回到选角界面）">⟲ 重开</button>
+      <button id="logRotateBtn" title="旋转屏幕 / 切换布局">⟳ 旋转</button>
+      <!-- ★ ISSUE-20261028-14 D3：教程重看入口。默认只自动播「通用课 + 你选的那个角色」，
+           其余角色的课在这里可以单独进入，不做成「4 节全强制看完」。 -->
+      <button id="tutReplayBtn" title="重看教程（通用课 / 各角色专属课）">📖 教程</button>
+      <!-- ★ ISSUE-20261031-98：「恢复系统光标」开关。**用纯文字，不用 emoji/图标** ——
+           96 号铁律要求新增图标必须是 Win10 SVG，而 sprite 里没有鼠标字形；
+           纯文字零新素材、不过 96 号闸门。文案由 setPrtsCursor() 动态改写。 -->
+      <button id="curToggleBtn" title="自定义光标 开/关">光标·开</button>
+      <!-- ★ ISSUE-20261031-130：「移动方式」开关。**只影响选角厅** —— 事件关强制逐格，
+           按钮在那种相位下没有任何作用（代码里也不读它）。文案刻意不用「新/旧」：
+           半年后没人知道哪个是新的，写「逐格 / 平滑」才是描述行为本身。 -->
+      <button id="stepToggleBtn" title="移动方式：逐格 / 平滑（仅选角厅）">移动·逐格</button>
+      <!-- ★ ISSUE-20261031-95：「导出文案改动」。默认 hidden —— 只有管理员开 debugMode 后
+           才由 src/ui/text_edit.js 显出来。正式玩家永远看不到这个按钮（零界面污染）。 -->
+      <button id="textExportBtn" title="导出 Alt 就地改过的文案（text-overrides.json）" hidden>导出文案</button>
+    </div>
+    <div id="tutReplayList" hidden></div>
+    <div id="log"></div>
+  </div>
+</section>
+
+<!-- ③ 升级奖励抽屉（通关自动弹出；选完奖励后自动弹 ♟️ 角色面板做六维加点，ISSUE-20261029-37） -->
+<section class="drawer" id="drawerLevelUp" data-drawer="levelup" aria-hidden="true">
+  <header class="drawer-head">
+    <span class="drawer-title" id="drawerLevelUpTitle">升级奖励</span>
+    <!-- 这里**没有 ✕**（ISSUE-20261030-47）：奖励必须选一个才能继续，
+         留个点不动的按钮只会让玩家以为坏了。遮罩/Esc 也由 drawerClose 统一拒绝。 -->
+  </header>
+  <div class="drawer-body" id="drawerLevelUpBody"></div>
+</section>
+
+<!-- ⑤ 收藏品三选一（ISSUE-20261028-06）：每通关 3 关一次，与经验升级解耦。
+     同样**没有 ✕** —— 收藏品是纯正收益，没有「跳过」的道理，必须选一件才走。 -->
+<section class="drawer" id="drawerRelic" data-drawer="relic" aria-hidden="true">
+  <header class="drawer-head">
+    <span class="drawer-title" id="drawerRelicTitle">收藏品</span>
+  </header>
+  <div class="drawer-body" id="drawerRelicBody"></div>
+</section>
+
+<!-- ⑥ 关卡事件（ISSUE-20261028-06）：每关通关必弹，选项有取舍或随机。
+     **没有 ✕**：每个事件都自带一个「什么都不做」的安全选项（等价于跳过），
+     但不允许关掉抽屉直接逃到下一关 —— 否则事件就成了可选福利，失去取舍意义。 -->
+<section class="drawer" id="drawerEvent" data-drawer="event" aria-hidden="true">
+  <header class="drawer-head">
+    <span class="drawer-title" id="drawerEventTitle">关卡事件</span>
+  </header>
+  <div class="drawer-body" id="drawerEventBody"></div>
+</section>
+
+<!-- ④ 角色面板（ISSUE-20261029-36 奠基 / 20261029-42 重做）：与设置面板同款「覆盖棋盘」弹窗。
+     形状 = 棋盘本身（棋盘已正方形化，ISSUE-20261029-43），所以面板就是正方形。
+     内容：顶部 = 与「行动按钮上方 HUD」**完全同源**的角色信息（#charTop 由 renderHeroCard 写入）；
+           左下 = 六维图（点属性名直接加点，下挂剩余点数提示）；
+           右下 = 升级获得的 BUFF 奖励池（代替被删掉的那排徽章）。
+     ★ 没有标题栏、没有 ✕：点面板外面（遮罩）或按 Esc 关闭 —— 人类 2026-10-29 16:18 要求。 -->
+<section class="drawer" id="drawerChar" data-drawer="char" aria-hidden="true">
+  <div class="drawer-body char-body">
+    <div class="char-top" id="charTop"></div>
+    <!-- ISSUE-20261030-74 ②：六维图上方加 AC / 熟练两个圆角方框（值由 renderCharPanel 填） -->
+    <div class="char-stats-row" id="charStatsRow">
+      <div class="char-stat-box"><span class="char-stat-label">AC</span><span class="char-stat-val" id="charAcVal">—</span></div>
+      <div class="char-stat-box"><span class="char-stat-label">熟练</span><span class="char-stat-val" id="charProfVal">—</span></div>
+      <div class="char-stat-box"><span class="char-stat-label" id="charDmgLbl">伤害</span><span class="char-stat-val" id="charDmgVal">—</span></div>
+    </div>
+    <div class="char-grid">
+      <div class="char-radar">
+        <canvas id="charRadarCanvas" data-debug-name="六维雷达图"></canvas>
+        <div class="char-alloc" id="charAllocHint"></div>
+      </div>
+      <div class="char-relics" id="charRelics"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================================================================
+     ISSUE-20261029-46：联机大厅面板（覆盖棋盘，与设置 / 角色面板同一套 .drawer 机制）
+     -------------------------------------------------------------------
+     入口 = 选角厅地图上的 🌐 那格（代码 (9,5)，人类 (9,5)）—— 走过去或点一下都能进。
+     布局：上面 = 玩家昵称（与账号一致，JS 从 ArkShell.account 取，不是让玩家重填）；
+           中间 = 房间号输入栏（域名固定 https://arkroguelike.top，所以只填房间号）；
+           左下 = 建房、右下 = 加入。
+     建房 → 进「房间地图」，五位房间码渲染在棋盘**底行** x=3..7、y=ROWS-1（人类最底一行）。
+     节点挂在 <body> 直属（不能挂 #sidebar：render() 每次重刷侧栏会把面板冲掉）。
+     =================================================================== -->
+<section class="drawer" id="drawerOnline" data-drawer="online" aria-hidden="true">
+  <div class="drawer-body online-body">
+    <div class="online-nick">昵称：<b id="onlineNick">—</b></div>
+    <!-- ★ ISSUE-20261031-128：模式选择。默认「对战」= 改动前的行为，一个字节都没变；
+         选「合作」才走 4 人大厅那条新链路。 -->
+    <div class="online-modes" id="onlineModes">
+      <button class="online-mode on" id="onlineModePvp" data-mode="pvp" type="button">⚔ 对战</button>
+      <button class="online-mode" id="onlineModeCoop" data-mode="coop" type="button">🤝 合作闯关</button>
+    </div>
+    <div class="online-mid">
+      <!-- ★ DEBUG-20261030-02：原来 maxlength=6 隐含「房间号 6 位」的假设，与服务端/显示层三方各说各话。
+           位数归一交给服务端（服务端只认 ROOMS{} 里的键），前端放宽到 8 只为挡住粘贴垃圾，
+           不再做「猜测性」硬限制 —— 那正是这次联机全挂的成因类别。 -->
+      <input id="onlineRoomIn" maxlength="8" placeholder="房间号" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="onlineStatus"></div>
+    <!-- ★ 合作房大厅：座位表 + 房主「开始」。只在合作模式且已进房时显示。 -->
+    <div id="onlineRoom" class="online-room" hidden>
+      <div class="or-head">房间号 <b id="orCode">—</b><span id="orCount" class="or-count"></span></div>
+      <ul id="orSlots" class="or-slots"></ul>
+      <div id="orHint" class="or-hint"></div>
+    </div>
+  </div>
+  <div class="online-foot">
+    <button id="onlineCreate" class="online-btn" type="button">建房</button>
+    <button id="onlineJoin" class="online-btn" type="button">加入</button>
+    <button id="onlineStart" class="online-btn or-start" type="button" hidden>开始闯关</button>
+  </div>
+</section>
+
+<!-- ===================================================================
+     ISSUE-20261029-45：账号与排行榜（原 index.html 外壳，已内联进单文件）
+     -------------------------------------------------------------------
+     面板内「只显示排行榜」：原左 1/3 账号卡（.acct / .avatar / .pnameLine / .pstats）
+     已整块删除。账号信息改为「自己那一行 + 该行下方的内联编辑抽屉」（由 JS 按需插入），
+     玩家未上榜时由底部 setRow 提供同一套编辑入口。
+     =================================================================== -->
+<div id="arkUi">
+  <div id="lobbyMask"></div>
+
+  <aside id="lobbyDrawer" tabindex="-1" aria-hidden="true" aria-label="排行榜">
+    <header class="dhead">
+      <span class="dtitle">🏆 排行榜</span>
+      <span class="meta" id="boardMeta"></span>
+    </header>
+    <div class="dbody" id="rankScroll">
+      <ol id="miniBoard"></ol>
+      <div class="empty" id="boardEmpty" hidden>还没有人上榜<br>去玩一把，把名字留在上面 ✦</div>
+    </div>
+  </aside>
+
+  <div id="hint" class="hide"></div>
+  <div id="toast"></div>
+</div>
+
+<script src="app.js?v=11012252"></script>
 </body>
 </html>
