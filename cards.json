@@ -1,24 +1,6 @@
 {
  "version": 1,
- "updated_at": 1795256952,
- "total": 1,
- "users": {
-  "5648491503": {
-   "cards": [
-    {
-     "name": "闭环测试",
-     "state": {
-      "HP": "15/15",
-      "业力": "3"
-     },
-     "notes": "验证用",
-     "created_at": 1795256917,
-     "updated_at": 1795256917
-    }
-   ],
-   "groups": [
-    "dm_5648491503"
-   ]
-  }
- }
+ "updated_at": 1795256978,
+ "total": 0,
+ "users": {}
 }
