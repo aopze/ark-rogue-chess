@@ -3918,7 +3918,6 @@ setInterval(function(){
     var addBtn=e.target.closest?e.target.closest('[data-add-context]'):null;
     if(addBtn){e.stopPropagation();openAdd(addBtn.getAttribute('data-add-context'));return;}
     if(e.target.id==='close-add-btn'){e.stopPropagation();closeAdd();return;}
-    if(e.target.id==='save-card-btn'){e.stopPropagation();saveCard();return;}
     var confirmBtn=e.target.closest?e.target.closest('#confirm-added-btn'):null;
     if(confirmBtn){e.stopPropagation();confirmAdded();return;}
     var removeBtn=e.target.closest?e.target.closest('[data-remove-key]'):null;
