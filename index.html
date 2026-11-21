@@ -3306,8 +3306,52 @@ setInterval(function(){
   };
   var DATA=null,OPTIONS={},SELECTED_WEAPONS=[],KEY='',inputs=[],byField={},added=[],confirmed=[],freeCustomLeft=0,freeEquipLeft=0,activeCtx=null,msgTimer=null,boundSet=new WeakSet();
 
+  /* 布局改版后的老片段迁移：frag 是持久 DOM，格子顺序还是旧的，这里就地重排成新结构 */
+  function normalizeCardRows(box){
+    var labelOfCell=function(c){
+      var b=c.querySelector('b'); if(!b) return '';
+      return String(b.textContent).replace(/[:：]\s*$/,'').trim();
+    };
+    var reorder=function(row,want,clsMap){
+      var cells=[].slice.call(row.children);
+      if(cells.length<2) return;
+      var known={},rest=[];
+      cells.forEach(function(c){ var l=labelOfCell(c); if(want.indexOf(l)>=0&&!known[l]) known[l]=c; else rest.push(c); });
+      var ordered=want.map(function(k){return known[k];}).filter(Boolean).concat(rest);
+      var same=cells.length===ordered.length && cells.every(function(c,i){return c===ordered[i];});
+      if(!same) ordered.forEach(function(c){ row.appendChild(c); });
+      if(clsMap) Object.keys(clsMap).forEach(function(k){ if(known[k]) known[k].classList.add(clsMap[k]); });
+    };
+    // 武器：武器名/伤害/射程/维护费 + 备注独占一行
+    [].slice.call(box.querySelectorAll('.weapon-row')).forEach(function(row){
+      if(row.children.length<3) return;
+      reorder(row,['武器名','伤害','射程','维护费','备注'],{'备注':'weapon-note'});
+    });
+    // 定制：删掉「实际生效」，重排 定制名/维护费/效果
+    [].slice.call(box.querySelectorAll('.weapon-custom-item')).forEach(function(row){
+      [].slice.call(row.children).forEach(function(c){ if(labelOfCell(c)==='实际生效') c.remove(); });
+      [].slice.call(row.children).forEach(function(c){
+        var b=c.querySelector('b');
+        if(b&&/^定制\s*[:：]/.test(String(b.textContent).trim())) b.textContent='定制名:';
+      });
+      if(row.children.length>=2) reorder(row,['定制名','维护费','效果'],{'效果':'custom-effect'});
+    });
+    // 装备：旧的「价格+维护费」合并格要拆开，再重排 装备名/价格/维护费/效果
+    [].slice.call(box.querySelectorAll('.equip-row')).forEach(function(row){
+      var merged=row.querySelector('.equip-cost');
+      if(merged){
+        var t=merged.textContent||'';
+        var m1=t.match(/价格\s*[:：]\s*(-?\d+(?:\.\d+)?)/), m2=t.match(/维护费\s*[:：]\s*(-?\d+(?:\.\d+)?)/);
+        var mkCell=function(lab,val){var d=document.createElement('div');d.className='weapon-cell';d.innerHTML='<b>'+lab+':</b>'+val;return d;};
+        var pc=mkCell('价格',m1?m1[1]:'—'), uc=mkCell('维护费',m2?m2[1]:'—');
+        row.insertBefore(pc,merged); row.insertBefore(uc,merged); merged.remove();
+      }
+      if(row.children.length>=2) reorder(row,['装备名','价格','维护费','效果'],{'效果':'equip-effect'});
+    });
+  }
   window.prepareCardDom=function(box){
     if(!box) return;
+    try{ normalizeCardRows(box); }catch(e){}
     // 数值框（只处理最外层字段，耐力上限/贷款明细由父节点一并渲染）
     [].slice.call(box.querySelectorAll('[data-num-field]'))
       .filter(el=>!el.parentElement.closest('[data-num-field]')&&!el.querySelector('.num-input'))
