@@ -222,6 +222,11 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .result-label .card-add-btn{margin-left:auto;}
 .section-add-btn,.card-add-btn{flex:none;padding:3px 10px;border:1px solid var(--primary);border-radius:12px;background:#fff;color:var(--primary);font-family:inherit;font-size:.75rem;font-weight:600;cursor:pointer;white-space:nowrap;}
 .section-add-btn:hover,.card-add-btn:hover{background:#eef2ff;}
+/* 添加按钮默认收起：先点姓名右侧「✎ 编辑」才出现 */
+.section-add-btn,.card-add-btn{display:none;}
+#result-area.card-editing .section-add-btn,#result-area.card-editing .card-add-btn{display:inline-flex;align-items:center;}
+.card-edit-toggle{flex:none;margin-left:auto;padding:5px 12px;border:1px solid #f59e0b;border-radius:14px;background:#fffbeb;color:#b45309;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap;}
+.card-edit-toggle.on{background:#f59e0b;color:#fff;border-color:#f59e0b;}
 .added-section:empty{display:none;}
 .added-section{margin-top:14px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:12px;}
 .added-title{font-weight:700;color:var(--primary);margin-bottom:8px;}
@@ -2210,7 +2215,7 @@ function showResult(){
       <label for="card-name-input" style="font-size:.9rem;font-weight:600;color:#475569;white-space:nowrap;">角色姓名</label>
       <input id="card-name-input" class="card-name-input" type="text" maxlength="40"
         placeholder="给角色起个名字" value="${escCardText(window._cardName||'')}"
-        style="flex:1;min-width:0;font-size:1rem;font-weight:600;padding:7px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#92400e;outline:none;"
+        style="flex:1 1 120px;max-width:160px;min-width:0;font-size:1rem;font-weight:600;padding:7px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#92400e;outline:none;"
         onfocus="this.select()" oninput="window._cardName=this.value;window._updateCopyBtn&&window._updateCopyBtn()">
     </div>
     ${statsStripHtml({level:base.level,karma:base.karma,stamina:base.stamina,staminaMax:base.staminaMax,attr:base.attr},financeCards)}
@@ -3323,6 +3328,17 @@ setInterval(function(){
       var saveBtn=document.createElement('button');saveBtn.type='button';saveBtn.id='save-card-btn';saveBtn.textContent='💾 保存修改后的角色卡';
       bar.appendChild(msgSpan);bar.appendChild(saveBtn);box.appendChild(bar);
     }
+    // 姓名右侧「✎ 编辑」开关：只有打开它，各栏目的「添加」按钮才出现
+    var nameBar=box.querySelector('.card-name-bar');
+    if(nameBar){
+      if(!nameBar.querySelector('.card-edit-toggle')){
+        var tg=document.createElement('button');
+        tg.type='button';tg.className='card-edit-toggle';tg.textContent='✎ 编辑';
+        nameBar.appendChild(tg);
+      }
+      var tg2=nameBar.querySelector('.card-edit-toggle');
+      if(tg2&&!box.classList.contains('card-editing')){tg2.textContent='✎ 编辑';tg2.classList.remove('on');}
+    }
   };
 
   window.initCardRuntime=function(){
@@ -3674,7 +3690,9 @@ setInterval(function(){
     if(ctx==='custom') freeCustomLeft-=rec.waived;
     if(ctx==='equipment') freeEquipLeft-=rec.waived;
     setNum('upkeep',getNum('upkeep')+rec.upkeep);
-    added.push(rec);save();renderAdded();renderList();
+    added.push(rec);save();
+    // 点选即正式加入：直接落到上方对应栏目，外观与初始选择完全一致，不再经过「追加内容→确认」
+    confirmAdded();
     msg('已添加：'+labelOf(ctx,item).name);
   }
   function cardFileName(){
@@ -3762,6 +3780,19 @@ setInterval(function(){
     }
   }
 
+  // 编辑开关：切换 #result-area.card-editing，决定各栏目「添加」按钮是否出现
+  document.addEventListener('click',function(e){
+    var tg=e.target.closest?e.target.closest('.card-edit-toggle'):null;
+    if(!tg) return;
+    e.stopPropagation();e.preventDefault();
+    var bar=tg.closest('.card-name-bar');
+    var box=(bar&&bar.parentNode)||document.getElementById('result-area');
+    if(!box) return;
+    var on=box.classList.toggle('card-editing');
+    tg.classList.toggle('on',on);
+    tg.textContent=on?'✓ 完成':'✎ 编辑';
+    msg(on?'编辑模式：点各栏右侧「添加」即可新增':'已收起「添加」按钮');
+  },true);
   document.addEventListener('click',function(e){
     var addBtn=e.target.closest?e.target.closest('[data-add-context]'):null;
     if(addBtn){e.stopPropagation();openAdd(addBtn.getAttribute('data-add-context'));return;}
