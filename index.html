@@ -2458,13 +2458,13 @@ function buildHKTRPGCommand(){
 }
 
 /* ============ 导出独立角色卡 HTML ============ */
-function buildCardPayload(){
-  const f=finance();
+/* 候选项池：按能力系统 id + 已选武器即时构建，卡片视图打开时也能重建同一份列表 */
+function buildOptionsFor(sysIds, selectedWeaponNames){
   const gunNames=['手枪','突击步枪','狙击步枪'];
-  const sysIds=finalSysIds();
-  const selectedWeaponNames=[answers.weapon1,answers.weapon2].filter(Boolean).map(w=>w.className);
-  const options={
-    abilities:ABILITY_SYSTEMS.filter(sys=>sysIds.includes(sys.id)).flatMap(sys=>sys.abilities.map(str=>{
+  const ids=Array.isArray(sysIds)?sysIds:[];
+  const wnames=Array.isArray(selectedWeaponNames)?selectedWeaponNames:[];
+  return {
+    abilities:ABILITY_SYSTEMS.filter(sys=>ids.includes(sys.id)).flatMap(sys=>sys.abilities.map(str=>{
       const m=str.match(/^《(.+?)》（(.+?)）：(.*)$/);
       return m?{system:sys.name,name:m[1],type:m[2],effect:m[3]}:null;
     }).filter(Boolean)),
@@ -2477,6 +2477,12 @@ function buildCardPayload(){
     ],
     connections:connectionData.map(c=>({label:c.label,role:c.role,effect:c.effect}))
   };
+}
+function buildCardPayload(){
+  const f=finance();
+  const sysIds=finalSysIds();
+  const selectedWeaponNames=[answers.weapon1,answers.weapon2].filter(Boolean).map(w=>w.className);
+  const options=buildOptionsFor(sysIds, selectedWeaponNames);
   return {
     resultCards:window._resultCards||[],
     financeCards:window._financeCards||[],
@@ -2786,18 +2792,43 @@ function _fragFromHTML(html){
   }catch(e){ return {frag:'',payload:null}; }
 }
 /* 统一卡片模板：样式 + 运行时脚本只此一份，frag 由数据填充 */
-function buildCardViewHTML(frag, runtime, uid, name){
+function buildCardViewHTML(frag, runtime, uid, name, opts, weapons, freeCustom, freeEquip){
   const styleEl=document.querySelector('style');
   const rtEl=document.getElementById('card-runtime');
   const style=styleEl?styleEl.textContent:'';
   const runtimeJS=rtEl?rtEl.textContent:'';
-  const payload={runtimeState:runtime||{},__uid:uid||'',__name:name||''};
+  const payload={
+    runtimeState:runtime||{},
+    __uid:uid||'',__name:name||'',
+    // 候选项池必须带进来，否则卡片视图里「添加」弹窗是空列表
+    options:opts||{},
+    selectedWeaponNames:weapons||[],
+    freeCustomRemaining:freeCustom||0,
+    freeEquipRemaining:freeEquip||0
+  };
   const data=JSON.stringify(payload).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
+  // 运行时依赖的弹窗骨架必须一起带上，否则卡片视图里「添加」无反应（找不到 #add-modal）
+  const chrome=
+     '<div class="modal-overlay" id="detail-modal" onclick="closeDetail(event)">'
+    +'<div class="modal-box" onclick="event.stopPropagation()">'
+    +'<button class="modal-close" onclick="closeDetail(event)">×</button>'
+    +'<div class="modal-title" id="modal-title"></div>'
+    +'<div class="modal-content" id="modal-content"></div>'
+    +'</div></div>'
+    +'<div class="modal-overlay" id="add-modal">'
+    +'<div class="modal-box add-box">'
+    +'<button class="modal-close" id="close-add-btn">×</button>'
+    +'<div class="modal-title" id="add-modal-title">添加</div>'
+    +'<div class="add-search"><input type="text" id="add-search" placeholder="搜索名称或效果…"></div>'
+    +'<div class="add-list" id="add-list"></div>'
+    +'</div></div>'
+    +'<div class="toast" id="toast"></div>';
   return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">'
     +'<meta name="viewport" content="width=device-width,initial-scale=1.0"><title>角色卡</title>'
     +'<style>'+style+'</style></head>'
     +'<body data-card-view="1" style="padding:12px;">'
     +'<div id="result-area" style="display:block;margin-top:0;">'+frag+'</div>'
+    +chrome
     +'<script id="card-data" type="application/json">'+data+'<\/script>'
     +'<script>'+runtimeJS+'<\/script>'
     +'</body></html>';
@@ -3035,7 +3066,10 @@ function _showCardDetail(idx){
     const box=$('#card-full-view');
     if(!box) return;
     if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} }
-    const html=buildCardViewHTML(c.frag, c.runtime, uid, c.name);
+    // 用卡片自己记录的能力系统/武器重建候选项池；老记录没有就退回当前选择
+    const opts=buildOptionsFor(c.sysIds||finalSysIds(), c.weapons||[]);
+    const html=buildCardViewHTML(c.frag, c.runtime, uid, c.name, opts, c.weapons||[],
+      c.freeCustom||0, c.freeEquip||0);
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     _cardBlobUrl=URL.createObjectURL(blob);
     $('#card-full-title').textContent='🧾 '+(c.name||'角色卡');
@@ -3163,7 +3197,12 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   const rt=(payload&&payload.runtimeState)||{};
   const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
     level:(rt.level!==undefined&&rt.level!==null?rt.level:(state['等级']||'')),
-    credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||''))};
+    credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||'')),
+    // 只记 id/名字这几个小字段，打开卡片时据此重建「添加」候选项池
+    sysIds:finalSysIds(),
+    weapons:(payload&&payload.selectedWeaponNames)||[],
+    freeCustom:(payload&&payload.freeCustomRemaining)||0,
+    freeEquip:(payload&&payload.freeEquipRemaining)||0};
   // 摘要：从 payload.resultCards 提取更丰富的展示字段
   if(payload&&payload.resultCards){
     rec.summary=payload.resultCards.slice(0,8).map(c=>({label:c.label,value:c.value}));
@@ -3195,9 +3234,11 @@ async function loadMyCards(){
     remote.forEach(c=>{ byName[c.name]=Object.assign({},c,{_local:false}); });
     local.forEach(c=>{
       if(c.hasFull && byName[c.name]){
-        // 线上已同步，但本地有完整卡：保留完整功能和摘要，只去掉待同步标记
+        // 线上已同步，但本地有完整卡：保留完整功能（frag/候选项池）与摘要，只去掉待同步标记
         byName[c.name]=Object.assign({},byName[c.name],{
-          hasFull:true, html:c.html, summary:c.summary, _local:false
+          hasFull:true, html:c.html, frag:c.frag, runtime:c.runtime,
+          sysIds:c.sysIds, weapons:c.weapons, freeCustom:c.freeCustom, freeEquip:c.freeEquip,
+          summary:c.summary, _local:false
         });
       }else if(c._local && !byName[c.name]){
         byName[c.name]=c; // 线上还没有，保留待同步
@@ -3823,11 +3864,14 @@ setInterval(function(){
   document.addEventListener('click',function(e){
     if(e.target.id==='add-modal') closeAdd();
   });
-  document.getElementById('add-list').addEventListener('click',function(e){
+  // 弹窗与搜索框可能不存在（卡片视图模板里由 buildCardViewHTML 注入，缺失时不能让脚本中断）
+  var addListEl=document.getElementById('add-list');
+  if(addListEl) addListEl.addEventListener('click',function(e){
     var btn=e.target.closest('.add-option');
     if(btn&&!btn.disabled) addItem(btn.getAttribute('data-ctx'),parseInt(btn.getAttribute('data-idx'),10));
   });
-  document.getElementById('add-search').addEventListener('input',renderList);
+  var addSearchEl=document.getElementById('add-search');
+  if(addSearchEl) addSearchEl.addEventListener('input',renderList);
 
   document.addEventListener('DOMContentLoaded',function(){
     var box=document.getElementById('result-area');
