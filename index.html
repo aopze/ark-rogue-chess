@@ -193,11 +193,13 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 @media (max-width:560px){
   .item-row{grid-template-columns:1fr;}
 }
-.base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:6px 10px;margin-bottom:14px;display:flex;align-items:baseline;flex-wrap:wrap;row-gap:2px;}
-.base-stat-item{display:flex;align-items:baseline;gap:4px;padding:0 9px;border-left:1px solid rgba(180,83,9,.28);white-space:nowrap;}
+.base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:7px 10px;margin-bottom:14px;display:flex;align-items:baseline;flex-wrap:wrap;row-gap:4px;}
+.base-stat-item{display:flex;align-items:baseline;gap:4px;padding:0 9px;border-left:1px solid rgba(180,83,9,.28);min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere;}
 .base-stat-item:first-child{border-left:none;padding-left:0;}
 .base-stat-break{flex-basis:100%;height:0;line-height:0;}
 .base-stat-break+.base-stat-item{border-left:none;padding-left:0;}
+/* 贷款额度+利息内容最长，独占一行，避免溢出边框 */
+.base-stat-item.wide{flex:1 1 100%;border-left:none;padding-left:0;margin-top:1px;}
 .base-stat-item.clickable{cursor:pointer;border-radius:4px;}
 .base-stat-item.clickable:hover{background:rgba(245,158,11,.14);}
 .base-stat-item.clickable:hover .base-stat-value{text-decoration:underline;}
@@ -542,7 +544,7 @@ function statsStripHtml(o,extra=[]){
     const val=`<span class="base-stat-value"${fa}>${v}</span>`;
     return idx==null
       ? `<div class="base-stat-item"><span class="base-stat-label">${l}</span>${val}</div>`
-      : `<div class="base-stat-item clickable" onclick="openDetail(${idx}, window._financeCards)"><span class="base-stat-label">${l}</span>${val}</div>`;
+      : `<div class="base-stat-item clickable${idx===2?' wide':''}" onclick="openDetail(${idx}, window._financeCards)"><span class="base-stat-label">${l}</span>${val}</div>`;
   };
   // 第一栏顺序：属性 → 等级 → 业力 → 耐力 → 信用点 → 维护费 → 贷款
   const FIELD_BY_LABEL={'信用点:':'credit','维护费:':'upkeep','贷款额度:':'loanLine'};
