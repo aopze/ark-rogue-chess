@@ -2529,6 +2529,14 @@ function buildStandaloneCardHTML(){
     }
   }
   clone.querySelectorAll('[contenteditable]').forEach(el=>el.removeAttribute('contenteditable'));
+  // 把用户当前输入的数值写回克隆节点的 value 属性，保证片段自带最新值
+  const liveInputs=box.querySelectorAll('input,textarea,select');
+  const cloneInputs=clone.querySelectorAll('#result-area input,#result-area textarea,#result-area select');
+  liveInputs.forEach((el,i)=>{
+    const t=cloneInputs[i]; if(!t) return;
+    if(el.tagName==='SELECT'){ [].slice.call(t.options).forEach(o=>{ o.selected=(o.value===el.value); }); }
+    else t.setAttribute('value',el.value);
+  });
   const bodyEl=clone.querySelector('body');
   if(bodyEl) bodyEl.setAttribute('data-card-export','1');
   const title=clone.querySelector('title');
@@ -2734,8 +2742,8 @@ function _cacheKey(uid){ return 'yu7_cards_'+(uid||'guest'); }
 function _loadLocal(uid){
   try{
     const cards=JSON.parse(localStorage.getItem(_cacheKey(uid))||'{"cards":[]}').cards||[];
-    // 给有完整卡的记录挂上 html（从独立 key 读）
-    cards.forEach(c=>{ if(c.hasFull) c.html=_getCardHtml(uid,c.name); });
+    // 兼容旧数据：没有 frag 但有独立 HTML 的，挂上待迁移
+    cards.forEach(c=>{ if(!c.frag && c.hasFull) c.html=_getCardHtml(uid,c.name)||''; });
     return cards;
   }
   catch(e){ return []; }
@@ -2746,6 +2754,81 @@ function _saveLocal(uid,cards){
   try{ localStorage.setItem(_cacheKey(uid),JSON.stringify({cards:slim,synced_at:Date.now()})); return true; }
   catch(e){ return false; }
 }
+/* ===== 卡片数据化：每卡只存 result-area 片段 + 运行时数值，共用同一套模板 ===== */
+function _serializeResultArea(box){
+  if(!box) return '';
+  const clone=box.cloneNode(true);
+  const src=box.querySelectorAll('input,textarea,select');
+  const dst=clone.querySelectorAll('input,textarea,select');
+  src.forEach((el,i)=>{
+    const t=dst[i]; if(!t) return;
+    if(el.tagName==='SELECT'){
+      [].slice.call(t.options).forEach(o=>{ o.selected=(o.value===el.value); });
+    }else{
+      t.setAttribute('value',el.value);
+    }
+  });
+  return clone.innerHTML;
+}
+function _fragFromHTML(html){
+  try{
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    const box=doc.querySelector('#result-area');
+    const tag=doc.querySelector('#card-data');
+    let payload=null;
+    try{ payload=tag?JSON.parse(tag.textContent):null; }catch(e){}
+    return {frag:box?box.innerHTML:'', payload:payload};
+  }catch(e){ return {frag:'',payload:null}; }
+}
+/* 统一卡片模板：样式 + 运行时脚本只此一份，frag 由数据填充 */
+function buildCardViewHTML(frag, runtime, uid, name){
+  const styleEl=document.querySelector('style');
+  const rtEl=document.getElementById('card-runtime');
+  const style=styleEl?styleEl.textContent:'';
+  const runtimeJS=rtEl?rtEl.textContent:'';
+  const payload={runtimeState:runtime||{},__uid:uid||'',__name:name||''};
+  const data=JSON.stringify(payload).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
+  return '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">'
+    +'<meta name="viewport" content="width=device-width,initial-scale=1.0"><title>角色卡</title>'
+    +'<style>'+style+'</style></head>'
+    +'<body data-card-view="1" style="padding:12px;">'
+    +'<div id="result-area" style="display:block;margin-top:0;">'+frag+'</div>'
+    +'<script id="card-data" type="application/json">'+data+'<\/script>'
+    +'<script>'+runtimeJS+'<\/script>'
+    +'</body></html>';
+}
+/* 旧卡迁移：把独立 HTML 拆成 frag + runtime，然后删掉大文件 */
+function _migrateCardsToData(uid){
+  let list;
+  try{ list=JSON.parse(localStorage.getItem(_cacheKey(uid))||'{"cards":[]}').cards||[]; }
+  catch(e){ return; }
+  let changed=false;
+  list.forEach(c=>{
+    if(c.frag) return;
+    const html=_getCardHtml(uid,c.name);
+    if(!html) return;
+    const snap=_fragFromHTML(html);
+    if(!snap.frag) return;
+    c.frag=snap.frag;
+    c.runtime=(snap.payload&&snap.payload.runtimeState)||null;
+    c.hasFull=true;
+    delete c.html;
+    changed=true;
+    _delCardHtml(uid,c.name);
+  });
+  if(changed) _saveLocal(uid,list);
+}
+/* 卡片模板里点保存：把最新面板与数值写回卡片墙 */
+window.addEventListener('message',function(e){
+  const d=e.data;
+  if(!d || d.type!=='yu7-card-save') return;
+  const uid=_tgUserId();
+  if(!uid || !d.name) return;
+  const list=_loadLocal(uid).map(c=>c.name===d.name
+    ? Object.assign({},c,{frag:d.frag,runtime:d.runtime,hasFull:true,updated_at:Math.floor(Date.now()/1000)}) : c);
+  _saveLocal(uid,list);
+  _renderMyCards(_loadLocal(uid));
+});
 /* 单张完整卡 HTML 单独存，key 按 uid+卡名，避免主索引过大 */
 function _cardHtmlKey(uid,name){ return 'yu7_card_html_'+uid+'_'+encodeURIComponent(name); }
 function _saveCardHtml(uid,name,html){
@@ -2900,8 +2983,9 @@ function _materializeBotCard(c){
     setIn('credit',st['信用点']); setIn('upkeep',st['维护费']);
     if(st['贷款']){ const p=String(st['贷款']).split('/'); setIn('loan',p[0]); setIn('loanLimit',p[1]); }
     setIn('interest',st['利息']);
-    return buildStandaloneCardHTML();
-  }catch(e){ return ''; }
+    const snap=_fragFromHTML(buildStandaloneCardHTML());
+    return {frag:snap.frag, runtime:(snap.payload&&snap.payload.runtimeState)||null};
+  }catch(e){ return {frag:'',runtime:null}; }
   finally{
     Object.keys(answers).forEach(k=>{ delete answers[k]; });
     Object.assign(answers,saved.answers);
@@ -2918,31 +3002,43 @@ let _cardBlobUrl=null;
 function _showCardDetail(idx){
   const c=_myCardsCache[idx];
   if(!c) return;
-  // bot 建的卡没有完整 HTML：先物化再打开，功能与正常流程一致
-  if(!c.html && c.state && Object.keys(c.state).length){
-    const html=_materializeBotCard(c);
-    if(html){
-      c.html=html; c.hasFull=true;
-      const uid=_tgUserId();
-      if(uid && _saveCardHtml(uid,c.name,html)){
-        const list=_loadLocal(uid).map(x=>x.name===c.name?Object.assign({},x,{hasFull:true,html:html}):x);
-        _saveLocal(uid,list);
-      }
-      _renderMyCards(_myCardsCache);
+  const uid=_tgUserId();
+  let migrated=false;
+  // 旧卡迁移：有独立 HTML 但未数据化 → 抽 frag 后删大文件
+  if(!c.frag && c.html){
+    const snap=_fragFromHTML(c.html);
+    if(snap.frag){
+      c.frag=snap.frag;
+      c.runtime=(snap.payload&&snap.payload.runtimeState)||c.runtime||null;
+      c.hasFull=true;
+      delete c.html;
+      migrated=true;
     }
   }
-  if(c.html){
-    // 有完整独立卡 HTML → iframe 打开，功能完整
+  // bot 建的卡只有 state：现场物化成和正常流程一致的面板
+  if(!c.frag && c.state && Object.keys(c.state).length){
+    const snap=_materializeBotCard(c);
+    if(snap && snap.frag){ c.frag=snap.frag; c.runtime=snap.runtime; c.hasFull=true; migrated=true; }
+  }
+  if(c.frag){
+    if(uid){
+      const list=_loadLocal(uid).map(x=>x.name===c.name
+        ? Object.assign({},x,{frag:c.frag,runtime:c.runtime,hasFull:true}) : x);
+      _saveLocal(uid,list);
+      _delCardHtml(uid,c.name);   // 数据化后不再需要每卡大 HTML
+    }
     const box=$('#card-full-view');
     if(!box) return;
     if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} }
-    const blob=new Blob([c.html],{type:'text/html;charset=utf-8'});
+    const html=buildCardViewHTML(c.frag, c.runtime, uid, c.name);
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     _cardBlobUrl=URL.createObjectURL(blob);
     $('#card-full-title').textContent='🧾 '+(c.name||'角色卡');
     const f=box.querySelector('iframe');
     f.src=_cardBlobUrl;
     // 必须用 flex 才会让 iframe 的 flex:1 生效；block 下 iframe 退回默认 150px 高
     box.style.display='flex';
+    if(migrated) _renderMyCards(_myCardsCache);
     return;
   }
   // 兜底：线上同步来的卡只有 state → 只读展示摘要
@@ -3050,12 +3146,17 @@ window._onCardCopied=function(cmd, fullHTML, payload){
     const i=p.indexOf(':');
     if(i>0 && p.trim()) state[p.slice(0,i).trim()]=p.slice(i+1).trim();
   });
-  // 完整 HTML 单独存；失败则回滚，提示空间不足
-  if(fullHTML && !_saveCardHtml(uid,name,fullHTML)) return false;
+  // 只从完整 HTML 里抽 result-area 片段 + 运行时数值，不再存整页（每卡 ~5-10KB）
+  let frag='', runtime=null;
+  if(fullHTML){
+    const snap=_fragFromHTML(fullHTML);
+    frag=snap.frag;
+    runtime=(snap.payload&&snap.payload.runtimeState)||null;
+  }
   const local=_loadLocal(uid).filter(c=>c.name!==name); // 同名去重（重制卡）
   const now=Math.floor(Date.now()/1000);
   const rt=(payload&&payload.runtimeState)||{};
-  const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!fullHTML,html:fullHTML||'',
+  const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
     level:(rt.level!==undefined&&rt.level!==null?rt.level:(state['等级']||'')),
     credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||''))};
   // 摘要：从 payload.resultCards 提取更丰富的展示字段
@@ -3070,6 +3171,7 @@ window._onCardCopied=function(cmd, fullHTML, payload){
 async function loadMyCards(){
   const uid=_tgUserId();
   if(!uid) return;  // 浏览器直接打开、无 Telegram 身份时不显示
+  _migrateCardsToData(uid);   // 旧独立 HTML → frag 数据（只跑一次，跑完删大文件）
   // 0) 不再自动 sendData（会关闭 Mini App，且会阻断对账）；改为点「N 项待同步」手动触发
   // 1) 先渲染本地缓存：复制过的卡立刻可见
   const local=_loadLocal(uid);
@@ -3607,6 +3709,24 @@ setInterval(function(){
   // 保存当前角色卡：独立文件优先覆盖原文件，主页面则导出角色卡
   function saveCard(){
     save();
+    // 统一模板（数据化卡片）：把当前面板写回卡片墙记录，不再生成独立文件
+    if(document.body.getAttribute('data-card-view')==='1'){
+      var tagV=document.getElementById('card-data');
+      var payV={}; try{payV=JSON.parse(tagV.textContent)||{};}catch(e){}
+      var runtimeV=window._cardRuntimeState();
+      var boxV=document.getElementById('result-area');
+      var cloneV=boxV.cloneNode(true);
+      var srcV=boxV.querySelectorAll('input,textarea,select');
+      var dstV=cloneV.querySelectorAll('input,textarea,select');
+      srcV.forEach(function(el,i){
+        var t=dstV[i]; if(!t) return;
+        if(el.tagName==='SELECT'){ [].slice.call(t.options).forEach(function(o){ o.selected=(o.value===el.value); }); }
+        else { t.setAttribute('value',el.value); }
+      });
+      try{ window.parent.postMessage({type:'yu7-card-save',name:payV.__name||'',frag:cloneV.innerHTML,runtime:runtimeV},'*'); }catch(e){}
+      msg('已保存到卡片墙');
+      return;
+    }
     if(document.body.getAttribute('data-card-export')==='1'){
       // 独立角色卡：把当前修改写回自身并覆盖保存
       var tag=document.getElementById('card-data');
