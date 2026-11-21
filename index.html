@@ -428,11 +428,13 @@ try {
 
 <div class="container">
   <!-- 首页：我创建的角色卡（卡片墙） -->
-  <div id="home-view" style="display:block;position:relative;">
-    <h1 style="text-align:center;margin:4px 0 4px;font-size:1.35rem;">我的角色卡</h1>
-    <button id="edit-mode-btn" onclick="toggleEditModeCards()" style="position:absolute;right:0;top:6px;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 12px;font-size:.82rem;font-weight:700;cursor:pointer;">✎ 编辑</button>
+  <div id="home-view" style="display:block;">
+    <div style="display:flex;align-items:center;justify-content:center;position:relative;margin:4px 0 4px;">
+      <h1 style="margin:0;font-size:1.35rem;">我的角色卡</h1>
+      <button id="edit-mode-btn" onclick="toggleEditModeCards()" style="position:absolute;right:0;top:50%;transform:translateY(-50%);border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 12px;font-size:.82rem;font-weight:700;cursor:pointer;">✎ 编辑</button>
+    </div>
     <div id="my-cards-count" style="text-align:center;color:#64748b;font-size:.85rem;margin-bottom:16px;"></div>
-    <div id="my-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;"></div>
+    <div id="my-cards-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;"></div>
     <div id="home-hint" style="text-align:center;color:#94a3b8;font-size:.78rem;margin-top:16px;line-height:1.6;">点卡片查看 · 点 ➕ 创建新角色卡</div>
   </div>
   <!-- 问卷 / 结果 -->
@@ -2793,7 +2795,7 @@ function toggleEditModeCards(){
   const b=$('#edit-mode-btn');
   if(b){ b.textContent=_editMode?'✅ 完成':'✎ 编辑'; b.style.background=_editMode?'#4f46e5':'#fff'; b.style.color=_editMode?'#fff':'#4338ca'; }
   const hint=$('#home-hint');
-  if(hint) hint.textContent=_editMode?'编辑模式：✎ 重命名 / 🗑 删除，点「完成」同步到 bot':'点卡片查看 · 点 ➕ 创建新角色卡';
+  if(hint) hint.style.display=_editMode?'none':'block';
   showHome();  // 重渲染以显示/隐藏操作按钮
 }
 function _renderMyCards(cards){
