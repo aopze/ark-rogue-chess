@@ -176,11 +176,17 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .equip-title-main{display:flex;align-items:center;gap:8px;min-width:0;}
 .equip-block + .equip-block{margin-top:10px;}
 .equip-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
-.equip-row{display:grid;grid-template-columns:1.15fr 2.9fr .7fr 72px;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
+.equip-row{display:grid;grid-template-columns:1.15fr 2.9fr 1.35fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
 .equip-row + .equip-row{margin-top:6px;}
+/* 价格 + 维护费合成一格、同一行显示 */
+.equip-cost{white-space:nowrap;}
+.equip-cost b{display:inline;margin:0;}
+.equip-cost b + b{margin-left:12px;}
 .equip-empty{font-size:.82rem;color:#94a3b8;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:8px 10px;}
 @media (max-width:560px){
-  .equip-row{grid-template-columns:1fr 1fr;}
+  /* 窄屏：装备名/效果 一行（竖线偏左），价格+维护费 独占下一行 */
+  .equip-row{grid-template-columns:1fr 1.55fr;}
+  .equip-cost{grid-column:1/-1;}
 }
 /* ==== 道具：与装备同款展开块，但只有 名称/效果/价格（消耗品不产生维护费） ==== */
 .item-section{margin-top:10px;}
@@ -2049,6 +2055,8 @@ function showResult(){
   const gunNames=['手枪','突击步枪','狙击步枪'];
   let freeLeft=f.free||0;
   const weaponCell=(label,value)=>`<div class="weapon-cell"><b>${label}:</b>${value??'—'}</div>`;
+  // 价格与维护费合并到一格、同一行显示
+  const weaponCostCell=(price,upkeep)=>`<div class="weapon-cell equip-cost"><b>价格:</b>${price??'—'}<b>维护费:</b>${upkeep??'—'}</div>`;
   const weaponPlain=[];
   let weaponUpkeepTotal=0;
   let customUpkeepTotal=0;
@@ -2124,8 +2132,7 @@ function showResult(){
       ${g.items.map(it=>`<div class="equip-row">
         ${weaponCell('装备名',it.e.name)}
         ${weaponCell('效果',it.e.effect||'—')}
-        ${weaponCell('价格',it.e.price)}
-        ${weaponCell('维护费',it.upkeep)}
+        ${weaponCostCell(it.e.price,it.upkeep)}
       </div>`).join('')}
     </div>`).join('');
   const equipSectionHtml=`<div class="equip-section">
@@ -3297,7 +3304,7 @@ setInterval(function(){
     contract:{title:'添加契约',list:'contracts'},
     connection:{title:'添加人脉',list:'connections'}
   };
-  var BASE_MSG='数值可直接修改，修改会自动保存在本地浏览器中。';
+  var BASE_MSG='点「✎ 编辑」修改内容，点「✓ 完成」自动保存。';
   var esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   var numOnly=s=>{var m=String(s).match(/-?\d+(?:\.\d+)?/);return m?m[0]:'0';};
   var hash=s=>{var h=5381;for(var i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))>>>0;return h.toString(36);};
@@ -3390,8 +3397,8 @@ setInterval(function(){
     if(!box.querySelector('.card-runtime-bar')){
       var bar=document.createElement('div');bar.className='card-runtime-bar';
       var msgSpan=document.createElement('span');msgSpan.id='add-msg';msgSpan.textContent=BASE_MSG;
-      var saveBtn=document.createElement('button');saveBtn.type='button';saveBtn.id='save-card-btn';saveBtn.textContent='💾 保存修改后的角色卡';
-      bar.appendChild(msgSpan);bar.appendChild(saveBtn);box.appendChild(bar);
+      // 保存已并入「✎ 编辑 → ✓ 完成」，底部不再放保存按钮
+      bar.appendChild(msgSpan);box.appendChild(bar);
     }
     // 姓名右侧「✎ 编辑」开关：只有打开它，各栏目的「添加」按钮才出现
     var nameBar=box.querySelector('.card-name-bar');
@@ -3463,7 +3470,7 @@ setInterval(function(){
   function msg(text){
     var el=document.getElementById('add-msg');
     if(!el) return;
-    el.textContent=text?BASE_MSG+' '+text:BASE_MSG;
+    el.textContent=text||BASE_MSG;
     clearTimeout(msgTimer);
     msgTimer=setTimeout(()=>{el.textContent=BASE_MSG;},2200);
   }
@@ -3565,6 +3572,7 @@ setInterval(function(){
     function rm(rec){return '<button type="button" class="runtime-remove" data-remove-key="'+esc(rec.key)+'">移除</button>';}
     function cell(label,value){return '<div class="weapon-cell"><b>'+esc(label)+':</b>'+esc(value==null||value===''?'—':value)+'</div>';}
     function rawCell(label,html){return '<div class="weapon-cell"><b>'+esc(label)+':</b>'+html+'</div>';}
+    function costCell(price,upkeep){return '<div class="weapon-cell equip-cost"><b>价格:</b>'+esc(price)+'<b>维护费:</b>'+esc(upkeep)+'</div>';}
     function head(rec,title){return '<div class="runtime-added-head"><b>'+esc(title)+'</b>'+rm(rec)+'</div>';}
     // 胶囊的原始基线只记录一次，后续按基线 + 已确认追加项重算，避免重复累加
     function baseOf(el){
@@ -3646,7 +3654,7 @@ setInterval(function(){
         }
         appendTo(block,mk('equip-row',
           rawCell('装备名','<strong>'+esc(it.name)+'</strong> '+rm(rec))+
-          cell('效果',it.effect||'—')+cell('价格',it.price||0)+cell('维护费',rec.upkeep||0),rec.key));
+          cell('效果',it.effect||'—')+costCell(it.price||0,rec.upkeep||0),rec.key));
       });
     }
     // 定制 → 归入对应武器的 weapon-custom-row，并同步该武器「合计维护费」
@@ -3898,7 +3906,13 @@ setInterval(function(){
     var on=box.classList.toggle('card-editing');
     tg.classList.toggle('on',on);
     tg.textContent=on?'✓ 完成':'✎ 编辑';
-    msg(on?'编辑模式：点各栏右侧「添加」即可新增':'已收起「添加」按钮');
+    if(on){
+      msg('编辑模式：点各栏右侧「添加」即可新增');
+    }else if(document.body.getAttribute('data-card-view')==='1'){
+      saveCard();   // 「完成」即保存到卡片墙（saveCard 内部会提示已保存）
+    }else{
+      msg('已退出编辑');
+    }
   },true);
   document.addEventListener('click',function(e){
     var addBtn=e.target.closest?e.target.closest('[data-add-context]'):null;
