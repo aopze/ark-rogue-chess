@@ -447,6 +447,15 @@ try {
 </div>
 <div class="toast" id="toast" style="opacity: 0;">已复制到剪贴板！</div>
 
+<!-- 完整角色卡全屏查看层 -->
+<div id="card-full-view" style="display:none;position:fixed;inset:0;z-index:20000;background:#fff;flex-direction:column;">
+  <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
+    <span id="card-full-title" style="font-weight:700;color:#3730a3;font-size:.95rem;">🧾 角色卡</span>
+    <button onclick="closeCardFull()" style="border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;">✕ 关闭</button>
+  </div>
+  <iframe src="" style="flex:1;width:100%;border:0;background:#fff;"></iframe>
+</div>
+
 <div class="modal-overlay" id="detail-modal" onclick="closeDetail(event)">
   <div class="modal-box" onclick="event.stopPropagation()">
     <button class="modal-close" onclick="closeDetail(event)">×</button>
@@ -2216,16 +2225,25 @@ function copyResult(){
   syncEdits();
   if(!_currentCardName()){
     _updateCopyBtn();
-    toast('⚠️ 请先填写角色姓名，再复制命令');
+    toast('⚠️ 请先填写角色姓名，再保存');
     const el=$('#card-name-input'); if(el) el.focus();
     return;
   }
   window._cardName=_currentCardName();
   const cmd=buildHKTRPGCommand();
-  copyText(cmd, '✅ 已保存！命令已复制，粘贴给 bot 即可建卡');
-  /* 乐观更新：保存即写本地缓存，立即在首页显示，不等 GitHub CDN */
-  try{ if(window._onCardCopied) window._onCardCopied(cmd); }catch(e){}
-  setTimeout(()=>showHome(), 900);  // 提示后回首页看新卡
+  /* 保存 = 生成完整独立角色卡（和旧导出一致，去掉问卷），存进本地卡片墙 */
+  let fullHTML='', payload=null;
+  try{ fullHTML=buildStandaloneCardHTML(); payload=buildCardPayload(); }catch(e){}
+  let saved=false;
+  try{ saved=window._onCardCopied(cmd, fullHTML, payload); }catch(e){}
+  if(saved===false){ toast('⚠️ 本地空间不足，保存失败'); return; }
+  toast('✅ 已保存，点「首页」查看');
+  const _btn=$('#copy-all-btn');
+  if(_btn){ const _old=_btn.textContent; _btn.textContent='✅ 已保存'; setTimeout(()=>{_btn.textContent=_old;},2500); }
+  /* 命令静默存入剪贴板兜底（界面不提示）；想让 bot 建卡时粘贴即可 */
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).catch(()=>{});
+  }catch(e){}
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
@@ -2434,20 +2452,19 @@ function ensureCardData(){
   return payload;
 }
 // 导出独立角色卡 HTML（携带当前状态，打开后可继续编辑）
-function exportResultHTML(){
+/* 生成完整独立角色卡 HTML 字符串（与旧导出完全一致，只是不下载） */
+function buildStandaloneCardHTML(){
   syncEdits();
   const box=$('#result-area');
-  if(!box||box.style.display==='none'||!box.innerHTML.trim()){toast('请先生成角色卡');return;}
-  // 先同步编辑值并初始化运行时（从内嵌快照恢复追加项），再生成 payload，
-  // 确保导出携带的是当前真实状态而非上一次的残留
+  if(!box||box.style.display==='none'||!box.innerHTML.trim()) return '';
   syncEdits();
   if(window.prepareCardDom) window.prepareCardDom(box);
   if(window.initCardRuntime) window.initCardRuntime();
   ensureCardData();
 
-  // 导出文件直接从主文件当前 DOM 裁出：保留样式、结果页、添加弹窗与共用卡片脚本
+  // 从主文件当前 DOM 裁出：保留样式、结果页、添加弹窗与共用卡片脚本，去掉问卷引导
   const clone=document.documentElement.cloneNode(true);
-  ['#quiz-container','#nav-area','#debug-btn','#save-edit-btn','#toast'].forEach(sel=>{
+  ['#quiz-container','#nav-area','#debug-btn','#save-edit-btn','#toast','#home-view','#quiz-wrap'].forEach(sel=>{
     const el=clone.querySelector(sel);
     if(el) el.remove();
   });
@@ -2478,8 +2495,11 @@ function exportResultHTML(){
   if(title) title.textContent='角色卡';
   const style=clone.querySelector('style');
   if(style) style.textContent+='\n#result-area{display:block!important;}#quiz-container,#nav-area{display:none!important;}body{padding:20px;}';
-  const html='<!DOCTYPE html>\n'+clone.outerHTML;
-
+  return '<!DOCTYPE html>\n'+clone.outerHTML;
+}
+function exportResultHTML(){
+  const html=buildStandaloneCardHTML();
+  if(!html){toast('请先生成角色卡');return;}
   const blob=new Blob([html],{type:'text/html;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -2673,12 +2693,29 @@ function _tgUserId(){
 }
 function _cacheKey(uid){ return 'yu7_cards_'+(uid||'guest'); }
 function _loadLocal(uid){
-  try{ return JSON.parse(localStorage.getItem(_cacheKey(uid))||'{"cards":[]}').cards||[]; }
+  try{
+    const cards=JSON.parse(localStorage.getItem(_cacheKey(uid))||'{"cards":[]}').cards||[];
+    // 给有完整卡的记录挂上 html（从独立 key 读）
+    cards.forEach(c=>{ if(c.hasFull) c.html=_getCardHtml(uid,c.name); });
+    return cards;
+  }
   catch(e){ return []; }
 }
 function _saveLocal(uid,cards){
-  try{ localStorage.setItem(_cacheKey(uid),JSON.stringify({cards:cards,synced_at:Date.now()})); }
-  catch(e){}
+  // 主索引不存完整 HTML（太大），只存标记；html 由 _saveCardHtml 单独存
+  const slim=(cards||[]).map(c=>{ const o=Object.assign({},c); delete o.html; return o; });
+  try{ localStorage.setItem(_cacheKey(uid),JSON.stringify({cards:slim,synced_at:Date.now()})); return true; }
+  catch(e){ return false; }
+}
+/* 单张完整卡 HTML 单独存，key 按 uid+卡名，避免主索引过大 */
+function _cardHtmlKey(uid,name){ return 'yu7_card_html_'+uid+'_'+encodeURIComponent(name); }
+function _saveCardHtml(uid,name,html){
+  try{ if(html) localStorage.setItem(_cardHtmlKey(uid,name),html); return true; }
+  catch(e){ return false; }
+}
+function _getCardHtml(uid,name){
+  try{ return localStorage.getItem(_cardHtmlKey(uid,name))||''; }
+  catch(e){ return ''; }
 }
 /* 显示我创建的卡片墙（含末尾加号卡片） */
 function _renderMyCards(cards){
@@ -2691,14 +2728,22 @@ function _renderMyCards(cards){
     : '还没有角色卡，点下面的 ➕ 开始创建';
   // 卡片：统一尺寸（正方形偏竖），中间名字 + 摘要；待同步黄底
   grid.innerHTML=_myCardsCache.map((c,i)=>{
-    const st=c.state||{};
-    const pairs=Object.keys(st).slice(0,5);
-    const brief=pairs.map(k=>'<div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#334155;">'+escCardText(st[k])+'</b></div>').join('');
+    let brief='';
+    if(c.summary&&c.summary.length){
+      brief=c.summary.slice(0,6).map(x=>'<div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b;">'+escCardText(x.label)+'</span><b style="color:#334155;">'+escCardText(x.value)+'</b></div>').join('');
+    }else{
+      const st=c.state||{};
+      brief=Object.keys(st).slice(0,5).map(k=>'<div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#334155;">'+escCardText(st[k])+'</b></div>').join('');
+    }
+    const fullTag=c.hasFull
+      ? '<div style="text-align:center;font-size:.68rem;color:#4f46e5;margin-top:5px;">📄 点击查看完整卡</div>'
+      : '';
     return '<div onclick="_showCardDetail('+i+')" style="cursor:pointer;aspect-ratio:3/4;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
       +'<div style="font-size:1.5rem;text-align:center;">🧾</div>'
       +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.95rem;margin:4px 0 8px;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
-      +'<div style="font-size:.72rem;line-height:1.7;flex:1;">'+brief+'</div>'
-      +(c._local?'<div style="text-align:center;font-size:.7rem;color:#b45309;margin-top:6px;">⏳ 待同步</div>':'')
+      +'<div style="font-size:.72rem;line-height:1.7;flex:1;overflow:hidden;">'+brief+'</div>'
+      +fullTag
+      +(c._local?'<div style="text-align:center;font-size:.7rem;color:#b45309;margin-top:4px;">⏳ 待同步</div>':'')
       +'</div>';
   }).join('')
   // 加号卡片（和角色卡同尺寸）
@@ -2707,16 +2752,37 @@ function _renderMyCards(cards){
   +'<div style="font-size:.85rem;margin-top:8px;font-weight:600;">创建新角色卡</div>'
   +'</div>';
 }
-/* 点卡片看详情（复用 detail-modal，只读展示 state） */
+/* 点卡片：打开完整角色卡（和旧导出一致，可编辑/添加/保存），用全屏 iframe */
+let _cardBlobUrl=null;
 function _showCardDetail(idx){
   const c=_myCardsCache[idx];
   if(!c) return;
+  if(c.html){
+    // 有完整独立卡 HTML → iframe 打开，功能完整
+    const box=$('#card-full-view');
+    if(!box) return;
+    if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} }
+    const blob=new Blob([c.html],{type:'text/html;charset=utf-8'});
+    _cardBlobUrl=URL.createObjectURL(blob);
+    $('#card-full-title').textContent='🧾 '+(c.name||'角色卡');
+    const f=box.querySelector('iframe');
+    f.src=_cardBlobUrl;
+    box.style.display='block';
+    return;
+  }
+  // 兜底：线上同步来的卡只有 state → 只读展示摘要
   $('#modal-title').textContent='🧾 '+(c.name||'未命名');
   const st=c.state||{};
   const rows=Object.keys(st).map(k=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px dashed #e2e8f0;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#0f172a;">'+escCardText(st[k])+'</b></div>').join('');
   $('#modal-content').innerHTML=(rows||'<div style="color:#94a3b8;">（无属性）</div>')
-    +(c._local?'<div style="margin-top:10px;color:#b45309;font-size:.82rem;">⏳ 尚未同步到 bot，请把命令发给 bot 后再看</div>':'');
+    +'<div style="margin-top:10px;color:#64748b;font-size:.82rem;">这张卡由 bot 同步，完整内容请在 Telegram 用 .char 查看。</div>';
   $('#detail-modal').classList.add('show');
+}
+function closeCardFull(){
+  const box=$('#card-full-view');
+  if(box) box.style.display='none';
+  const f=box&&box.querySelector('iframe'); if(f) f.src='';
+  if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} _cardBlobUrl=null; }
 }
 /* 首页 / 开始创建 切换 */
 function showHome(){
@@ -2732,22 +2798,30 @@ function startCreate(){
   stepIdx=0;
   render();
 }
-/* 复制命令时调用：解析命令里的 name/state，立即写本地并渲染（0 延迟） */
-window._onCardCopied=function(cmd){
+/* 保存时调用：解析命令里的 name/state，同时存完整卡 HTML + payload（0 延迟显示） */
+window._onCardCopied=function(cmd, fullHTML, payload){
   const uid=_tgUserId();
-  if(!uid) return;
-  const name=((cmd||'').match(/name\[([^\]]*)\]/)||[])[1]||_currentCardName();
+  if(!uid) return false;
+  const name=_currentCardName();
   const stateRaw=((cmd||'').match(/state\[([^\]]*)\]/)||[])[1]||'';
   const state={};
   stateRaw.split(';').forEach(p=>{
     const i=p.indexOf(':');
     if(i>0 && p.trim()) state[p.slice(0,i).trim()]=p.slice(i+1).trim();
   });
+  // 完整 HTML 单独存；失败则回滚，提示空间不足
+  if(fullHTML && !_saveCardHtml(uid,name,fullHTML)) return false;
   const local=_loadLocal(uid).filter(c=>c.name!==name); // 同名去重（重制卡）
   const now=Math.floor(Date.now()/1000);
-  local.unshift({name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true});
-  _saveLocal(uid,local);
+  const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!fullHTML,html:fullHTML||''};
+  // 摘要：从 payload.resultCards 提取更丰富的展示字段
+  if(payload&&payload.resultCards){
+    rec.summary=payload.resultCards.slice(0,8).map(c=>({label:c.label,value:c.value}));
+  }
+  local.unshift(rec);
+  if(!_saveLocal(uid,local)) return false;
   _renderMyCards(local);
+  return true;
 };
 async function loadMyCards(){
   const uid=_tgUserId();
@@ -2761,11 +2835,16 @@ async function loadMyCards(){
     if(!r.ok) return;
     const payload=await r.json();
     const remote=(((payload.users||{})[uid]||{}).cards)||[];
-    // 合并：线上卡为准（去掉 _local），本地独有且较新的保留为待同步
+    // 合并：线上卡为准（去掉 _local），但保留本地已存的完整卡 HTML
     const byName={};
     remote.forEach(c=>{ byName[c.name]=Object.assign({},c,{_local:false}); });
     local.forEach(c=>{
-      if(c._local && !byName[c.name]){
+      if(c.hasFull && byName[c.name]){
+        // 线上已同步，但本地有完整卡：保留完整功能和摘要，只去掉待同步标记
+        byName[c.name]=Object.assign({},byName[c.name],{
+          hasFull:true, html:c.html, summary:c.summary, _local:false
+        });
+      }else if(c._local && !byName[c.name]){
         byName[c.name]=c; // 线上还没有，保留待同步
       }
     });
