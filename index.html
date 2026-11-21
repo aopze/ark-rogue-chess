@@ -2751,14 +2751,49 @@ function _addDeleted(uid,name){
 function _delCardHtml(uid,name){
   try{ localStorage.removeItem(_cardHtmlKey(uid,name)); }catch(e){}
 }
+/* 待同步操作队列：删除/改名先记本地，点「完成」时一次性 sendData 给 bot */
+function _pendingKey(uid){ return 'yu7_pending_ops_'+(uid||'guest'); }
+function _getPending(uid){
+  try{ const a=JSON.parse(localStorage.getItem(_pendingKey(uid))||'[]'); return Array.isArray(a)?a:[]; }
+  catch(e){ return []; }
+}
+function _addPending(uid,op){
+  try{
+    const arr=_getPending(uid);
+    arr.push(op);
+    localStorage.setItem(_pendingKey(uid),JSON.stringify(arr.slice(-50)));
+  }catch(e){}
+}
+function _clearPending(uid){ try{ localStorage.removeItem(_pendingKey(uid)); }catch(e){} }
+function _flushPendingOps(){
+  const uid=_tgUserId();
+  if(!uid) return false;
+  const pending=_getPending(uid);
+  if(!pending.length) return false;
+  const wa=window.Telegram&&window.Telegram.WebApp;
+  if(!wa||typeof wa.sendData!=='function') return false;  // 浏览器直开：留在队列，下次在 Telegram 内再发
+  try{
+    wa.sendData(JSON.stringify({kind:'card_ops',ops:pending}));
+    _clearPending(uid);
+    return true;
+  }catch(e){ return false; }
+}
 /* 显示我创建的卡片墙（含末尾加号卡片） */
 let _editMode=false;
 function toggleEditModeCards(){
+  const wasEdit=_editMode;
+  // 退出编辑模式：把攒下的删除/改名一次性送回 bot（sendData 会关闭 Mini App）
+  if(wasEdit){
+    const uid=_tgUserId();
+    if(_getPending(uid).length && !_flushPendingOps()){
+      toast('☁️ 改动已存，下次在 Telegram 内打开会自动同步');
+    }
+  }
   _editMode=!_editMode;
   const b=$('#edit-mode-btn');
   if(b){ b.textContent=_editMode?'✅ 完成':'✎ 编辑'; b.style.background=_editMode?'#4f46e5':'#fff'; b.style.color=_editMode?'#fff':'#4338ca'; }
   const hint=$('#home-hint');
-  if(hint) hint.textContent=_editMode?'编辑模式：点卡片上的 ✎ 重命名 / 🗑 删除':'点卡片查看 · 点 ➕ 创建新角色卡';
+  if(hint) hint.textContent=_editMode?'编辑模式：✎ 重命名 / 🗑 删除，点「完成」同步到 bot':'点卡片查看 · 点 ➕ 创建新角色卡';
   showHome();  // 重渲染以显示/隐藏操作按钮
 }
 function _renderMyCards(cards){
@@ -2870,6 +2905,7 @@ function confirmCardAction(){
     if(target&&target.hasFull) _delCardHtml(uid,oldName);
     const next=cards.filter(x=>x.name!==oldName);
     _addDeleted(uid,oldName);
+    _addPending(uid,{a:'del',name:oldName});   // 排队同步给 bot
     _saveLocal(uid,next);
     _renderMyCards(next);
     toast('🗑 已删除「'+oldName+'」');
@@ -2894,6 +2930,7 @@ function confirmCardAction(){
       target.name=newName;
     }
     _addDeleted(uid,oldName);  // 旧名加墓碑，防止对账把旧卡加回
+    _addPending(uid,{a:'ren',old:oldName,new:newName});   // 排队同步给 bot
     _saveLocal(uid,cards);
     _renderMyCards(cards);
     toast('✎ 已改名为「'+newName+'」');
@@ -2942,6 +2979,12 @@ window._onCardCopied=function(cmd, fullHTML, payload){
 async function loadMyCards(){
   const uid=_tgUserId();
   if(!uid) return;  // 浏览器直接打开、无 Telegram 身份时不显示
+  // 0) 上次没点「完成」就退出：这次在 Telegram 内打开时自动补发队列
+  if(_getPending(uid).length && window.Telegram && window.Telegram.WebApp &&
+     typeof window.Telegram.WebApp.sendData==='function'){
+    setTimeout(()=>{ _flushPendingOps(); }, 600);
+    return;  // sendData 会关闭 Mini App，不必再对账
+  }
   // 1) 先渲染本地缓存：复制过的卡立刻可见
   const local=_loadLocal(uid);
   _renderMyCards(local);
