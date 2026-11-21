@@ -460,7 +460,7 @@ try {
     <span id="card-full-title" style="font-weight:700;color:#3730a3;font-size:.95rem;">🧾 角色卡</span>
     <button onclick="closeCardFull()" style="border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;">✕ 关闭</button>
   </div>
-  <iframe src="" style="flex:1;width:100%;border:0;background:#fff;"></iframe>
+  <iframe src="" style="flex:1 1 auto;min-height:0;width:100%;height:100%;border:0;background:#fff;"></iframe>
 </div>
 
 <div class="modal-overlay" id="detail-modal" onclick="closeDetail(event)">
@@ -2816,36 +2816,43 @@ function _renderMyCards(cards){
   if(cnt) cnt.textContent=_myCardsCache.length
     ? '共 '+_myCardsCache.length+' 张'+(pending?' · '+pending+' 张待同步':'')
     : '';
-  // 卡片：统一尺寸（正方形偏竖），中间名字 + 摘要；待同步黄底
+  // 卡片：矮卡，只显示 出身/领域 + 等级/信用点；待同步黄底
+  const pickBrief=(list,label)=>{
+    const arr=Array.isArray(list)?list:[];
+    const hit=arr.find(x=>x&&String(x.label||'').replace(/[:：]/g,'').trim()===label);
+    if(!hit) return '';
+    return String(hit.value==null?'':hit.value).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
+  };
   grid.innerHTML=_myCardsCache.map((c,i)=>{
-    let brief='';
-    if(c.summary&&c.summary.length){
-      brief=c.summary.slice(0,6).map(x=>'<div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b;">'+escCardText(x.label)+'</span><b style="color:#334155;">'+escCardText(x.value)+'</b></div>').join('');
-    }else{
-      const st=c.state||{};
-      brief=Object.keys(st).slice(0,5).map(k=>'<div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#334155;">'+escCardText(st[k])+'</b></div>').join('');
-    }
+    const sum=c.summary||[], st=c.state||{};
+    const ori=pickBrief(sum,'出身')||pickBrief(sum,'出身领域');
+    const dom=pickBrief(sum,'领域');
+    const originDomain=[ori,dom].filter(Boolean).join(' · ')||'—';
+    const level=(c.level!==undefined&&c.level!==null&&c.level!=='')?c.level:(st['等级']||'—');
+    const credit=(c.credit!==undefined&&c.credit!==null&&c.credit!=='')?c.credit:(pickBrief(sum,'信用点')||st['信用点']||'—');
+    const brief='<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;word-break:break-all;">'+escCardText(originDomain)+'</div>'
+      +'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;margin-top:2px;">'+escCardText('等级 '+level+'　信用点 '+credit)+'</div>';
     const fullTag=c.hasFull
-      ? '<div style="text-align:center;font-size:.68rem;color:#4f46e5;margin-top:5px;">点击查看完整卡</div>'
+      ? '<div style="text-align:center;font-size:.66rem;color:#4f46e5;margin-top:3px;">点击查看完整卡</div>'
       : '';
     // 编辑模式：卡片顶部显示重命名/删除按钮
     const ops=_editMode
-      ? '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:4px;">'
-        +'<button onclick="event.stopPropagation();askRenameCard('+i+')" style="padding:2px 7px;border:1px solid #a5b4fc;background:#eef2ff;color:#4338ca;border-radius:10px;font-size:.68rem;cursor:pointer;">✎ 重命名</button>'
-        +'<button onclick="event.stopPropagation();askDeleteCard('+i+')" style="padding:2px 7px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;border-radius:10px;font-size:.68rem;cursor:pointer;">🗑 删除</button>'
+      ? '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:3px;">'
+        +'<button onclick="event.stopPropagation();askRenameCard('+i+')" style="padding:2px 6px;border:1px solid #a5b4fc;background:#eef2ff;color:#4338ca;border-radius:10px;font-size:.64rem;cursor:pointer;">✎ 重命名</button>'
+        +'<button onclick="event.stopPropagation();askDeleteCard('+i+')" style="padding:2px 6px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;border-radius:10px;font-size:.64rem;cursor:pointer;">🗑 删除</button>'
         +'</div>'
       : '';
-    return '<div onclick="'+( _editMode?'void(0)':'_showCardDetail('+i+')')+'" style="cursor:'+( _editMode?'default':'pointer')+';aspect-ratio:3/4;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
+    return '<div onclick="'+( _editMode?'void(0)':'_showCardDetail('+i+')')+'" style="cursor:'+( _editMode?'default':'pointer')+';aspect-ratio:4/3;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:10px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
       +ops
-      +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.92rem;margin:0 0 8px;word-break:break-all;line-height:1.35;">'+escCardText(c.name||'未命名')+'</div>'
-      +'<div style="font-size:.72rem;line-height:1.7;flex:1;overflow:hidden;">'+brief+'</div>'
+      +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.9rem;line-height:1.3;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
+      +brief
       +fullTag
       +'</div>';
   }).join('')
   // 加号卡片（和角色卡同尺寸）
-  + '<div onclick="startCreate()" style="cursor:pointer;aspect-ratio:3/4;border:2px dashed #a5b4fc;border-radius:12px;background:#f8fafc;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6366f1;transition:transform .15s;">'
-  +'<div style="font-size:2.6rem;line-height:1;">＋</div>'
-  +'<div style="font-size:.85rem;margin-top:8px;font-weight:600;">创建新角色卡</div>'
+  + '<div onclick="startCreate()" style="cursor:pointer;aspect-ratio:4/3;border:2px dashed #a5b4fc;border-radius:12px;background:#f8fafc;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#6366f1;transition:transform .15s;">'
+  +'<div style="font-size:2.2rem;line-height:1;">＋</div>'
+  +'<div style="font-size:.78rem;margin-top:6px;font-weight:600;">创建新角色卡</div>'
   +'</div>';
 }
 /* 点卡片：打开完整角色卡（和旧导出一致，可编辑/添加/保存），用全屏 iframe */
@@ -2863,7 +2870,8 @@ function _showCardDetail(idx){
     $('#card-full-title').textContent='🧾 '+(c.name||'角色卡');
     const f=box.querySelector('iframe');
     f.src=_cardBlobUrl;
-    box.style.display='block';
+    // 必须用 flex 才会让 iframe 的 flex:1 生效；block 下 iframe 退回默认 150px 高
+    box.style.display='flex';
     return;
   }
   // 兜底：线上同步来的卡只有 state → 只读展示摘要
@@ -2975,7 +2983,10 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   if(fullHTML && !_saveCardHtml(uid,name,fullHTML)) return false;
   const local=_loadLocal(uid).filter(c=>c.name!==name); // 同名去重（重制卡）
   const now=Math.floor(Date.now()/1000);
-  const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!fullHTML,html:fullHTML||''};
+  const rt=(payload&&payload.runtimeState)||{};
+  const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!fullHTML,html:fullHTML||'',
+    level:(rt.level!==undefined&&rt.level!==null?rt.level:(state['等级']||'')),
+    credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||''))};
   // 摘要：从 payload.resultCards 提取更丰富的展示字段
   if(payload&&payload.resultCards){
     rec.summary=payload.resultCards.slice(0,8).map(c=>({label:c.label,value:c.value}));
