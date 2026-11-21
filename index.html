@@ -161,9 +161,11 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-block + .weapon-block{margin-top:10px;}
 .weapon-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .weapon-row,.weapon-custom-row{display:grid;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
-.weapon-row{grid-template-columns:repeat(5,minmax(0,1fr));}
+.weapon-row{grid-template-columns:1.7fr .9fr .9fr;}          /* 武器名 伤害 维护费 */
+.weapon-row .weapon-note{grid-column:2/-1;}                   /* 射程 备注 */
 .weapon-custom-row{grid-template-columns:minmax(0,1fr);}
-.weapon-custom-item{display:grid;grid-template-columns:1.1fr 2.4fr 1.3fr 70px;gap:1px;background:#cbd5e1;}
+.weapon-custom-item{display:grid;grid-template-columns:1.7fr .9fr;gap:1px;background:#cbd5e1;}  /* 定制名 维护费 */
+.weapon-custom-item .custom-effect{grid-column:1/-1;}         /* 效果独占下一行 */
 .weapon-cell{min-width:0;background:#f8fafc;padding:6px 8px;font-size:.78rem;line-height:1.5;color:#334155;overflow-wrap:anywhere;}
 .weapon-cell b{display:block;font-size:.7rem;color:#64748b;margin-bottom:2px;}
 .weapon-custom-title{font-size:.78rem;font-weight:700;color:var(--primary);margin:6px 0 3px;display:flex;align-items:center;gap:8px;}
@@ -176,17 +178,12 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .equip-title-main{display:flex;align-items:center;gap:8px;min-width:0;}
 .equip-block + .equip-block{margin-top:10px;}
 .equip-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
-.equip-row{display:grid;grid-template-columns:1.15fr 2.9fr 1.35fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
+.equip-row{display:grid;grid-template-columns:1.8fr .8fr .8fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
 .equip-row + .equip-row{margin-top:6px;}
-/* 价格 + 维护费合成一格、同一行显示 */
-.equip-cost{white-space:nowrap;}
-.equip-cost b{display:inline;margin:0;}
-.equip-cost b + b{margin-left:12px;}
+.equip-row .equip-effect{grid-column:1/-1;}   /* 装备名/价格/维护费一行，效果独占下一行 */
 .equip-empty{font-size:.82rem;color:#94a3b8;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:8px 10px;}
 @media (max-width:560px){
-  /* 窄屏：装备名/效果 一行（竖线偏左），价格+维护费 独占下一行 */
-  .equip-row{grid-template-columns:1fr 1.55fr;}
-  .equip-cost{grid-column:1/-1;}
+  .equip-row{grid-template-columns:1.7fr .75fr .75fr;}
 }
 /* ==== 道具：与装备同款展开块，但只有 名称/效果/价格（消耗品不产生维护费） ==== */
 .item-section{margin-top:10px;}
@@ -2054,9 +2051,7 @@ function showResult(){
   const wpn=[answers.weapon1,answers.weapon2].filter(Boolean);
   const gunNames=['手枪','突击步枪','狙击步枪'];
   let freeLeft=f.free||0;
-  const weaponCell=(label,value)=>`<div class="weapon-cell"><b>${label}:</b>${value??'—'}</div>`;
-  // 价格与维护费合并到一格、同一行显示
-  const weaponCostCell=(price,upkeep)=>`<div class="weapon-cell equip-cost"><b>价格:</b>${price??'—'}<b>维护费:</b>${upkeep??'—'}</div>`;
+  const weaponCell=(label,value,cls)=>`<div class="weapon-cell${cls?' '+cls:''}"><b>${label}:</b>${value??'—'}</div>`;
   const weaponPlain=[];
   let weaponUpkeepTotal=0;
   let customUpkeepTotal=0;
@@ -2081,20 +2076,19 @@ function showResult(){
     weaponPlain.push(`${title}\n武器名:${w.className}  射程:${w.range}  伤害:${w.damage}  备注:${w.note}  维护费:${w.upkeep}\n        ${subPlain}`);
     const subHtml=subLines.length
       ?subLines.map(s=>`<div class="weapon-custom-item">
-        ${weaponCell('定制',`${s.name}（价格 ${s.price}）`)}
-        ${weaponCell('效果',s.effect||'—')}
-        ${weaponCell('实际生效',s.changes&&s.changes.length?s.changes.join('；'):'—')}
+        ${weaponCell('定制名',`${s.name}（价格 ${s.price}）`)}
         ${weaponCell('维护费',s.up)}
+        ${weaponCell('效果',s.effect||'—','custom-effect')}
       </div>`).join('')
       :`<div class="weapon-custom-item"><div class="weapon-cell" style="grid-column:1/-1;">无</div></div>`;
     return `<div class="weapon-block">
       <div class="weapon-block-title">${title}</div>
       <div class="weapon-row">
         ${weaponCell('武器名',w.className)}
-        ${weaponCell('射程',w.range)}
         ${weaponCell('伤害',damageDisplay(w))}
-        ${weaponCell('备注',w.note)}
         ${weaponCell('维护费',w.upkeep)}
+        ${weaponCell('射程',w.range)}
+        ${weaponCell('备注',w.note,'weapon-note')}
       </div>
       <div class="weapon-custom-title">定制<span class="upkeep-pill">合计维护费 ${customUpkeep}</span></div>
       <div class="weapon-custom-row">
@@ -2131,8 +2125,9 @@ function showResult(){
       <div class="equip-block-title">${g.cat}</div>
       ${g.items.map(it=>`<div class="equip-row">
         ${weaponCell('装备名',it.e.name)}
-        ${weaponCell('效果',it.e.effect||'—')}
-        ${weaponCostCell(it.e.price,it.upkeep)}
+        ${weaponCell('价格',it.e.price)}
+        ${weaponCell('维护费',it.upkeep)}
+        ${weaponCell('效果',it.e.effect||'—','equip-effect')}
       </div>`).join('')}
     </div>`).join('');
   const equipSectionHtml=`<div class="equip-section">
@@ -3571,8 +3566,8 @@ setInterval(function(){
     function mk(cls,html,key){var d=document.createElement('div');d.className=cls;d.setAttribute('data-runtime-added',key||cls);d.innerHTML=html;return d;}
     function rm(rec){return '<button type="button" class="runtime-remove" data-remove-key="'+esc(rec.key)+'">移除</button>';}
     function cell(label,value){return '<div class="weapon-cell"><b>'+esc(label)+':</b>'+esc(value==null||value===''?'—':value)+'</div>';}
+    function cellCls(label,value,cls){return '<div class="weapon-cell '+cls+'"><b>'+esc(label)+':</b>'+esc(value==null||value===''?'—':value)+'</div>';}
     function rawCell(label,html){return '<div class="weapon-cell"><b>'+esc(label)+':</b>'+html+'</div>';}
-    function costCell(price,upkeep){return '<div class="weapon-cell equip-cost"><b>价格:</b>'+esc(price)+'<b>维护费:</b>'+esc(upkeep)+'</div>';}
     function head(rec,title){return '<div class="runtime-added-head"><b>'+esc(title)+'</b>'+rm(rec)+'</div>';}
     // 胶囊的原始基线只记录一次，后续按基线 + 已确认追加项重算，避免重复累加
     function baseOf(el){
@@ -3654,7 +3649,9 @@ setInterval(function(){
         }
         appendTo(block,mk('equip-row',
           rawCell('装备名','<strong>'+esc(it.name)+'</strong> '+rm(rec))+
-          cell('效果',it.effect||'—')+costCell(it.price||0,rec.upkeep||0),rec.key));
+          cell('价格',it.price||0)+
+          cell('维护费',rec.upkeep||0)+
+          cellCls('效果',it.effect||'—','equip-effect'),rec.key));
       });
     }
     // 定制 → 归入对应武器的 weapon-custom-row，并同步该武器「合计维护费」
@@ -3666,7 +3663,7 @@ setInterval(function(){
         if(!block){
           block=document.createElement('div');block.className='weapon-block';block.setAttribute('data-runtime-block','1');
           block.innerHTML='<div class="weapon-block-title">'+esc(wname)+'</div>'+
-            '<div class="weapon-row">'+cell('武器名',wname)+'</div>'+
+            '<div class="weapon-row"><div class="weapon-cell" style="grid-column:1/-1;"><b>武器名:</b>'+esc(wname)+'</div></div>'+
             '<div class="weapon-custom-title">定制<span class="upkeep-pill" data-runtime-base="0">合计维护费 0</span></div>'+
             '<div class="weapon-custom-row"></div>';
           appendTo(wsec,block);
@@ -3674,10 +3671,9 @@ setInterval(function(){
         var crow=block.querySelector('.weapon-custom-row');
         if(!crow){crow=document.createElement('div');crow.className='weapon-custom-row';block.appendChild(crow);}
         appendTo(crow,mk('weapon-custom-item',
-          cell('定制',wname+' · '+it.name+'（价格 '+(it.price||0)+'）')+
-          cell('效果',it.effect||'—')+
-          cell('实际生效',it.applied&&it.applied.length?it.applied.join('；'):'—')+
-          rawCell('维护费',esc(rec.upkeep||0)+' '+rm(rec)),rec.key));
+          rawCell('定制名',esc(wname+' · '+it.name)+'（价格 '+(it.price||0)+'） '+rm(rec))+
+          cell('维护费',rec.upkeep||0)+
+          cellCls('效果',it.effect||'—','custom-effect'),rec.key));
         var cpill=block.querySelector('.weapon-custom-title .upkeep-pill');
         if(cpill){
           var cbase=baseOf(cpill);
