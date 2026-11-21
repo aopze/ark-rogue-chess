@@ -193,22 +193,22 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 @media (max-width:560px){
   .item-row{grid-template-columns:1fr;}
 }
-/* 固定三行：1)属性/等级/业力/耐力 2)信用点/维护费 3)贷款+利息 */
-.base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:7px 10px;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 0;align-items:baseline;}
-.base-stat-item{display:flex;align-items:baseline;gap:3px;padding:0 7px;border-left:1px solid rgba(180,83,9,.28);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-/* 每行第一列不要左边框 */
-.base-stat-item:nth-child(4n+1){border-left:none;padding-left:0;}
-/* 第二行两项各占一半 */
+/* 表格化三行：1)属性/等级/业力/耐力 2)信用点/维护费 3)贷款+利息 */
+.base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:0;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;align-items:stretch;overflow:hidden;}
+.base-stat-item{display:flex;align-items:baseline;gap:2px;padding:5px 4px;min-width:0;white-space:nowrap;border-left:1px solid rgba(180,83,9,.22);border-top:1px solid rgba(180,83,9,.22);}
+/* 第一行不要上边框 */
+.base-stat-item:nth-child(-n+4){border-top:none;}
+/* 每行第一列不要左边框（第 1、5、7 项） */
+.base-stat-item:nth-child(4n+1),.base-stat-item:nth-child(7){border-left:none;}
+/* 第 5~8 项：第二行两格、第三行两格 */
 .base-stat-item:nth-child(n+5){grid-column:span 2;}
-/* 第三行贷款独占整行 */
-.base-stat-item.wide{grid-column:1/-1;}
 .base-stat-break{display:none;}
 .base-stat-item.clickable{cursor:pointer;border-radius:4px;}
 .base-stat-item.clickable:hover{background:rgba(245,158,11,.14);}
 .base-stat-item.clickable:hover .base-stat-value{text-decoration:underline;}
-.base-stat-label{font-size:.88rem;color:#92400e;font-weight:bold;}
-.base-stat-value{font-size:.88rem;font-weight:bold;color:#b45309;}
-.base-stat-value span{font-size:.88rem;color:#a16207;}
+.base-stat-label{font-size:.8rem;color:#92400e;font-weight:bold;}
+.base-stat-value{font-size:.8rem;font-weight:bold;color:#b45309;}
+.base-stat-value span{font-size:.8rem;color:#a16207;}
 .debug-mode [contenteditable="true"]{outline:2px dashed #10b981!important;background-color:rgba(16,185,129,.05)!important;cursor:text!important;border-radius:3px;}
 .debug-mode [contenteditable="true"]:focus{outline:2px solid #3b82f6!important;background-color:#fff!important;box-shadow:0 0 8px rgba(59,130,246,.3);}
 /* ==== 独立角色卡（主文件最后一页与导出文件共用） ==== */
@@ -547,10 +547,10 @@ function statsStripHtml(o,extra=[]){
     const val=`<span class="base-stat-value"${fa}>${v}</span>`;
     return idx==null
       ? `<div class="base-stat-item"><span class="base-stat-label">${l}</span>${val}</div>`
-      : `<div class="base-stat-item clickable${idx===2?' wide':''}" onclick="openDetail(${idx}, window._financeCards)"><span class="base-stat-label">${l}</span>${val}</div>`;
+      : `<div class="base-stat-item clickable" onclick="openDetail(${idx}, window._financeCards)"><span class="base-stat-label">${l}</span>${val}</div>`;
   };
   // 第一栏顺序：属性 → 等级 → 业力 → 耐力 → 信用点 → 维护费 → 贷款
-  const FIELD_BY_LABEL={'信用点:':'credit','维护费:':'upkeep','贷款:':'loanLine'};
+  const FIELD_BY_LABEL={'信用点:':'credit','维护费:':'upkeep','贷款:':'loanLine','利息:':'interest'};
   const extras=extra.map((x,i)=>it(x.label,x.value,i,FIELD_BY_LABEL[x.label]||null)).join('');
   // 4 列网格自动分行：前 4 项第一行，5/6 项各占半行，贷款项(wide)独占第三行
   return `<div class="base-stats-panel">${it('属性',o.attr)}${it('等级',o.level,null,'level')}${it('业力',o.karma,null,'karma')}${it('耐力',`${o.stamina}<span data-num-field="staminaMax">/${o.staminaMax}</span>`,null,'stamina')}${extras}</div>`;
@@ -2178,7 +2178,8 @@ function showResult(){
   const financeCards=[
     {label:'信用点:',value:`${f.remaining}`,detail:creditDetail},
     {label:'维护费:',value:`${maintenanceTotal}`,detail:upkeepDetail},
-    {label:'贷款:',value:`<span data-num-field="loan">${f.usedLoan}</span>/<span data-num-field="loanLimit">200</span>　利息:<span data-num-field="interest">${f.interest}</span>`,detail:loanDetail}
+    {label:'贷款:',value:`<span data-num-field="loan">${f.usedLoan}</span>/<span data-num-field="loanLimit">200</span>`,detail:loanDetail},
+    {label:'利息:',value:`<span data-num-field="interest">${f.interest}</span>`,detail:loanDetail}
   ];
   window._financeCards=financeCards;
 
@@ -3082,7 +3083,7 @@ loadMyCards();
           el.innerHTML=makeInput(cur,'stamina')+' / '+makeInput(max,'staminaMax');
         }else if(kind==='loanLine'){
           var nums=el.textContent.match(/-?\d+(?:\.\d+)?/g)||[];
-          el.innerHTML=makeInput(nums[0]||'0','loan')+'/'+makeInput(nums[1]||'200','loanLimit')+'　利息'+makeInput(nums[2]||'0','interest');
+          el.innerHTML=makeInput(nums[0]||'0','loan')+'/'+makeInput(nums[1]||'200','loanLimit');
         }else if(FIELD_LABELS[kind]){
           el.innerHTML=makeInput(el.textContent,kind);
         }
