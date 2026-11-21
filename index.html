@@ -6,13 +6,15 @@
 <style>
 :root{--primary:#4f46e5;--bg:#f3f4f6;--card-bg:#fff;--text:#1f2937;--sub:#8b5cf6;--accent:#0ea5e9;--warn:#f59e0b;}
 *{box-sizing:border-box}
-body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;justify-content:center;align-items:flex-start;min-height:100vh;margin:0;padding:20px;}
-.container{background:var(--card-bg);width:100%;max-width:860px;padding:2rem;border-radius:12px;box-shadow:0 4px 6px -1px rgba(0,0,0,.1);}
-.q-title{font-weight:bold;margin-bottom:.5rem;display:block;}
-.section-title{font-weight:bold;font-size:.95rem;margin:16px 0 8px;display:flex;align-items:center;gap:6px;}
-.hint{font-size:.82rem;color:#9ca3af;margin-top:14px;}
+body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;justify-content:center;align-items:flex-start;min-height:100vh;margin:0;padding:0;}
+.container{background:var(--card-bg);width:100%;max-width:none;padding:14px 12px;border-radius:0;box-shadow:none;}
+.q-title{font-weight:bold;font-size:.98rem;margin-bottom:.5rem;display:block;}
+.section-title{font-weight:bold;font-size:.86rem;margin:14px 0 7px;display:flex;align-items:center;gap:6px;}
+.hint{font-size:.76rem;color:#9ca3af;margin-top:14px;}
 .options-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px;}
-.option-btn{position:relative;padding:10px;border:2px solid #e5e7eb;background:#fff;border-radius:8px;cursor:pointer;transition:all .2s;font-size:.9rem;font-family:inherit;text-align:center;}
+/* 第6页武器：选项固定一行 3 个 */
+.options-grid.weapon-grid{grid-template-columns:repeat(3,1fr);gap:8px;}
+.option-btn{position:relative;padding:8px 6px;border:2px solid #e5e7eb;background:#fff;border-radius:8px;cursor:pointer;transition:all .2s;font-size:.8rem;font-family:inherit;text-align:center;word-break:break-word;}
 .option-btn:hover{border-color:var(--primary);color:var(--primary);}
 .option-btn.active{background:var(--primary);color:#fff;border-color:var(--primary);}
 .option-btn:disabled{opacity:.45;cursor:not-allowed;}
@@ -87,7 +89,8 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
 .sys-card p{margin:0;font-size:.82rem;color:#64748b;line-height:1.5;}
 .sys-check{position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff;}
 .sys-card.active .sys-check{background:var(--accent);border-color:var(--accent);}
-.body-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px;margin-top:8px;}
+/* 第5页角色类型/身体/服装/住所：固定一行 6 个 */
+.body-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:8px;}
 .body-preview-box{margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;font-size:.85rem;color:#334155;line-height:1.6;display:none;}
 .body-preview-box.visible{display:block;animation:fadeIn .25s ease;}
 .body-preview-item{padding:4px 0;border-bottom:1px solid #e2e8f0;}
@@ -117,19 +120,20 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 #result-area{display:none;margin-top:20px;}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:10px 20px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20000;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
-.sticky-header{position:sticky;top:10px;z-index:100;background:#fff;padding:12px 16px;border-radius:8px;border:2px solid #fca5a5;box-shadow:0 4px 10px rgba(0,0,0,.1);margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;}
-.sticky-header .credit-text{font-size:1.1rem;font-weight:bold;color:#dc2626;}
-.sticky-header .credit-detail{font-size:.85rem;color:#6b7280;}
+.sticky-header{position:sticky;top:8px;z-index:100;background:#fff;padding:9px 12px;border-radius:8px;border:2px solid #fca5a5;box-shadow:0 4px 10px rgba(0,0,0,.1);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+.sticky-header .credit-text{font-size:.98rem;font-weight:bold;color:#dc2626;}
+.sticky-header .credit-detail{font-size:.76rem;color:#6b7280;}
 .equip-category{margin-top:20px;}
-.equip-category-title{font-size:1rem;font-weight:bold;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;margin-bottom:10px;}
-.equip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;}
+.equip-category-title{font-size:.9rem;font-weight:bold;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;margin-bottom:8px;}
+/* 第7页装备 / 第8页道具：固定一行 2 个 */
+.equip-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
 .equip-card{border:2px solid #e5e7eb;border-radius:8px;padding:12px;cursor:pointer;transition:all .2s;background:#fff;display:flex;flex-direction:column;justify-content:space-between;}
 .equip-card:hover{border-color:var(--warn);}
 .equip-card.active{border-color:var(--warn);background:#fffbeb;box-shadow:0 0 0 3px rgba(245,158,11,.15);}
-.equip-card h4{margin:0 0 8px;font-size:.95rem;color:var(--text);}
-.equip-card .eq-price{font-weight:bold;color:#dc2626;margin-bottom:8px;font-size:.9rem;}
-.equip-card .eq-effect{font-size:.85rem;color:#4b5563;line-height:1.4;flex-grow:1;margin-bottom:8px;}
-.equip-card .eq-desc{font-size:.75rem;color:#9ca3af;font-style:italic;border-top:1px dashed #e5e7eb;padding-top:6px;margin-top:auto;}
+.equip-card h4{margin:0 0 6px;font-size:.84rem;color:var(--text);line-height:1.35;}
+.equip-card .eq-price{font-weight:bold;color:#dc2626;margin-bottom:6px;font-size:.8rem;}
+.equip-card .eq-effect{font-size:.76rem;color:#4b5563;line-height:1.45;flex-grow:1;margin-bottom:6px;}
+.equip-card .eq-desc{font-size:.7rem;color:#9ca3af;font-style:italic;border-top:1px dashed #e5e7eb;padding-top:5px;margin-top:auto;}
 .result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:10px;}
 .result-card{border:1px solid #e5e7eb;border-left:4px solid var(--primary);border-radius:6px;padding:10px 12px;background:#fff;cursor:pointer;transition:all .2s;}
 .result-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);transform:translateY(-1px);}
@@ -504,7 +508,7 @@ const BASE={level:2,karma:2,stamina:8};
 
 /* 通用渲染片段 */
 const btn=(active,label,click,cls='')=>`<button class="option-btn ${active?'active':''} ${cls}" onclick="${click}">${label}</button>`;
-const grid=html=>`<div class="options-grid">${html}</div>`;
+const grid=(html,cls='')=>`<div class="options-grid ${cls}">${html}</div>`;
 const hint=t=>`<div class="hint">${t}</div>`;
 const section=t=>`<div class="section-title">${t}</div>`;
 const parentInfo=p=>`<strong>${p.label}</strong><br>${p.preview}`;
@@ -1822,9 +1826,9 @@ const weaponInfoHtml=(w,subs)=>{
   ${subs.map(s=>`<div style="font-size:.8rem;color:#334155;margin-top:6px;">定制 · ${s.name}（${s.price}）：${s.effect}${s.desc?`<br><span style="color:#9ca3af;font-size:.78rem;">${s.desc}</span>`:''}</div>`).join('')}`;
 };
 const subInfoHtml=s=>`<div class="body-preview-item"><strong>${s.name} (${s.price})：</strong>${s.effect}<br><span style="color:#9ca3af;font-size:.85rem;">${s.desc}</span></div>`;
-const subBtn=(s,active,click)=>`<button class="option-btn ${active?'active':''}" onclick="${click}" style="padding:8px;">
+const subBtn=(s,active,click)=>`<button class="option-btn ${active?'active':''}" onclick="${click}" style="padding:7px 4px;">
   <div style="font-weight:bold;">${s.name}</div>
-  <div style="font-size:.75rem;color:${active?'#fff':'#6b7280'};margin-top:4px;">价格: ${s.price}</div></button>`;
+  <div style="font-size:.7rem;color:${active?'#fff':'#6b7280'};margin-top:3px;">价格: ${s.price}</div></button>`;
 
 function renderWeapon(){
   const f=finance();
@@ -1835,24 +1839,24 @@ function renderWeapon(){
   if(f.free) h+=hint(`🔫 最佳拍档：枪械定制合计前 ${f.free} 点已免费（该部分不支付维护费）。`);
   h+=section('⚔️ 主武器大类（仅限推荐武器）');
   if(doms.length) h+=`<div class="hint" style="margin-top:0;color:var(--warn);font-weight:bold;">💡 根据领域【${doms.join('、')}】，推荐：${recs.join('、')}</div>`;
-  h+=grid(weaponData.filter(w=>recs.includes(w.name)).map(w=>btn(answers.weaponClass===w.name,w.name,`pick('weaponClass','${w.name}')`,'recommended')).join(''));
+  h+=grid(weaponData.filter(w=>recs.includes(w.name)).map(w=>btn(answers.weaponClass===w.name,w.name,`pick('weaponClass','${w.name}')`,'recommended')).join(''),'weapon-grid');
   const mainSubs=main?main.subs.filter(s=>(answers.weaponSub||[]).includes(s.name)):[];
   h+=`<div class="body-preview-box ${main?'visible':''}">${main?weaponInfoHtml(main,mainSubs):''}</div>`;
   if(main){
     h+=section(`🔍 ${main.name} 武器定制（按预算多选，可不选）`);
-    h+=grid(main.subs.map(s=>subBtn(s,(answers.weaponSub||[]).includes(s.name),`pick('weaponSub','${s.name}')`)).join(''));
+    h+=grid(main.subs.map(s=>subBtn(s,(answers.weaponSub||[]).includes(s.name),`pick('weaponSub','${s.name}')`)).join(''),'weapon-grid');
   }
   if(main){
     h+=`<hr style="margin:24px 0;border:none;border-top:1px dashed #cbd5e1;">`;
     h+=section('🗡️ 副武器大类（可选，不选则可获得50信用点奖励）');
     if(answers.weaponClass2) h+=`<div style="margin-bottom:10px;"><button class="nav-btn secondary" style="padding:4px 12px;font-size:.85rem;" onclick="clearWeapon2()">❌ 清除副武器（保留50奖励）</button></div>`;
-    h+=grid(weaponData.map(w=>btn(answers.weaponClass2===w.name,w.name,`pick('weaponClass2','${w.name}')`)).join(''));
+    h+=grid(weaponData.map(w=>btn(answers.weaponClass2===w.name,w.name,`pick('weaponClass2','${w.name}')`)).join(''),'weapon-grid');
     const w2=answers.weaponClass2?weaponData.find(w=>w.name===answers.weaponClass2):null;
     const subs2=w2?w2.subs.filter(s=>(answers.weaponSub2||[]).includes(s.name)):[];
     h+=`<div class="body-preview-box ${w2?'visible':''}">${w2?weaponInfoHtml(w2,subs2):''}</div>`;
     if(w2){
       h+=section(`🔍 ${w2.name} 武器定制（按预算多选，可不选）`);
-      h+=grid(w2.subs.map(s=>subBtn(s,(answers.weaponSub2||[]).includes(s.name),`pick('weaponSub2','${s.name}')`)).join(''));
+      h+=grid(w2.subs.map(s=>subBtn(s,(answers.weaponSub2||[]).includes(s.name),`pick('weaponSub2','${s.name}')`)).join(''),'weapon-grid');
     }
   }
   return h;
