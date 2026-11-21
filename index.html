@@ -442,7 +442,7 @@ try {
     <div id="quiz-container" style="display: block;"></div>
     <div class="nav-buttons" id="nav-area" style="display: flex;">
       <button class="nav-btn secondary" id="prev-btn" onclick="changeStep(-1)">上一步</button>
-      <button class="nav-btn secondary" id="home-btn" onclick="showHome()">🏠 首页</button>
+      <button class="nav-btn secondary" id="home-btn" onclick="showHome()" style="display:none;">🏠 首页</button>
       <button class="nav-btn" id="next-btn" onclick="changeStep(1)">下一步</button>
     </div>
   </div>
@@ -1771,7 +1771,7 @@ function renderConnection(){
     body:`<span style="color:#475569;font-weight:500;display:block;margin-bottom:6px;">${c.role}</span><span style="background:#f1f5f9;padding:8px;border-radius:6px;display:block;color:#334155;">${c.effect}</span>`
   })).join('')}</div>
   <div class="conn-detail-box">
-    <div class="conn-detail-label">✍️ 人脉具体信息（可选）</div>
+    <div class="conn-detail-label">✍️ 人脉具体信息（必填）</div>
     <textarea class="conn-detail-input" rows="3" maxlength="500"
       placeholder="输入你选择人脉的具体身份以及补充说明"
       oninput="answers.connectionDetail=this.value">${escCardText(answers.connectionDetail||'')}</textarea>
@@ -1941,6 +1941,18 @@ function render(){
 }
 function changeStep(delta){
   const list=visibleQuestions();
+  const cur=list[stepIdx];
+  // 人脉具体信息必填：没填就不许进入下一步 / 生成角色卡
+  if(delta>0 && cur && cur.id==='connection'){
+    const ta=$('.conn-detail-input');
+    const val=String((ta&&ta.value)||answers.connectionDetail||'').trim();
+    if(!val){
+      toast('✍️ 请填写人脉具体信息');
+      if(ta) ta.focus();
+      return;
+    }
+    answers.connectionDetail=val;
+  }
   if(delta>0&&stepIdx===list.length-1){showResult();return;}
   stepIdx=Math.max(0,Math.min(list.length-1,stepIdx+delta));
   render();
