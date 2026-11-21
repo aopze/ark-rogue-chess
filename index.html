@@ -2819,10 +2819,18 @@ function _renderMyCards(cards){
   const grid=$('#my-cards-grid'), cnt=$('#my-cards-count');
   if(!grid) return;
   _myCardsCache=cards||[];
-  const pending=_myCardsCache.filter(c=>c._local).length;
-  if(cnt) cnt.textContent=_myCardsCache.length
-    ? '共 '+_myCardsCache.length+' 张'+(pending?' · '+pending+' 张待同步':'')
-    : '';
+  const uid=_tgUserId();
+  const pendingOps=_getPending(uid).length;
+  if(cnt){
+    cnt.textContent=_myCardsCache.length
+      ? '共 '+_myCardsCache.length+' 张'+(pendingOps?' · '+pendingOps+' 项待同步（点此同步）':'')
+      : '';
+    cnt.style.cursor=pendingOps?'pointer':'default';
+    cnt.onclick=pendingOps?function(){
+      if(window.confirm && !window.confirm('同步 '+pendingOps+' 项改动后 Mini App 会关闭，请重新打开查看。')) return;
+      if(!_flushPendingOps()) toast('请在 Telegram 内打开后再同步');
+    }:null;
+  }
   // 卡片：矮卡，只显示 出身/领域 + 等级/信用点；待同步黄底
   const pickBrief=(list,label)=>{
     const arr=Array.isArray(list)?list:[];
@@ -2832,13 +2840,15 @@ function _renderMyCards(cards){
   };
   grid.innerHTML=_myCardsCache.map((c,i)=>{
     const sum=c.summary||[], st=c.state||{};
-    const ori=pickBrief(sum,'出身')||pickBrief(sum,'出身领域');
-    const dom=pickBrief(sum,'领域');
-    const originDomain=[ori,dom].filter(Boolean).join(' · ')||'—';
-    const level=(c.level!==undefined&&c.level!==null&&c.level!=='')?c.level:(st['等级']||'—');
-    const credit=(c.credit!==undefined&&c.credit!==null&&c.credit!=='')?c.credit:(pickBrief(sum,'信用点')||st['信用点']||'—');
-    const brief='<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;word-break:break-all;">'+escCardText(originDomain)+'</div>'
-      +'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;margin-top:2px;">'+escCardText('等级 '+level+'　信用点 '+credit)+'</div>';
+    // 出身/领域：优先摘要，其次 bot 卡的 state；都没有就留空
+    const ori=pickBrief(sum,'出身')||pickBrief(sum,'出身领域')||String(st['出身']||'').trim();
+    const dom=pickBrief(sum,'领域')||String(st['领域']||'').trim();
+    const originDomain=[ori,dom].filter(Boolean).join(' · ');
+    const level=(c.level!==undefined&&c.level!==null&&c.level!=='')?c.level:(st['等级']||'');
+    const credit=(c.credit!==undefined&&c.credit!==null&&c.credit!=='')?c.credit:(pickBrief(sum,'信用点')||st['信用点']||'');
+    const levelCredit=[level?'等级 '+level:'',credit?'信用点 '+credit:''].filter(Boolean).join('　');
+    const brief=(originDomain?'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;word-break:break-all;">'+escCardText(originDomain)+'</div>':'')
+      +(levelCredit?'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;margin-top:2px;">'+escCardText(levelCredit)+'</div>':'');
     const fullTag=c.hasFull
       ? '<div style="text-align:center;font-size:.66rem;color:#4f46e5;margin-top:3px;">点击查看完整卡</div>'
       : '';
@@ -3006,12 +3016,7 @@ window._onCardCopied=function(cmd, fullHTML, payload){
 async function loadMyCards(){
   const uid=_tgUserId();
   if(!uid) return;  // 浏览器直接打开、无 Telegram 身份时不显示
-  // 0) 上次没点「完成」就退出：这次在 Telegram 内打开时自动补发队列
-  if(_getPending(uid).length && window.Telegram && window.Telegram.WebApp &&
-     typeof window.Telegram.WebApp.sendData==='function'){
-    setTimeout(()=>{ _flushPendingOps(); }, 600);
-    return;  // sendData 会关闭 Mini App，不必再对账
-  }
+  // 0) 不再自动 sendData（会关闭 Mini App，且会阻断对账）；改为点「N 项待同步」手动触发
   // 1) 先渲染本地缓存：复制过的卡立刻可见
   const local=_loadLocal(uid);
   _renderMyCards(local);
