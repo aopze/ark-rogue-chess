@@ -2978,9 +2978,6 @@ function _renderMyCards(cards){
     const levelCredit=[level?'等级 '+level:'',credit?'信用点 '+credit:''].filter(Boolean).join('　');
     const brief=(originDomain?'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;word-break:break-all;">'+escCardText(originDomain)+'</div>':'')
       +(levelCredit?'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;margin-top:2px;">'+escCardText(levelCredit)+'</div>':'');
-    const fullTag=c.hasFull
-      ? '<div style="text-align:center;font-size:.66rem;color:#4f46e5;margin-top:3px;">点击查看完整卡</div>'
-      : '';
     // 编辑模式：卡片顶部显示重命名/删除按钮
     const ops=_editMode
       ? '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:3px;">'
@@ -2992,7 +2989,6 @@ function _renderMyCards(cards){
       +ops
       +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.9rem;line-height:1.3;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
       +brief
-      +fullTag
       +'</div>';
   }).join('')
   // 加号卡片（和角色卡同尺寸）
@@ -3394,6 +3390,17 @@ setInterval(function(){
       // 保存已并入「✎ 编辑 → ✓ 完成」，底部不再放保存按钮
       bar.appendChild(msgSpan);box.appendChild(bar);
     }
+    // 老卡片片段里可能存着旧的「保存」按钮、旧文案甚至重复的底部栏，这里一并清理
+    [].slice.call(box.querySelectorAll('.card-runtime-bar')).forEach(function(b,i){
+      if(i>0){ if(b.parentNode) b.parentNode.removeChild(b); return; }
+      [].slice.call(b.querySelectorAll('#save-card-btn')).forEach(function(x){ if(x.parentNode) x.parentNode.removeChild(x); });
+      var m=b.querySelector('#add-msg');
+      if(!m){
+        m=document.createElement('span');m.id='add-msg';m.textContent=BASE_MSG;b.appendChild(m);
+      }else if(m.textContent.indexOf('数值可直接修改')>=0){
+        m.textContent=BASE_MSG;
+      }
+    });
     // 姓名右侧「✎ 编辑」开关：只有打开它，各栏目的「添加」按钮才出现
     var nameBar=box.querySelector('.card-name-bar');
     if(nameBar){
