@@ -245,6 +245,9 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .runtime-remove:hover{text-decoration:underline;}
 .ability-row-body .runtime-remove{float:right;}
 .result-label .runtime-remove{margin-left:auto;}
+/* 「移除」只在编辑态（姓名栏开了 ✎ 编辑）出现，平时看卡是干净的 */
+.runtime-remove,[data-remove-key]{display:none;}
+#result-area.card-editing .runtime-remove,#result-area.card-editing [data-remove-key]{display:inline-block;}
 .add-box{max-width:720px;}
 .add-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;}
 .add-tabs button{padding:6px 12px;border:1px solid #e5e7eb;background:#fff;border-radius:16px;cursor:pointer;font-family:inherit;font-size:.8rem;}
@@ -3687,7 +3690,7 @@ setInterval(function(){
       ||box.querySelector('.result-grid');
     groups.ability.forEach(function(rec){
       var l=labelOf('ability',rec.item);
-      var el=mk('ability-row runtime-ability','<div class="ability-tag-box"><span class="ability-name">'+esc(l.name)+'</span><span class="ability-type">追加</span></div><div class="ability-row-body">'+esc(l.desc)+rm(rec)+'</div>');
+      var el=mk('ability-row runtime-ability','<div class="ability-tag-box"><span class="ability-name">'+esc(l.name)+'</span><span class="ability-type">'+esc(rec.item.type||'追加')+'</span></div><div class="ability-row-body">'+esc(l.desc)+rm(rec)+'</div>');
       after(aAnchor,el);aAnchor=el;
     });
     // 人脉 → 人脉展开行下方（同样式）
