@@ -435,7 +435,7 @@ try {
     </div>
     <div id="my-cards-count" style="text-align:center;color:#64748b;font-size:.85rem;margin-bottom:16px;"></div>
     <div id="my-cards-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;"></div>
-    <div id="home-hint" style="text-align:center;color:#94a3b8;font-size:.78rem;margin-top:16px;line-height:1.6;">点卡片查看 · 点 ➕ 创建新角色卡</div>
+    <div id="home-hint" style="display:none;"></div>
   </div>
   <!-- 问卷 / 结果 -->
   <div id="quiz-wrap" style="display:none;">
@@ -448,7 +448,7 @@ try {
   </div>
   <div id="result-area" style="display: none;"></div>
 </div>
-<div class="toast" id="toast" style="opacity: 0;">已复制到剪贴板！</div>
+<div class="toast" id="toast" style="opacity: 0;"></div>
 
 <!-- 完整角色卡全屏查看层 -->
 <div id="card-full-view" style="display:none;position:fixed;inset:0;z-index:20000;background:#fff;flex-direction:column;">
@@ -2186,7 +2186,7 @@ function showResult(){
   box.innerHTML=`<div class="card-name-bar" style="display:flex;align-items:center;gap:10px;margin:0 0 12px;">
       <label for="card-name-input" style="font-size:.9rem;font-weight:600;color:#475569;white-space:nowrap;">角色姓名</label>
       <input id="card-name-input" class="card-name-input" type="text" maxlength="40"
-        placeholder="必填：给角色起个名字（复制命令要用）" value="${escCardText(window._cardName||'')}"
+        placeholder="给角色起个名字" value="${escCardText(window._cardName||'')}"
         style="flex:1;min-width:0;font-size:1rem;font-weight:600;padding:7px 12px;border:1px solid #f59e0b;border-radius:8px;background:#fffbeb;color:#92400e;outline:none;"
         onfocus="this.select()" oninput="window._cardName=this.value;window._updateCopyBtn&&window._updateCopyBtn()">
     </div>
@@ -2245,7 +2245,6 @@ function copyResult(){
   syncEdits();
   if(!_currentCardName()){
     _updateCopyBtn();
-    toast('⚠️ 请先填写角色姓名，再保存');
     const el=$('#card-name-input'); if(el) el.focus();
     return;
   }
@@ -2257,9 +2256,7 @@ function copyResult(){
   let saved=false;
   try{ saved=window._onCardCopied(cmd, fullHTML, payload); }catch(e){}
   if(saved===false){ toast('⚠️ 本地空间不足，保存失败'); return; }
-  toast('✅ 已保存，点「首页」查看');
-  const _btn=$('#copy-all-btn');
-  if(_btn){ const _old=_btn.textContent; _btn.textContent='✅ 已保存'; setTimeout(()=>{_btn.textContent=_old;},2500); }
+  toast('✅ 已保存');
   /* 命令静默存入剪贴板兜底（界面不提示）；想让 bot 建卡时粘贴即可 */
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).catch(()=>{});
@@ -2531,7 +2528,6 @@ function exportResultHTML(){
   a.click();
   a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1000);
-  toast('角色卡已导出为 HTML 文件');
 }
 
 /* ===================== 杂项 ===================== */
@@ -2794,8 +2790,6 @@ function toggleEditModeCards(){
   _editMode=!_editMode;
   const b=$('#edit-mode-btn');
   if(b){ b.textContent=_editMode?'✅ 完成':'✎ 编辑'; b.style.background=_editMode?'#4f46e5':'#fff'; b.style.color=_editMode?'#fff':'#4338ca'; }
-  const hint=$('#home-hint');
-  if(hint) hint.style.display=_editMode?'none':'block';
   showHome();  // 重渲染以显示/隐藏操作按钮
 }
 function _renderMyCards(cards){
@@ -2805,7 +2799,7 @@ function _renderMyCards(cards){
   const pending=_myCardsCache.filter(c=>c._local).length;
   if(cnt) cnt.textContent=_myCardsCache.length
     ? '共 '+_myCardsCache.length+' 张'+(pending?' · '+pending+' 张待同步':'')
-    : '还没有角色卡，点下面的 ➕ 开始创建';
+    : '';
   // 卡片：统一尺寸（正方形偏竖），中间名字 + 摘要；待同步黄底
   grid.innerHTML=_myCardsCache.map((c,i)=>{
     let brief='';
@@ -2831,7 +2825,6 @@ function _renderMyCards(cards){
       +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.95rem;margin:4px 0 8px;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
       +'<div style="font-size:.72rem;line-height:1.7;flex:1;overflow:hidden;">'+brief+'</div>'
       +fullTag
-      +(c._local?'<div style="text-align:center;font-size:.7rem;color:#b45309;margin-top:4px;">⏳ 待同步</div>':'')
       +'</div>';
   }).join('')
   // 加号卡片（和角色卡同尺寸）
@@ -2862,8 +2855,7 @@ function _showCardDetail(idx){
   $('#modal-title').textContent='🧾 '+(c.name||'未命名');
   const st=c.state||{};
   const rows=Object.keys(st).map(k=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px dashed #e2e8f0;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#0f172a;">'+escCardText(st[k])+'</b></div>').join('');
-  $('#modal-content').innerHTML=(rows||'<div style="color:#94a3b8;">（无属性）</div>')
-    +'<div style="margin-top:10px;color:#64748b;font-size:.82rem;">这张卡由 bot 同步，完整内容请在 Telegram 用 .char 查看。</div>';
+  $('#modal-content').innerHTML=(rows||'<div style="color:#94a3b8;">（无属性）</div>');
   $('#detail-modal').classList.add('show');
 }
 function closeCardFull(){
@@ -3531,8 +3523,8 @@ loadMyCards();
       return;
     }
     // 主填写页：重新生成角色卡文件（含当前修改）
-    if(window.exportResultHTML){window.exportResultHTML();msg('已生成修改后的角色卡文件');}
-    else{msg('当前页面不支持保存，请使用「导出角色卡」');}
+    if(window.exportResultHTML){window.exportResultHTML();msg('已保存角色卡文件');}
+    else{msg('当前页面不支持保存');}
   }
   function cardOpenDetail(i,list){
     var source=list||((DATA&&DATA.resultCards)||[]);
