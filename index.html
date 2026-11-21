@@ -2826,7 +2826,7 @@ function _renderMyCards(cards){
       brief=Object.keys(st).slice(0,5).map(k=>'<div style="display:flex;justify-content:space-between;gap:6px;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#334155;">'+escCardText(st[k])+'</b></div>').join('');
     }
     const fullTag=c.hasFull
-      ? '<div style="text-align:center;font-size:.68rem;color:#4f46e5;margin-top:5px;">📄 点击查看完整卡</div>'
+      ? '<div style="text-align:center;font-size:.68rem;color:#4f46e5;margin-top:5px;">点击查看完整卡</div>'
       : '';
     // 编辑模式：卡片顶部显示重命名/删除按钮
     const ops=_editMode
@@ -2837,8 +2837,7 @@ function _renderMyCards(cards){
       : '';
     return '<div onclick="'+( _editMode?'void(0)':'_showCardDetail('+i+')')+'" style="cursor:'+( _editMode?'default':'pointer')+';aspect-ratio:3/4;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
       +ops
-      +'<div style="font-size:1.5rem;text-align:center;">🧾</div>'
-      +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.95rem;margin:4px 0 8px;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
+      +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.92rem;margin:0 0 8px;word-break:break-all;line-height:1.35;">'+escCardText(c.name||'未命名')+'</div>'
       +'<div style="font-size:.72rem;line-height:1.7;flex:1;overflow:hidden;">'+brief+'</div>'
       +fullTag
       +'</div>';
