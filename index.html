@@ -3050,6 +3050,13 @@ async function loadMyCards(){
 /* 启动：显示首页卡片墙 + 后台对账 */
 showHome();
 loadMyCards();
+/* bot 新建/删除卡后：切回前台或每 30 秒静默对账，刷新即可见 */
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible' && !_editMode) loadMyCards();
+});
+setInterval(function(){
+  if(document.visibilityState==='visible' && !_editMode) loadMyCards();
+},30000);
 </script>
 
 <script id="card-runtime">
