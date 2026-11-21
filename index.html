@@ -2792,7 +2792,8 @@ function _fragFromHTML(html){
   }catch(e){ return {frag:'',payload:null}; }
 }
 /* 统一卡片模板：样式 + 运行时脚本只此一份，frag 由数据填充 */
-function buildCardViewHTML(frag, runtime, uid, name, opts, weapons, freeCustom, freeEquip){
+function buildCardViewHTML(frag, runtime, uid, name, extra){
+  extra=extra||{};
   const styleEl=document.querySelector('style');
   const rtEl=document.getElementById('card-runtime');
   const style=styleEl?styleEl.textContent:'';
@@ -2801,10 +2802,13 @@ function buildCardViewHTML(frag, runtime, uid, name, opts, weapons, freeCustom, 
     runtimeState:runtime||{},
     __uid:uid||'',__name:name||'',
     // 候选项池必须带进来，否则卡片视图里「添加」弹窗是空列表
-    options:opts||{},
-    selectedWeaponNames:weapons||[],
-    freeCustomRemaining:freeCustom||0,
-    freeEquipRemaining:freeEquip||0
+    options:extra.opts||{},
+    selectedWeaponNames:extra.weapons||[],
+    freeCustomRemaining:extra.freeCustom||0,
+    freeEquipRemaining:extra.freeEquip||0,
+    // 详情弹窗的数据源：没有它，点「契约/能力系统/角色形象」这些格子不会弹说明
+    resultCards:extra.resultCards||[],
+    financeCards:extra.financeCards||[]
   };
   const data=JSON.stringify(payload).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
   // 运行时依赖的弹窗骨架必须一起带上，否则卡片视图里「添加」无反应（找不到 #add-modal）
@@ -2847,6 +2851,8 @@ function _migrateCardsToData(uid){
     if(!snap.frag) return;
     c.frag=snap.frag;
     c.runtime=(snap.payload&&snap.payload.runtimeState)||null;
+    if(snap.payload&&Array.isArray(snap.payload.resultCards)&&!c.resultCards) c.resultCards=snap.payload.resultCards;
+    if(snap.payload&&Array.isArray(snap.payload.financeCards)&&!c.financeCards) c.financeCards=snap.payload.financeCards;
     c.hasFull=true;
     delete c.html;
     changed=true;
@@ -3046,6 +3052,9 @@ function _showCardDetail(idx){
     if(snap.frag){
       c.frag=snap.frag;
       c.runtime=(snap.payload&&snap.payload.runtimeState)||c.runtime||null;
+      // 旧 HTML 里带着完整 payload，顺手把详情数据捞回来
+      if(snap.payload&&!c.resultCards&&Array.isArray(snap.payload.resultCards)) c.resultCards=snap.payload.resultCards;
+      if(snap.payload&&!c.financeCards&&Array.isArray(snap.payload.financeCards)) c.financeCards=snap.payload.financeCards;
       c.hasFull=true;
       delete c.html;
       migrated=true;
@@ -3068,8 +3077,17 @@ function _showCardDetail(idx){
     if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} }
     // 用卡片自己记录的能力系统/武器重建候选项池；老记录没有就退回当前选择
     const opts=buildOptionsFor(c.sysIds||finalSysIds(), c.weapons||[]);
-    const html=buildCardViewHTML(c.frag, c.runtime, uid, c.name, opts, c.weapons||[],
-      c.freeCustom||0, c.freeEquip||0);
+    // 详情格子数与 resultCards 对不上时宁可不传，让运行时按格子文字兜底显示，避免串位
+    let rcList=c.resultCards||[];
+    try{
+      const probe=document.createElement('div'); probe.innerHTML=c.frag;
+      const need=probe.querySelectorAll('.result-card:not([data-runtime-added])').length;
+      if(need>=0 && rcList.length!==need) rcList=[];
+    }catch(e){}
+    const html=buildCardViewHTML(c.frag, c.runtime, uid, c.name, {
+      opts:opts, weapons:c.weapons||[], freeCustom:c.freeCustom||0, freeEquip:c.freeEquip||0,
+      resultCards:rcList, financeCards:c.financeCards||[]
+    });
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     _cardBlobUrl=URL.createObjectURL(blob);
     $('#card-full-title').textContent='🧾 '+(c.name||'角色卡');
@@ -3202,7 +3220,10 @@ window._onCardCopied=function(cmd, fullHTML, payload){
     sysIds:finalSysIds(),
     weapons:(payload&&payload.selectedWeaponNames)||[],
     freeCustom:(payload&&payload.freeCustomRemaining)||0,
-    freeEquip:(payload&&payload.freeEquipRemaining)||0};
+    freeEquip:(payload&&payload.freeEquipRemaining)||0,
+    // 详情弹窗数据源（点击各格子查看说明）
+    resultCards:(payload&&payload.resultCards)||[],
+    financeCards:(payload&&payload.financeCards)||[]};
   // 摘要：从 payload.resultCards 提取更丰富的展示字段
   if(payload&&payload.resultCards){
     rec.summary=payload.resultCards.slice(0,8).map(c=>({label:c.label,value:c.value}));
@@ -3804,9 +3825,51 @@ setInterval(function(){
     if(window.exportResultHTML){window.exportResultHTML();msg('已保存角色卡文件');}
     else{msg('当前页面不支持保存');}
   }
-  function cardOpenDetail(i,list){
+  // 老卡没有详情数据时：先用候选池能重建的（契约/能力系统）重建，剩下的退回格子文字
+  function rebuildDetail(label,val){
+    var opt=(DATA&&DATA.options)||{};
+    var lab=String(label||''),v=String(val||'');
+    var hrLine='<hr style="border:0;border-top:1px dashed #cbd5e1;margin:8px 0;">';
+    if(lab.indexOf('契约')===0&&opt.contracts&&opt.contracts.length){
+      var parts=v.split('/').map(function(s){return s.replace(/^\s*(妖精|神明)[:：]\s*/,'').trim();}).filter(Boolean);
+      var blocks=parts.map(function(n){
+        var hit=null;
+        for(var k=0;k<opt.contracts.length;k++){ if(opt.contracts[k].name===n) hit=opt.contracts[k]; }
+        if(!hit) return '';
+        var title=(v.indexOf('妖精：'+n)>=0||v.indexOf('妖精:'+n)>=0)?'契约妖精：'+n:('信仰神明：'+n);
+        return '<div class="sheet-group-title">'+esc(title)+'</div><div>能力系统：'+esc(hit.sysText)
+          +'<br>特征：'+esc(hit.feature)+'<br>性质：'+esc(hit.nature)+'<br>由来：'+esc(hit.source)+'</div>';
+      }).filter(Boolean);
+      if(blocks.length) return blocks.join(hrLine);
+    }
+    if(lab.indexOf('能力系统')===0&&opt.abilities&&opt.abilities.length){
+      var sysNames=v.split('/').map(function(s){return s.trim();}).filter(Boolean);
+      var out=sysNames.map(function(sn){
+        var abs=opt.abilities.filter(function(a){return a.system===sn;});
+        if(!abs.length) return '';
+        return '<div class="sheet-group-title">'+esc(sn)+'</div>'+abs.map(function(a){
+          return '<div class="ability-row" style="margin:6px 0;"><div class="ability-tag-box"><span class="ability-name">《'+esc(a.name)+'》</span><span class="ability-type">'+esc(a.type)+'</span></div><div class="ability-row-body">'+esc(a.effect)+'</div></div>';
+        }).join('');
+      }).filter(Boolean);
+      if(out.length) return out.join(hrLine);
+    }
+    return '';
+  }
+  function cardOpenDetail(i,list,el){
     var source=list||((DATA&&DATA.resultCards)||[]);
-    var c=source[i];if(!c) return;
+    var c=source&&source[i];
+    if(!c&&el){
+      // 老卡没带详情数据：能重建就重建，重建不了用格子文字兜底，保证点得开
+      var lab=el.querySelector('.result-label')||el.querySelector('.base-stat-label');
+      var valEl=el.querySelector('.result-value')||el.querySelector('.base-stat-value');
+      var nums=valEl?valEl.querySelectorAll('.num-input'):[];
+      var val=nums.length?[].slice.call(nums).map(function(x){return x.value;}).join('/'):((valEl&&valEl.textContent)||'').trim();
+      var labText=lab?String(lab.textContent).replace(/添加$/,'').trim():'详情';
+      var built=rebuildDetail(labText,val);
+      c={label:labText,value:val,detail:built||('<div>'+esc(val||'（无详细说明）')+'</div>')};
+      source=[c];i=0;
+    }
+    if(!c) return;
     window._currentDetailList=source;
     window._currentDetailIdx=i;
     document.getElementById('modal-title').textContent=c.label;
@@ -3858,7 +3921,7 @@ setInterval(function(){
     if(detail){
       e.stopPropagation();
       var list=detail.getAttribute('data-detail-list')==='finance'?((DATA&&DATA.financeCards)||[]):((DATA&&DATA.resultCards)||[]);
-      cardOpenDetail(parseInt(detail.getAttribute('data-detail-index'),10),list);
+      cardOpenDetail(parseInt(detail.getAttribute('data-detail-index'),10),list,detail);
     }
   },true);
   document.addEventListener('click',function(e){
