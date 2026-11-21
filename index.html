@@ -247,6 +247,11 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .runtime-added-head b{font-weight:700;overflow-wrap:anywhere;}
 .runtime-remove{flex:none;border:none;background:none;color:#ef4444;cursor:pointer;font-family:inherit;font-size:.75rem;padding:0 2px;}
 .runtime-remove:hover{text-decoration:underline;}
+/* 追加人脉的自填备注：平时只读像正文，编辑态才可写 */
+.conn-note-input{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:5px 9px;border:1px dashed #cbd5e1;border-radius:6px;background:#fff;font-family:inherit;font-size:.82rem;line-height:1.5;color:#334155;}
+.conn-note-input:read-only{border-color:transparent;background:transparent;padding-left:0;}
+.conn-note-input:focus{outline:none;border-color:#f59e0b;background:#fffbeb;}
+#result-area.card-editing .conn-note-input{border-color:#f59e0b;background:#fffbeb;}
 .ability-row-body .runtime-remove{float:right;}
 .result-label .runtime-remove{margin-left:auto;}
 /* 「移除」只在编辑态（姓名栏开了 ✎ 编辑）出现，平时看卡是干净的 */
@@ -473,11 +478,12 @@ try {
 
 <!-- 完整角色卡全屏查看层 -->
 <div id="card-full-view" style="display:none;position:fixed;inset:0;z-index:20000;background:#fff;flex-direction:column;">
-  <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
-    <span id="card-full-title" style="font-weight:700;color:#3730a3;font-size:.95rem;">🧾 角色卡</span>
-    <button onclick="closeCardFull()" style="border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;">✕ 关闭</button>
+  <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 14px;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
+    <span id="card-full-title" style="flex:1 1 auto;min-width:0;font-weight:700;color:#3730a3;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🧾 角色卡</span>
+    <button id="card-full-edit" onclick="toggleCardFullEdit()" style="flex:none;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✎ 编辑</button>
+    <button onclick="closeCardFull()" style="flex:none;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ 关闭</button>
   </div>
-  <iframe src="" style="flex:1 1 auto;min-height:0;width:100%;height:100%;border:0;background:#fff;"></iframe>
+  <iframe id="card-full-frame" src="" style="flex:1 1 auto;min-height:0;width:100%;height:100%;border:0;background:#fff;"></iframe>
 </div>
 
 <div class="modal-overlay" id="detail-modal" onclick="closeDetail(event)">
@@ -3097,6 +3103,7 @@ function _showCardDetail(idx){
     f.src=_cardBlobUrl;
     // 必须用 flex 才会让 iframe 的 flex:1 生效；block 下 iframe 退回默认 150px 高
     box.style.display='flex';
+    _syncCardEditBtn(false);
     if(migrated) _renderMyCards(_myCardsCache);
     return;
   }
@@ -3112,7 +3119,41 @@ function closeCardFull(){
   if(box) box.style.display='none';
   const f=box&&box.querySelector('iframe'); if(f) f.src='';
   if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} _cardBlobUrl=null; }
+  _syncCardEditBtn(false);
 }
+/* ===== 顶栏「✎ 编辑 / ✓ 完成」：控制 iframe 内 #result-area.card-editing ===== */
+let _cardEditing=false;
+function _cardFrame(){
+  const box=$('#card-full-view');
+  return box?box.querySelector('iframe'):null;
+}
+function _syncCardEditBtn(on){
+  _cardEditing=!!on;
+  const b=$('#card-full-edit');
+  if(!b) return;
+  b.textContent=on?'✓ 完成':'✎ 编辑';
+  b.style.background=on?'#f59e0b':'#fffbeb';
+  b.style.color=on?'#fff':'#b45309';
+  b.style.borderColor='#f59e0b';
+}
+function toggleCardFullEdit(){
+  const f=_cardFrame();
+  const next=!_cardEditing;
+  let done=false;
+  try{
+    const w=f&&f.contentWindow;
+    if(w&&typeof w.yu7SetEditing==='function'){ w.yu7SetEditing(next); done=true; }
+  }catch(e){}
+  if(!done){
+    // 跨文档直接调用失败时退回消息通道，iframe 内会监听 yu7-edit-toggle
+    try{ f.contentWindow.postMessage({type:'yu7-edit-toggle',on:next},'*'); }catch(e){}
+  }
+  _syncCardEditBtn(next);
+}
+window.addEventListener('message',function(e){
+  const d=e.data;
+  if(d&&d.type==='yu7-edit-state') _syncCardEditBtn(!!d.on);
+});
 /* ===== 卡片管理：删除 / 重命名 ===== */
 let _cardAction={mode:'',idx:-1};
 function askDeleteCard(i){
@@ -3402,6 +3443,17 @@ setInterval(function(){
     }
     // 人脉标题 + 人脉添加按钮（人脉已改为展开行，按钮挂在区块标题上）
     var connTitle=box.querySelector('.conn-section-title');
+    if(!connTitle){
+      // 建卡时没选人脉的卡没有这一块，补一个标题，保证任何时候都能往里加人脉
+      var connRef=box.querySelector('.weapon-section')||box.querySelector('.equip-section')
+        ||box.querySelector('.item-section')||box.querySelector('.result-grid');
+      if(connRef&&connRef.parentNode){
+        connTitle=document.createElement('div');
+        connTitle.className='conn-section-title';
+        connTitle.textContent='人脉';
+        connRef.parentNode.insertBefore(connTitle,connRef);
+      }
+    }
     if(connTitle&&!connTitle.querySelector('.section-add-btn')){
       connTitle.appendChild(addBtn('connection','添加','section-add-btn'));
     }
@@ -3448,8 +3500,15 @@ setInterval(function(){
       }
     });
     // 姓名右侧「✎ 编辑」开关：只有打开它，各栏目的「添加」按钮才出现
+    // 卡片视图（全屏查看层）已把「编辑」上移到顶栏，箱体里不再重复出现
+    var isCardView=document.body.getAttribute('data-card-view')==='1';
+    if(isCardView){
+      [].slice.call(box.querySelectorAll('.card-edit-toggle')).forEach(function(t){
+        if(t.parentNode) t.parentNode.removeChild(t);
+      });
+    }
     var nameBar=box.querySelector('.card-name-bar');
-    if(nameBar){
+    if(nameBar&&!isCardView){
       if(!nameBar.querySelector('.card-edit-toggle')){
         var tg=document.createElement('button');
         tg.type='button';tg.className='card-edit-toggle';tg.textContent='✎ 编辑';
@@ -3504,6 +3563,47 @@ setInterval(function(){
       window.closeDetail=cardCloseDetail;
     }
   };
+
+  /* 编辑态统一入口：切换 .card-editing、同步输入框可编辑性、同步可能的箱内按钮 */
+  function applyEditing(on){
+    var box=document.getElementById('result-area');
+    if(!box) return false;
+    on=!!on;
+    box.classList.toggle('card-editing',on);
+    [].slice.call(box.querySelectorAll('.conn-note-input')).forEach(function(inp){
+      inp.readOnly=!on;
+      if(on) inp.removeAttribute('readonly'); else inp.setAttribute('readonly','readonly');
+    });
+    [].slice.call(box.querySelectorAll('.card-edit-toggle')).forEach(function(t){
+      t.classList.toggle('on',on);
+      t.textContent=on?'✓ 完成':'✎ 编辑';
+    });
+    return on;
+  }
+  window.yu7IsEditing=function(){
+    var box=document.getElementById('result-area');
+    return !!(box&&box.classList.contains('card-editing'));
+  };
+  // 由顶栏（父页面）调用；on 省略时切换
+  window.yu7SetEditing=function(on){
+    var box=document.getElementById('result-area');
+    if(!box) return false;
+    var next=(typeof on==='boolean')?on:!box.classList.contains('card-editing');
+    applyEditing(next);
+    if(next){
+      msg('编辑模式：点各栏右侧「添加」即可新增');
+    }else if(document.body.getAttribute('data-card-view')==='1'){
+      saveCard();   // 「完成」即保存到卡片墙（saveCard 内部会提示已保存）
+    }else{
+      msg('已退出编辑');
+    }
+    try{ window.parent.postMessage({type:'yu7-edit-state',on:next},'*'); }catch(e){}
+    return next;
+  };
+  window.addEventListener('message',function(e){
+    var d=e.data||{};
+    if(d.type==='yu7-edit-toggle') window.yu7SetEditing(typeof d.on==='boolean'?d.on:undefined);
+  });
 
   function getNum(f){return parseFloat(byField[f]&&byField[f].value)||0;}
   function setNum(f,v){if(byField[f]) byField[f].value=v;}
@@ -3616,7 +3716,8 @@ setInterval(function(){
     confirmed.forEach(function(rec){(groups[rec.tab]||groups.ability).push(rec);});
     function appendTo(sec,el){var c=sec.lastElementChild;if(c) sec.insertBefore(el,c.nextSibling);else sec.appendChild(el);}
     function mk(cls,html,key){var d=document.createElement('div');d.className=cls;d.setAttribute('data-runtime-added',key||cls);d.innerHTML=html;return d;}
-    function rm(rec){return '<button type="button" class="runtime-remove" data-remove-key="'+esc(rec.key)+'">移除</button>';}
+    function recId(rec){return rec.rid||rec.key;}
+    function rm(rec){return '<button type="button" class="runtime-remove" data-remove-key="'+esc(recId(rec))+'">移除</button>';}
     function cell(label,value){return '<div class="weapon-cell"><b>'+esc(label)+':</b>'+esc(value==null||value===''?'—':value)+'</div>';}
     function cellCls(label,value,cls){return '<div class="weapon-cell '+cls+'"><b>'+esc(label)+':</b>'+esc(value==null||value===''?'—':value)+'</div>';}
     function rawCell(label,html){return '<div class="weapon-cell"><b>'+esc(label)+':</b>'+html+'</div>';}
@@ -3760,7 +3861,8 @@ setInterval(function(){
       ||box.querySelector('.result-grid');
     groups.connection.forEach(function(rec){
       var l=labelOf('connection',rec.item);
-      var el=mk('ability-row runtime-connection','<div class="ability-tag-box"><span class="ability-name">'+esc(l.name)+'</span><span class="ability-type">人脉</span></div><div class="ability-row-body">'+esc(l.desc)+rm(rec)+'</div>');
+      var note='<input type="text" class="conn-note-input" data-note-rid="'+esc(recId(rec))+'" value="'+esc(rec.note||'')+'" placeholder="填写这位人脉的备注（编辑模式可修改）" readonly>';
+      var el=mk('ability-row runtime-connection','<div class="ability-tag-box"><span class="ability-name">'+esc(l.name)+'</span><span class="ability-type">人脉</span></div><div class="ability-row-body">'+esc(l.desc)+rm(rec)+note+'</div>',recId(rec));
       after(cAnchor,el);cAnchor=el;
     });
     // 契约 → 结果卡片区
@@ -3772,6 +3874,8 @@ setInterval(function(){
         appendTo(grid,mk('result-card runtime-contract','<div class="result-label">'+esc(l.name)+rm(rec)+'</div><div class="result-value">'+esc(l.desc)+'</div>'));
       });
     }
+    // 新插入的人脉备注框按当前编辑态同步只读状态
+    applyEditing(window.yu7IsEditing());
   }
   // 渲染添加弹窗的候选列表（费用为 0 的项不显示费用行）
   function renderList(){
@@ -3784,7 +3888,8 @@ setInterval(function(){
       var meta=(c.waived?'免费额度 -'+c.waived+'，':'')+'信用点 -'+c.cost+(activeCtx==='item'?'（消耗品，不计维护费）':'　维护费 +'+c.upkeep);
       // 能力/人脉/契约等不消耗信用点、也不产生维护费，则不显示费用行
       var showMeta=!!(c.waived||c.cost||c.upkeep);
-      var disabled=added.concat(confirmed).some(a=>a.key===key);
+      // 人脉允许重复添加（同一个人脉可被多次追加，各自带不同备注）
+      var disabled=activeCtx!=='connection'&&added.concat(confirmed).some(a=>a.key===key);
       return '<button type="button" class="add-option" data-ctx="'+activeCtx+'" data-idx="'+idx+'"'+(disabled?' disabled':'')+'>'+
         '<b>'+esc(l.name)+'</b>'+(disabled?'<span class="add-meta">已添加</span>':(showMeta?'<div class="add-meta">'+esc(meta)+'</div>':''))+
         '<div class="add-desc">'+esc(l.desc)+'</div></button>';
@@ -3806,7 +3911,9 @@ setInterval(function(){
   function addItem(ctx,idx){
     var item=listForCtx(ctx)[idx];if(!item) return;
     var c=calc(ctx,item);
-    var rec={tab:ctx,key:keyOf(ctx,item),item:item,cost:c.cost,upkeep:c.upkeep,waived:c.waived};
+    // rid 是每条记录的唯一标识：人脉可重复添加，同 key 的两条要靠 rid 才能精确移除
+    var rec={tab:ctx,key:keyOf(ctx,item),item:item,cost:c.cost,upkeep:c.upkeep,waived:c.waived,
+      rid:ctx+'#'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
     if(!purchase(rec.cost)) return;
     if(ctx==='custom') freeCustomLeft-=rec.waived;
     if(ctx==='equipment') freeEquipLeft-=rec.waived;
@@ -3948,19 +4055,7 @@ setInterval(function(){
     var tg=e.target.closest?e.target.closest('.card-edit-toggle'):null;
     if(!tg) return;
     e.stopPropagation();e.preventDefault();
-    var bar=tg.closest('.card-name-bar');
-    var box=(bar&&bar.parentNode)||document.getElementById('result-area');
-    if(!box) return;
-    var on=box.classList.toggle('card-editing');
-    tg.classList.toggle('on',on);
-    tg.textContent=on?'✓ 完成':'✎ 编辑';
-    if(on){
-      msg('编辑模式：点各栏右侧「添加」即可新增');
-    }else if(document.body.getAttribute('data-card-view')==='1'){
-      saveCard();   // 「完成」即保存到卡片墙（saveCard 内部会提示已保存）
-    }else{
-      msg('已退出编辑');
-    }
+    window.yu7SetEditing();
   },true);
   document.addEventListener('click',function(e){
     var addBtn=e.target.closest?e.target.closest('[data-add-context]'):null;
@@ -3972,8 +4067,10 @@ setInterval(function(){
     if(removeBtn){
       e.stopPropagation();
       var key=removeBtn.getAttribute('data-remove-key'),idx=-1,isConfirmed=false;
-      added.forEach((a,i)=>{if(a.key===key) idx=i;});
-      if(idx<0){confirmed.forEach((a,i)=>{if(a.key===key){idx=i;isConfirmed=true;}});}
+      // rid 精确匹配（人脉可重复）；老存档没有 rid 时退回按 key 匹配
+      var hit=function(a){return (a.rid||a.key)===key||a.key===key;};
+      added.forEach((a,i)=>{if(hit(a)) idx=i;});
+      if(idx<0){confirmed.forEach((a,i)=>{if(hit(a)){idx=i;isConfirmed=true;}});}
       if(idx>=0){
         var list=isConfirmed?confirmed:added;
         refund(list[idx]);list.splice(idx,1);
@@ -3999,6 +4096,16 @@ setInterval(function(){
   });
   var addSearchEl=document.getElementById('add-search');
   if(addSearchEl) addSearchEl.addEventListener('input',renderList);
+  // 人脉备注输入：实时写回记录并落盘（不重建 DOM，保持光标位置）
+  document.addEventListener('input',function(e){
+    var inp=e.target;
+    if(!inp||!inp.classList||!inp.classList.contains('conn-note-input')) return;
+    var rid=inp.getAttribute('data-note-rid'); if(!rid) return;
+    var hit=null;
+    confirmed.forEach(function(a){ if(!hit&&(a.rid||a.key)===rid) hit=a; });
+    if(!hit) added.forEach(function(a){ if(!hit&&(a.rid||a.key)===rid) hit=a; });
+    if(hit){ hit.note=inp.value; save(); }
+  },true);
 
   document.addEventListener('DOMContentLoaded',function(){
     var box=document.getElementById('result-area');
