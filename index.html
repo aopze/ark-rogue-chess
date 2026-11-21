@@ -161,8 +161,10 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-block + .weapon-block{margin-top:10px;}
 .weapon-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .weapon-row,.weapon-custom-row{display:grid;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
-.weapon-row{grid-template-columns:1.7fr .9fr .9fr;}          /* 武器名 伤害 维护费 */
-.weapon-row .weapon-note{grid-column:2/-1;}                   /* 射程 备注 */
+.weapon-row{grid-template-columns:repeat(4,minmax(0,1fr));}   /* 武器名 伤害 射程 维护费：四格等宽 */
+.weapon-row .weapon-cell{padding:4px 3px;font-size:.68rem;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.weapon-row .weapon-cell b{display:inline;margin:0;font-size:.66rem;}
+.weapon-row .weapon-note{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 备注独占第二行，过长可换行 */
 .weapon-custom-row{grid-template-columns:minmax(0,1fr);}
 .weapon-custom-item{display:grid;grid-template-columns:1.7fr .9fr;gap:1px;background:#cbd5e1;}  /* 定制名 维护费 */
 .weapon-custom-item .custom-effect{grid-column:1/-1;}         /* 效果独占下一行 */
@@ -2085,8 +2087,8 @@ function showResult(){
       <div class="weapon-row">
         ${weaponCell('武器名',w.className)}
         ${weaponCell('伤害',damageDisplay(w))}
-        ${weaponCell('维护费',w.upkeep)}
         ${weaponCell('射程',w.range)}
+        ${weaponCell('维护费',w.upkeep)}
         ${weaponCell('备注',w.note,'weapon-note')}
       </div>
       <div class="weapon-custom-title">定制<span class="upkeep-pill">合计维护费 ${customUpkeep}</span></div>
