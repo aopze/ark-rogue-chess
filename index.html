@@ -428,8 +428,9 @@ try {
 
 <div class="container">
   <!-- 首页：我创建的角色卡（卡片墙） -->
-  <div id="home-view" style="display:block;">
+  <div id="home-view" style="display:block;position:relative;">
     <h1 style="text-align:center;margin:4px 0 4px;font-size:1.35rem;">我的角色卡</h1>
+    <button id="edit-mode-btn" onclick="toggleEditModeCards()" style="position:absolute;right:0;top:6px;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 12px;font-size:.82rem;font-weight:700;cursor:pointer;">✎ 编辑</button>
     <div id="my-cards-count" style="text-align:center;color:#64748b;font-size:.85rem;margin-bottom:16px;"></div>
     <div id="my-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;"></div>
     <div id="home-hint" style="text-align:center;color:#94a3b8;font-size:.78rem;margin-top:16px;line-height:1.6;">点卡片查看 · 点 ➕ 创建新角色卡</div>
@@ -461,6 +462,23 @@ try {
     <button class="modal-close" onclick="closeDetail(event)">×</button>
     <div class="modal-title" id="modal-title"></div>
     <div class="modal-content" id="modal-content"></div>
+  </div>
+</div>
+
+<!-- 重命名 / 删除确认弹窗 -->
+<div class="modal-overlay" id="card-action-modal" onclick="closeCardAction()">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:360px;">
+    <button class="modal-close" onclick="closeCardAction()">×</button>
+    <div class="modal-title" id="ca-title" style="font-weight:700;font-size:1.05rem;margin-bottom:12px;">✎ 重命名</div>
+    <div id="ca-rename-body">
+      <input id="ca-newname" type="text" maxlength="40" placeholder="输入新的角色名"
+        style="width:100%;padding:9px 12px;border:1px solid #c7d2fe;border-radius:8px;font-size:.95rem;box-sizing:border-box;">
+    </div>
+    <div id="ca-delete-body" style="display:none;color:#475569;font-size:.9rem;line-height:1.6;"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="closeCardAction()" style="flex:1;padding:9px;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:8px;cursor:pointer;font-weight:600;">取消</button>
+      <button id="ca-confirm" onclick="confirmCardAction()" style="flex:1;padding:9px;border:0;background:#4f46e5;color:#fff;border-radius:8px;cursor:pointer;font-weight:700;">确定</button>
+    </div>
   </div>
 </div>
 
@@ -2717,7 +2735,32 @@ function _getCardHtml(uid,name){
   try{ return localStorage.getItem(_cardHtmlKey(uid,name))||''; }
   catch(e){ return ''; }
 }
+/* 已删除名单（墓碑）：防止 bot 对账把删掉的卡又加回来 */
+function _deletedKey(uid){ return 'yu7_deleted_cards_'+uid; }
+function _getDeleted(uid){
+  try{ return JSON.parse(localStorage.getItem(_deletedKey(uid))||'[]'); }
+  catch(e){ return []; }
+}
+function _addDeleted(uid,name){
+  try{
+    const arr=_getDeleted(uid);
+    if(arr.indexOf(name)<0) arr.push(name);
+    localStorage.setItem(_deletedKey(uid),JSON.stringify(arr));
+  }catch(e){}
+}
+function _delCardHtml(uid,name){
+  try{ localStorage.removeItem(_cardHtmlKey(uid,name)); }catch(e){}
+}
 /* 显示我创建的卡片墙（含末尾加号卡片） */
+let _editMode=false;
+function toggleEditModeCards(){
+  _editMode=!_editMode;
+  const b=$('#edit-mode-btn');
+  if(b){ b.textContent=_editMode?'✅ 完成':'✎ 编辑'; b.style.background=_editMode?'#4f46e5':'#fff'; b.style.color=_editMode?'#fff':'#4338ca'; }
+  const hint=$('#home-hint');
+  if(hint) hint.textContent=_editMode?'编辑模式：点卡片上的 ✎ 重命名 / 🗑 删除':'点卡片查看 · 点 ➕ 创建新角色卡';
+  showHome();  // 重渲染以显示/隐藏操作按钮
+}
 function _renderMyCards(cards){
   const grid=$('#my-cards-grid'), cnt=$('#my-cards-count');
   if(!grid) return;
@@ -2738,7 +2781,15 @@ function _renderMyCards(cards){
     const fullTag=c.hasFull
       ? '<div style="text-align:center;font-size:.68rem;color:#4f46e5;margin-top:5px;">📄 点击查看完整卡</div>'
       : '';
-    return '<div onclick="_showCardDetail('+i+')" style="cursor:pointer;aspect-ratio:3/4;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
+    // 编辑模式：卡片顶部显示重命名/删除按钮
+    const ops=_editMode
+      ? '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:4px;">'
+        +'<button onclick="event.stopPropagation();askRenameCard('+i+')" style="padding:2px 7px;border:1px solid #a5b4fc;background:#eef2ff;color:#4338ca;border-radius:10px;font-size:.68rem;cursor:pointer;">✎ 重命名</button>'
+        +'<button onclick="event.stopPropagation();askDeleteCard('+i+')" style="padding:2px 7px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;border-radius:10px;font-size:.68rem;cursor:pointer;">🗑 删除</button>'
+        +'</div>'
+      : '';
+    return '<div onclick="'+( _editMode?'void(0)':'_showCardDetail('+i+')')+'" style="cursor:'+( _editMode?'default':'pointer')+';aspect-ratio:3/4;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:12px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
+      +ops
       +'<div style="font-size:1.5rem;text-align:center;">🧾</div>'
       +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.95rem;margin:4px 0 8px;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
       +'<div style="font-size:.72rem;line-height:1.7;flex:1;overflow:hidden;">'+brief+'</div>'
@@ -2783,6 +2834,71 @@ function closeCardFull(){
   if(box) box.style.display='none';
   const f=box&&box.querySelector('iframe'); if(f) f.src='';
   if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} _cardBlobUrl=null; }
+}
+/* ===== 卡片管理：删除 / 重命名 ===== */
+let _cardAction={mode:'',idx:-1};
+function askDeleteCard(i){
+  const c=_myCardsCache[i]; if(!c) return;
+  _cardAction={mode:'delete',idx:i};
+  $('#ca-title').textContent='🗑 删除角色卡';
+  $('#ca-rename-body').style.display='none';
+  $('#ca-delete-body').style.display='block';
+  $('#ca-delete-body').innerHTML='确定删除「<b>'+escCardText(c.name||'未命名')+'</b>」吗？<br>此操作不可恢复。';
+  const btn=$('#ca-confirm'); btn.textContent='🗑 删除'; btn.style.background='#dc2626';
+  $('#card-action-modal').classList.add('show');
+}
+function askRenameCard(i){
+  const c=_myCardsCache[i]; if(!c) return;
+  _cardAction={mode:'rename',idx:i};
+  $('#ca-title').textContent='✎ 重命名角色卡';
+  $('#ca-rename-body').style.display='block';
+  $('#ca-delete-body').style.display='none';
+  $('#ca-newname').value=c.name||'';
+  const btn=$('#ca-confirm'); btn.textContent='✎ 保存'; btn.style.background='#4f46e5';
+  $('#card-action-modal').classList.add('show');
+  setTimeout(()=>{ const el=$('#ca-newname'); if(el){el.focus();el.select();} },80);
+}
+function closeCardAction(){ $('#card-action-modal').classList.remove('show'); }
+function confirmCardAction(){
+  const uid=_tgUserId(), idx=_cardAction.idx, mode=_cardAction.mode;
+  const c=_myCardsCache[idx];
+  if(!uid||!c) return closeCardAction();
+  const oldName=c.name||'未命名';
+  const cards=_loadLocal(uid);
+  if(mode==='delete'){
+    const target=cards.find(x=>x.name===oldName);
+    if(target&&target.hasFull) _delCardHtml(uid,oldName);
+    const next=cards.filter(x=>x.name!==oldName);
+    _addDeleted(uid,oldName);
+    _saveLocal(uid,next);
+    _renderMyCards(next);
+    toast('🗑 已删除「'+oldName+'」');
+  }else if(mode==='rename'){
+    const newName=String($('#ca-newname').value||'').trim().replace(/[\\/:*?"<>|]/g,'').slice(0,40);
+    if(!newName){ toast('⚠️ 新名字不能为空'); return; }
+    if(newName===oldName) return closeCardAction();
+    if(cards.some(x=>x.name===newName)){ toast('⚠️ 已有同名角色卡'); return; }
+    const target=cards.find(x=>x.name===oldName);
+    // 迁移完整 HTML：旧 key → 新 key，并把卡内姓名写成新名
+    if(target&&target.hasFull){
+      let html=_getCardHtml(uid,oldName);
+      if(html){
+        html=html.split('value="'+oldName+'"').join('value="'+escCardText(newName)+'"');
+        html=html.split('>'+oldName+'<').join('>'+escCardText(newName)+'<');
+        _saveCardHtml(uid,newName,html);
+      }
+      _delCardHtml(uid,oldName);
+      target.name=newName; target.updated_at=Math.floor(Date.now()/1000);
+    }else{
+      // 线上同步来的卡（无完整 HTML）：只改索引名
+      target.name=newName;
+    }
+    _addDeleted(uid,oldName);  // 旧名加墓碑，防止对账把旧卡加回
+    _saveLocal(uid,cards);
+    _renderMyCards(cards);
+    toast('✎ 已改名为「'+newName+'」');
+  }
+  closeCardAction();
 }
 /* 首页 / 开始创建 切换 */
 function showHome(){
@@ -2834,7 +2950,10 @@ async function loadMyCards(){
     const r=await fetch(CARDS_JSON_URL+'?t='+Date.now(),{cache:'no-store'});
     if(!r.ok) return;
     const payload=await r.json();
-    const remote=(((payload.users||{})[uid]||{}).cards)||[];
+    let remote=(((payload.users||{})[uid]||{}).cards)||[];
+    // 墓碑过滤：已删除/已改名的卡不再从线上加回
+    const deleted=_getDeleted(uid);
+    remote=remote.filter(c=>deleted.indexOf(c.name)<0);
     // 合并：线上卡为准（去掉 _local），但保留本地已存的完整卡 HTML
     const byName={};
     remote.forEach(c=>{ byName[c.name]=Object.assign({},c,{_local:false}); });
