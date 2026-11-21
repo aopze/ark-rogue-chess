@@ -197,14 +197,13 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
   .item-row{grid-template-columns:1fr;}
 }
 /* 表格化三行：1)属性/等级/业力/耐力 2)信用点/维护费 3)贷款+利息 */
-.base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:0;margin-bottom:14px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;align-items:stretch;overflow:hidden;}
-.base-stat-item{display:flex;align-items:baseline;gap:2px;padding:5px 4px;min-width:0;white-space:nowrap;border-left:1px solid rgba(180,83,9,.22);border-top:1px solid rgba(180,83,9,.22);}
+.base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:0;margin-bottom:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;align-items:stretch;overflow:hidden;}
+.base-stat-item{display:flex;align-items:baseline;gap:2px;padding:5px 6px;min-width:0;white-space:nowrap;border-left:1px solid rgba(180,83,9,.22);border-top:1px solid rgba(180,83,9,.22);}
+/* 四行两列：1)属性/等级 2)业力/耐力 3)信用点/维护费 4)贷款/利息 */
 /* 第一行不要上边框 */
-.base-stat-item:nth-child(-n+4){border-top:none;}
-/* 每行第一列不要左边框（第 1、5、7 项） */
-.base-stat-item:nth-child(4n+1),.base-stat-item:nth-child(7){border-left:none;}
-/* 第 5~8 项：第二行两格、第三行两格 */
-.base-stat-item:nth-child(n+5){grid-column:span 2;}
+.base-stat-item:nth-child(-n+2){border-top:none;}
+/* 每行第一列（奇数项）不要左边框 */
+.base-stat-item:nth-child(odd){border-left:none;}
 .base-stat-break{display:none;}
 .base-stat-item.clickable{cursor:pointer;border-radius:4px;}
 .base-stat-item.clickable:hover{background:rgba(245,158,11,.14);}
@@ -563,7 +562,7 @@ function statsStripHtml(o,extra=[]){
   // 第一栏顺序：属性 → 等级 → 业力 → 耐力 → 信用点 → 维护费 → 贷款
   const FIELD_BY_LABEL={'信用点:':'credit','维护费:':'upkeep','贷款:':'loanLine','利息:':'interest'};
   const extras=extra.map((x,i)=>it(x.label,x.value,i,FIELD_BY_LABEL[x.label]||null)).join('');
-  // 4 列网格自动分行：前 4 项第一行，5/6 项各占半行，贷款项(wide)独占第三行
+  // 两列网格自动分行：属性/等级 → 业力/耐力 → 信用点/维护费 → 贷款/利息（共四行）
   return `<div class="base-stats-panel">${it('属性',o.attr)}${it('等级',o.level,null,'level')}${it('业力',o.karma,null,'karma')}${it('耐力',`${o.stamina}<span data-num-field="staminaMax">/${o.staminaMax}</span>`,null,'stamina')}${extras}</div>`;
 }
 
