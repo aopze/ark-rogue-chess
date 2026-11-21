@@ -166,8 +166,14 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-row .weapon-cell b{display:inline;margin:0;font-size:.66rem;}
 .weapon-row .weapon-note{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 备注独占第二行，过长可换行 */
 .weapon-custom-row{grid-template-columns:minmax(0,1fr);}
-.weapon-custom-item{display:grid;grid-template-columns:1.7fr .9fr;gap:1px;background:#cbd5e1;}  /* 定制名 维护费 */
-.weapon-custom-item .custom-effect{grid-column:1/-1;}         /* 效果独占下一行 */
+.weapon-custom-item{display:grid;grid-template-columns:1.7fr .9fr;gap:1px;background:#cbd5e1;}  /* 定制名（更宽）/ 维护费 */
+/* 定制 / 装备：与武器同款「标签:值 同一行」的单行格，字号比武器大一档 */
+.weapon-custom-item .weapon-cell,
+.equip-row .weapon-cell{padding:5px 5px;font-size:.76rem;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.weapon-custom-item .weapon-cell b,
+.equip-row .weapon-cell b{display:inline;font-size:.74rem;margin:0;}
+.weapon-custom-item .custom-effect,
+.equip-row .equip-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 效果独占下一行，过长可换行 */
 .weapon-cell{min-width:0;background:#f8fafc;padding:6px 8px;font-size:.78rem;line-height:1.5;color:#334155;overflow-wrap:anywhere;}
 .weapon-cell b{display:block;font-size:.7rem;color:#64748b;margin-bottom:2px;}
 .weapon-custom-title{font-size:.78rem;font-weight:700;color:var(--primary);margin:6px 0 3px;display:flex;align-items:center;gap:8px;}
@@ -180,13 +186,9 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .equip-title-main{display:flex;align-items:center;gap:8px;min-width:0;}
 .equip-block + .equip-block{margin-top:10px;}
 .equip-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
-.equip-row{display:grid;grid-template-columns:1.8fr .8fr .8fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
+.equip-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}   /* 装备名/价格/维护费：三格等宽 */
 .equip-row + .equip-row{margin-top:6px;}
-.equip-row .equip-effect{grid-column:1/-1;}   /* 装备名/价格/维护费一行，效果独占下一行 */
 .equip-empty{font-size:.82rem;color:#94a3b8;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:8px 10px;}
-@media (max-width:560px){
-  .equip-row{grid-template-columns:1.7fr .75fr .75fr;}
-}
 /* ==== 道具：与装备同款展开块，但只有 名称/效果/价格（消耗品不产生维护费） ==== */
 .item-section{margin-top:10px;}
 .item-section-title{font-size:1rem;font-weight:700;color:var(--accent);border-left:4px solid var(--accent);padding-left:8px;margin:10px 0 6px;}
