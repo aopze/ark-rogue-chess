@@ -2234,10 +2234,10 @@ function showResult(){
     </div>
     ${statsStripHtml({level:base.level,karma:base.karma,stamina:base.stamina,staminaMax:base.staminaMax,attr:base.attr},financeCards)}
     ${abilityRows}
-    ${connRowHtml}
     ${weaponSectionHtml}
     ${equipSectionHtml}
     ${itemSectionHtml}
+    ${connRowHtml}
     <div class="result-grid">${cards.map((c,i)=>`
       <div class="result-card ${c.cls||''}" onclick="openDetail(${i})">
         <div class="result-label">${c.label}${c.rightLabel?`<span class="result-label-right">${c.rightLabel}</span>`:''}</div>
@@ -3446,9 +3446,8 @@ setInterval(function(){
     // 人脉标题 + 人脉添加按钮（人脉已改为展开行，按钮挂在区块标题上）
     var connTitle=box.querySelector('.conn-section-title');
     if(!connTitle){
-      // 建卡时没选人脉的卡没有这一块，补一个标题，保证任何时候都能往里加人脉
-      var connRef=box.querySelector('.weapon-section')||box.querySelector('.equip-section')
-        ||box.querySelector('.item-section')||box.querySelector('.result-grid');
+      // 建卡时没选人脉的卡没有这一块，补一个标题放在道具下方，保证任何时候都能往里加人脉
+      var connRef=box.querySelector('.result-grid')||box.querySelector('.item-section');
       if(connRef&&connRef.parentNode){
         connTitle=document.createElement('div');
         connTitle.className='conn-section-title';
