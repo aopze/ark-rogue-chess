@@ -2297,34 +2297,10 @@ function _updateCopyBtn(){
      1) 先存本地卡片墙（离开页面也不丢）；
      2) 拉一次 bot 的 cards.json，看同名卡谁更新更晚：
         · bot 更晚 → 拉取：把 bot 的数值回填到当前卡片 + 本地记录，不动 bot；
-        · 本地更晚/新建 → 推送：.char add 指令 + ts 原样 sendData 给 bot。
-   sendData 会让 Telegram 关掉 Mini App，所以推送前先 toast，再延后发送。 */
-function _canSendData(){
-  const wa=window.Telegram&&window.Telegram.WebApp;
-  return !!(wa&&typeof wa.sendData==='function');
-}
-/* 发送失败要说话：以前 try/catch 吞掉，用户只看到「正在同步」然后什么都没发生 */
-/* Mini App 环境诊断：sendData 能不能用，取决于它是从「聊天里的按钮/菜单」还是
-   「直链 / 外部浏览器」打开的。initDataUnsafe.chat 为空 = 没有 chat context，
-   这时 sendData 调了也不报错、也不投递，就是当前这种「点了没反应」。 */
-function _tgDiag(){
-  try{
-    const wa=window.Telegram&&window.Telegram.WebApp;
-    if(!wa) return 'WebApp=无（不是 Telegram 环境）';
-    const u=(wa.initDataUnsafe&&wa.initDataUnsafe.user)||{};
-    const chat=(wa.initDataUnsafe&&wa.initDataUnsafe.chat)||null;
-    return '平台='+(wa.platform||'?')+' 版本='+(wa.version||'?')
-      +' 聊天='+(chat?((chat.type||'')+chat.id):'无')
-      +' uid='+(u.id||'无')+' init='+String(wa.initData||'').length;
-  }catch(e){ return '诊断失败'; }
-}
-/* 有没有 chat context：决定 sendData 能不能投递 */
-function _hasChatCtx(){
-  try{
-    const wa=window.Telegram&&window.Telegram.WebApp;
-    return !!(wa&&wa.initDataUnsafe&&wa.initDataUnsafe.chat);
-  }catch(e){ return false; }
-}
+        · 本地更晚/新建 → 推送：.char add 指令 + ts 直接 POST 给本机 bot。
+   推送只有一条通路：回环桥 http://127.0.0.1:18765（bot_cards_bridge.py）。
+   不再走 Telegram sendData —— 它要么因为没 chat context 静默不投递，要么会关掉
+   Mini App；本机桥在页面里就完成了，点完能直接看到 bot 回的「覆盖了哪张卡」。 */
 /* ===== 本地桥：直接 POST 给本机 bot（bot_cards_bridge.py，默认 127.0.0.1:18765）=====
    桌面端从菜单/链接打开时没有 chat context，sendData 静默不投递；而卡片本来就归
    本机 bot 管，回环请求最直接。https 页面访问 http://127.0.0.1 属浏览器白名单，
@@ -2339,7 +2315,7 @@ async function _pushToBridge(botData){
   try{
     if(typeof AbortController==='function'){
       ctl=new AbortController();
-      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },1500);
+      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },2500);
     }
     const r=await window.fetch(BRIDGE_URL+'/card',{
       method:'POST',
@@ -2357,11 +2333,15 @@ async function _pushToBridge(botData){
 /* 桥的返回结果转成人话 */
 function _bridgeSuffix(r){
   if(!r) return '';
-  if(r.add_upd&&r.add_upd.length) return '（覆盖 '+r.add_upd.join('、')+'）';
-  if(r.add_new&&r.add_new.length) return '（新建 '+r.add_new.join('、')+'）';
-  if(r.stale&&r.stale.length) return '（「'+r.stale.join('、')+'」bot 里更新更晚，保留 bot 版本）';
-  if(r.err&&r.err.length) return '（'+r.err[0]+'）';
-  return '';
+  const parts=[];
+  if(r.add_upd&&r.add_upd.length) parts.push('覆盖 '+r.add_upd.join('、'));
+  if(r.add_new&&r.add_new.length) parts.push('新建 '+r.add_new.join('、'));
+  if(r.del) parts.push('删除 '+r.del+' 张');
+  if(r.ren&&r.ren.length) parts.push('改名 '+r.ren.join('、'));
+  if(r.stale&&r.stale.length) parts.push('「'+r.stale.join('、')+'」bot 里更新更晚，保留 bot 版本');
+  const errs=Array.isArray(r.err)?r.err:[];
+  if(errs.length) parts.push(errs[0]);
+  return parts.length?'（'+parts.join('；')+'）':'';
 }
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    剪贴板在 Telegram WebView 里可能被拒（Write permission denied），所以：
@@ -2405,15 +2385,14 @@ function _showCopySheet(cmd, why){
     });
   }catch(e){
     // 面板都画不出来就退回最原始的提示
-    try{ toast('⚠️ '+(why||'没送达')+'\n指令已复制失败，请点「💾 保存角色卡」导出', 15000); }catch(x){}
+    try{ toast('⚠️ '+(why||'没送达')+'\n指令复制也失败了，请长按下方文字框手动全选', 15000); }catch(x){}
   }
 }
 function _syncFallback(cmd, why){
-  const hint=_hasChatCtx()
-    ? '\n本机 bot 没连上：确认 bot 在跑（run_bot.bat）'
-    : '\n回 bot 私聊发 /card，点消息里的按钮重新进入（也要确认 bot 在跑）';
+  const hint='\n本机 bot 没连上（'+BRIDGE_URL+'）：确认它正在跑 —— 桌面「小雨群管Bot.bat」，'
+    +'日志里应有 [card-bridge] 已监听。';
   const okToasts=function(){
-    toast('⚠️ '+(why||'没送达')+'\n指令已复制，回 bot 粘贴发送即可同步'+hint+'\n'+_tgDiag(),15000);
+    toast('⚠️ '+(why||'没送达')+hint+'\n指令已复制到剪贴板，回 bot 粘贴发送也能同步',15000);
   };
   let p=null;
   try{
@@ -2430,30 +2409,13 @@ function _syncFallback(cmd, why){
   if(_execCopy(cmd)) okToasts();
   else _showCopySheet(cmd, (why||'没送达')+hint+'\n剪贴板不可用，只能手动复制');
 }
-function _sendToBot(botData, cmd){
-  const wa=window.Telegram&&window.Telegram.WebApp;
-  if(!wa||typeof wa.sendData!=='function'){ _syncFallback(cmd,'当前环境不支持发送'); return false; }
-  try{
-    wa.sendData(botData);
-  }catch(e){
-    _syncFallback(cmd,'发送失败：'+((e&&e.message)||e));
-    return false;
-  }
-  // 送达时 Telegram 会马上关掉 Mini App；900ms 后页面还活着 = 大概率没投递（老客户端/网页版常见）
-  setTimeout(function(){
-    let alive=true;
-    try{ alive=document.visibilityState==='visible'; }catch(e){}
-    if(alive) _syncFallback(cmd,'未确认送达');
-  },900);
-  return true;
-}
 function _botAddPayload(cmd, ts, extra){
   if(!cmd) return null;
   try{
     const op={a:'add',cmd:cmd,ts:Math.floor(ts||0)};
     if(extra) Object.keys(extra).forEach(k=>{ op[k]=extra[k]; });
     const data=JSON.stringify({kind:'card_ops',ops:[op]});
-    // sendData 上限 4096 字节，留点余量；超了就不发，退回手动粘贴
+    // 上限跟 bot 侧的 WEBAPP_CMD_MAX 对齐，超了截断没意义，直接退回手动粘贴
     let bytes=0;
     try{ bytes=new TextEncoder().encode(data).length; }catch(e){ bytes=data.length*3; }
     return bytes>4000?null:data;
@@ -2640,15 +2602,14 @@ async function copyResult(){
   const myTs=Math.max(nowSec,(prevTs||0)+1);
   const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
-  toast('☁️ 已保存，正在同步到 bot…');
-  /* 本机桥优先：有没有 sendData 都先试，浏览器直开时这也是唯一通路 */
+  toast('☁️ 已保存，正在同步到本机 bot…');
+  /* 只有本机桥这一条路：连不上就把指令丢剪贴板，让用户手动粘给 bot */
   const bridged=await _pushToBridge(botData);
   if(bridged){
     toast('✅ 已同步到本机 bot'+_bridgeSuffix(bridged));
     return;
   }
-  if(!_canSendData()){ _syncFallback(cmd,'已保存到本地，浏览器直开无法发送'); return; }
-  setTimeout(function(){ _sendToBot(botData,cmd); }, 400);
+  _syncFallback(cmd,'本机 bot 没应答');
 }
 
 /* ============ 卡片墙上打开旧卡时的「☁️ 同步」============
@@ -2729,7 +2690,7 @@ async function syncCardFromWall(){
   const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 正在同步…');
-  /* 先走本机桥：桌面端唯一真正可靠的通道，也在页面内完成，不会像 sendData 那样把 App 关掉 */
+  /* 只有本机桥这一条路（在页面内完成，不会像 sendData 那样把 App 关掉） */
   const bridged=await _pushToBridge(botData);
   if(bridged){
     rec._local=false;
@@ -2740,8 +2701,7 @@ async function syncCardFromWall(){
     toast('✅ 已同步到本机 bot'+_bridgeSuffix(bridged));
     return;
   }
-  if(!_canSendData()){ _syncFallback(cmd,'当前环境不支持发送'); return; }
-  setTimeout(function(){ _sendToBot(botData,cmd); }, 400);
+  _syncFallback(cmd,'本机 bot 没应答');
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
@@ -3370,7 +3330,7 @@ function _addDeleted(uid,name){
 function _delCardHtml(uid,name){
   try{ localStorage.removeItem(_cardHtmlKey(uid,name)); }catch(e){}
 }
-/* 待同步操作队列：删除/改名先记本地，点「完成」时一次性 sendData 给 bot */
+/* 待同步操作队列：删除/改名先记本地，点「完成」/「N 项待同步」时一次性推给本机 bot */
 function _pendingKey(uid){ return 'yu7_pending_ops_'+(uid||'guest'); }
 function _getPending(uid){
   try{ const a=JSON.parse(localStorage.getItem(_pendingKey(uid))||'[]'); return Array.isArray(a)?a:[]; }
@@ -3384,28 +3344,38 @@ function _addPending(uid,op){
   }catch(e){}
 }
 function _clearPending(uid){ try{ localStorage.removeItem(_pendingKey(uid)); }catch(e){} }
-function _flushPendingOps(){
+/* 删除/改名批量推送：走同一条回环桥，不再依赖 Telegram sendData。
+   返回 true = 桥收到并处理了（队列已清空）；false = 桥没连上，队列留着下次再发。 */
+async function _flushPendingOps(){
   const uid=_tgUserId();
   if(!uid) return false;
   const pending=_getPending(uid);
   if(!pending.length) return false;
-  const wa=window.Telegram&&window.Telegram.WebApp;
-  if(!wa||typeof wa.sendData!=='function') return false;  // 浏览器直开：留在队列，下次在 Telegram 内再发
-  try{
-    wa.sendData(JSON.stringify({kind:'card_ops',ops:pending}));
-    _clearPending(uid);
-    return true;
-  }catch(e){ return false; }
+  const r=await _pushToBridge(JSON.stringify({kind:'card_ops',uid:uid,ops:pending}));
+  if(!r) return false;
+  _clearPending(uid);
+  const parts=[];
+  if(r.add_new&&r.add_new.length) parts.push('新建 '+r.add_new.join('、'));
+  if(r.add_upd&&r.add_upd.length) parts.push('覆盖 '+r.add_upd.join('、'));
+  if(r.del) parts.push('删除 '+r.del+' 张');
+  if(r.ren&&r.ren.length) parts.push('改名 '+r.ren.join('、'));
+  const errs=Array.isArray(r.err)?r.err:[];
+  if(parts.length) toast('✅ 已同步到本机 bot（'+parts.join('、')+'）');
+  else if(errs.length) toast('⚠️ '+errs[0]);
+  else toast('✅ 已同步到本机 bot');
+  return true;
 }
 /* 显示我创建的卡片墙（含末尾加号卡片） */
 let _editMode=false;
 function toggleEditModeCards(){
   const wasEdit=_editMode;
-  // 退出编辑模式：把攒下的删除/改名一次性送回 bot（sendData 会关闭 Mini App）
+  // 退出编辑模式：把攒下的删除/改名一次性推给本机 bot（不再发 Telegram 消息）
   if(wasEdit){
     const uid=_tgUserId();
-    if(_getPending(uid).length && !_flushPendingOps()){
-      toast('☁️ 改动已存，下次在 Telegram 内打开会自动同步');
+    if(_getPending(uid).length){
+      _flushPendingOps().then(function(ok){
+        if(!ok) toast('⚠️ 本机 bot 没连上，删除/改名已存本地，下次点「待同步」再发');
+      });
     }
   }
   _editMode=!_editMode;
@@ -3425,8 +3395,12 @@ function _renderMyCards(cards){
       : '';
     cnt.style.cursor=pendingOps?'pointer':'default';
     cnt.onclick=pendingOps?function(){
-      if(window.confirm && !window.confirm('同步 '+pendingOps+' 项改动后 Mini App 会关闭，请重新打开查看。')) return;
-      if(!_flushPendingOps()) toast('请在 Telegram 内打开后再同步');
+      if(cnt.dataset.busy) return;
+      cnt.dataset.busy='1';
+      _flushPendingOps().then(function(ok){
+        delete cnt.dataset.busy;
+        if(!ok) toast('⚠️ 本机 bot 没连上（127.0.0.1:18765），改动还留在本地');
+      });
     }:null;
   }
   // 卡片：矮卡，只显示 出身/领域 + 等级/信用点；待同步黄底
@@ -3758,7 +3732,7 @@ async function loadMyCards(){
   const uid=_tgUserId();
   if(!uid) return;  // 浏览器直接打开、无 Telegram 身份时不显示
   _migrateCardsToData(uid);   // 旧独立 HTML → frag 数据（只跑一次，跑完删大文件）
-  // 0) 不再自动 sendData（会关闭 Mini App，且会阻断对账）；改为点「N 项待同步」手动触发
+  // 0) 不再自动推送（原来是自动 sendData）；改为点「N 项待同步」手动触发
   // 1) 先渲染本地缓存：复制过的卡立刻可见
   const local=_loadLocal(uid);
   _renderMyCards(local);
