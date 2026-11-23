@@ -43,33 +43,42 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
 }
 
 /* 能力行 / 人脉行：左=名字(右上角类型)，右=直接展开的内容（结果页复用） */
-.ability-row,.conn-row{display:flex;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:8px;padding:10px 12px;margin-top:8px;}
+.ability-row{display:flex;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:8px;padding:10px 12px;margin-top:8px;}
 .ability-tag-box{flex:0 0 110px;position:relative;padding-right:46px;display:flex;align-items:flex-start;}
 .ability-tag-box .ability-name{font-weight:700;color:#0f172a;font-size:.9rem;line-height:1.4;}
 .ability-tag-box .ability-type{position:absolute;top:0;right:0;}
 .ability-row-body{flex:1;font-size:.85rem;color:#334155;line-height:1.65;border-left:1px dashed #cbd5e1;padding-left:12px;}
 @media (max-width:560px){
-  .ability-row,.conn-row{flex-direction:column}
+  .ability-row{flex-direction:column}
   .ability-tag-box{flex:none;width:100%;padding-right:46px;}
   .ability-row-body{border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
 }
-/* 人脉：压缩成与武器同款的小长条（第一格名字+角色，第二格效果，黄框输入可编辑） */
+/* 人脉：与能力行同一套视觉 —— 浅底 + 左侧主色条 + 虚线分隔。
+   以前它是 grid + background:#cbd5e1，又继承了 .ability-row 的 padding，
+   padding 区域把灰底露成一圈边框，看着像"框里再套一格"。现在只留一块。 */
 .conn-section-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 6px;font-weight:700;color:var(--primary);}
-.conn-row{display:grid;grid-template-columns:minmax(80px,120px) minmax(0,1fr);gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;margin-top:6px;}
-.conn-cell{padding:4px 6px;font-size:.76rem;line-height:1.45;background:#f8fafc;min-width:0;overflow-wrap:anywhere;}
-.conn-cell b{display:inline;font-size:.68rem;color:#64748b;margin-right:4px;font-weight:400;}
-.conn-role-mini{display:block;font-size:.68rem;color:#94a3b8;}
-.conn-detail-edit{grid-column:1/-1;display:block;width:100%;box-sizing:border-box;background:#fffbeb;border:1px solid #fde68a;border-left:3px solid var(--warn);border-radius:5px;padding:4px 8px;font-family:inherit;font-size:.78rem;line-height:1.45;color:#78350f;}
-.conn-detail-edit:read-only{background:#fffbeb;border-color:#fde68a;}
-.conn-detail-edit:focus{outline:none;background:#fff;border-color:var(--warn);}
-.conn-detail-edit::placeholder{color:#c2a36b;}
-.conn-rules{grid-column:1/-1;margin:0;background:#fff;border:0;border-top:1px solid #e2e8f0;border-radius:0;}
-.conn-rules summary{cursor:pointer;font-size:.78rem;font-weight:700;color:var(--primary);padding:5px 8px;list-style:none;user-select:none;}
-.conn-rules summary::-webkit-details-marker{display:none;}
-.conn-rules summary::before{content:"▸ ";}
-.conn-rules[open] summary::before{content:"▾ ";}
-.conn-rules[open] summary{border-bottom:1px dashed #e2e8f0;}
-.conn-rules-inner{padding:2px 10px 10px;font-size:.83rem;color:#334155;line-height:1.6;}
+.conn-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0;
+  background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid var(--primary);
+  border-radius:8px;padding:10px 12px;margin-top:8px;}
+.conn-cell{font-size:.85rem;line-height:1.65;color:#334155;min-width:0;overflow-wrap:anywhere;}
+.conn-cell:first-child{flex:0 0 110px;}
+.conn-cell:last-of-type{flex:1 1 0;border-left:1px dashed #cbd5e1;padding-left:12px;}
+.conn-label{font-size:.7rem;color:#64748b;margin-right:6px;}
+.conn-name{font-weight:700;color:#0f172a;font-size:.9rem;}
+.conn-role-mini{display:block;font-size:.75rem;color:#94a3b8;margin-top:2px;}
+/* 具体人脉信息：跟正文同色，平时只靠一条虚线分隔，编辑态才给底色 */
+/* 注意：全局有 input[type="text"]{border:2px solid;border-radius:8px}，权重比单个类高，
+   所以这里必须带上 [type="text"]，否则那条边框会漏进来（试过，看着像又套了一个小框） */
+.conn-detail-edit[type="text"]{flex:1 1 100%;display:block;width:100%;box-sizing:border-box;
+  margin-top:8px;padding:8px 0 0;background:transparent;border:0;border-top:1px dashed #e2e8f0;
+  border-radius:0;font-family:inherit;font-size:.85rem;line-height:1.65;color:#334155;}
+.conn-detail-edit[type="text"]:read-only{background:transparent;}
+.conn-detail-edit[type="text"]:focus{outline:none;background:#fff;border-radius:4px;box-shadow:0 0 0 2px rgba(79,70,229,.18);}
+.conn-detail-edit[type="text"]::placeholder{color:#94a3b8;}
+@media (max-width:560px){
+  .conn-cell:first-child{flex:1 1 100%;}
+  .conn-cell:last-of-type{flex:1 1 100%;border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
+}
 /* 第四页人脉：具体身份 / 补充说明输入框 */
 .conn-detail-box{margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;}
 .conn-detail-label{font-weight:700;font-size:.9rem;color:#92400e;margin-bottom:8px;}
@@ -1035,7 +1044,9 @@ const connectionData=[
   {label:"附身",role:"魔术师、占卜师、妖精、神",effect:"你获得1点「重启」。"},
   {label:"后援",role:"资产家、保护者、技术人员、主人",effect:"跑团结尾时，你所需要的支付维护费最多减少20信用点。"}
 ];
-/* 人脉效果不是被动：获取方式默认折叠在展开行内的 details 里；withTitle=false 时不重复输出标题 */
+/* 人脉效果不是被动：获取方式的口径说明。
+   卡面上那一栏（details「如何获得人脉效果」）已按需求删掉，所以目前没有调用点；
+   文案先留在这里，将来要挂到「人脉的选择」页或帮助里可以直接用。 */
 function connectionRuleHtml(withTitle=true){
   return `${withTitle?'<div class="sheet-group-title">如何获得人脉效果</div>':''}
   <div>人脉效果不是被动。得到效果不需要进行判定；从以下任一方式中选择一种激活。</div>
@@ -2041,19 +2052,18 @@ function showResult(){
       return s?`<div class="sheet-group-title">${s.name}</div>${s.abilities.map(abilityItemHtml).join('')}`:'';
     }).join(hr)||'—');
 
-  // 人脉：压缩成与武器同款的小长条，黄框文本可在编辑模式修改
+  // 人脉：与上方能力行同一套视觉（浅底 + 左侧主色条 + 虚线分隔），不再额外套框
   const conn=connectionData.find(c=>c.label===answers.connection);
   const connRowHtml=conn?`<div class="conn-section-title">人脉</div>
     <div class="conn-row">
       <div class="conn-cell">
-        <b>人脉:</b>${escCardText(conn.label)}
+        <span class="conn-label">人脉</span><span class="conn-name">${escCardText(conn.label)}</span>
         <div class="conn-role-mini">${escCardText(conn.role)}</div>
       </div>
       <div class="conn-cell">${escCardText(conn.effect)}</div>
       <input class="conn-detail-edit" data-conn-detail="1" type="text"
         value="${escCardText(answers.connectionDetail||'')}"
         placeholder="人脉具体信息（点「编辑」后可修改）" readonly>
-      <details class="conn-rules"><summary>如何获得人脉效果</summary><div class="conn-rules-inner">${connectionRuleHtml(false)}</div></details>
     </div>`:'';
 
   const sel=(sec)=>{const v=answers[sec.key];return Array.isArray(v)?v:[v].filter(Boolean);};
