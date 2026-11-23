@@ -2320,6 +2320,44 @@ function _hasChatCtx(){
     return !!(wa&&wa.initDataUnsafe&&wa.initDataUnsafe.chat);
   }catch(e){ return false; }
 }
+/* ===== 本地桥：直接 POST 给本机 bot（bot_cards_bridge.py，默认 127.0.0.1:18765）=====
+   桌面端从菜单/链接打开时没有 chat context，sendData 静默不投递；而卡片本来就归
+   本机 bot 管，回环请求最直接。https 页面访问 http://127.0.0.1 属浏览器白名单，
+   不会被混合内容拦。手机上的 127.0.0.1 指向手机自己，会很快失败自动回退。 */
+const BRIDGE_URL='http://127.0.0.1:18765';
+async function _pushToBridge(botData){
+  const uid=_tgUserId();
+  if(!uid||!window.fetch) return null;
+  let body=botData, o=null;
+  try{ o=JSON.parse(botData); o.uid=uid; body=JSON.stringify(o); }catch(e){ return null; }
+  let ctl=null, timer=null;
+  try{
+    if(typeof AbortController==='function'){
+      ctl=new AbortController();
+      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },1500);
+    }
+    const r=await window.fetch(BRIDGE_URL+'/card',{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=UTF-8'},   // simple request，少一次预检
+      body:body,
+      cache:'no-store',
+      signal:ctl?ctl.signal:undefined
+    });
+    if(!r.ok) return null;
+    const j=await r.json();
+    return j&&j.ok?j:null;
+  }catch(e){ return null; }
+  finally{ if(timer) clearTimeout(timer); }
+}
+/* 桥的返回结果转成人话 */
+function _bridgeSuffix(r){
+  if(!r) return '';
+  if(r.add_upd&&r.add_upd.length) return '（覆盖 '+r.add_upd.join('、')+'）';
+  if(r.add_new&&r.add_new.length) return '（新建 '+r.add_new.join('、')+'）';
+  if(r.stale&&r.stale.length) return '（「'+r.stale.join('、')+'」bot 里更新更晚，保留 bot 版本）';
+  if(r.err&&r.err.length) return '（'+r.err[0]+'）';
+  return '';
+}
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    这是唯一不依赖 sendData 的通道，必须有。 */
 function _syncFallback(cmd, why){
@@ -2552,6 +2590,11 @@ async function copyResult(){
   const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 已保存，正在同步到 bot…');
+  const bridged=await _pushToBridge(botData);
+  if(bridged){
+    toast('✅ 已同步到本机 bot'+_bridgeSuffix(bridged));
+    return;
+  }
   setTimeout(function(){ _sendToBot(botData,cmd); }, 400);
 }
 
@@ -2633,7 +2676,18 @@ async function syncCardFromWall(){
   if(!hasRoll) extra.kr=1;
   const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
-  toast('☁️ 正在同步到 bot…');
+  toast('☁️ 正在同步…');
+  /* 先走本机桥：桌面端唯一真正可靠的通道，也在页面内完成，不会像 sendData 那样把 App 关掉 */
+  const bridged=await _pushToBridge(botData);
+  if(bridged){
+    rec._local=false;
+    rec.updated_at=Math.max(rec.updated_at||0,ts);
+    list[i]=rec;
+    _saveLocal(uid,list);
+    _renderMyCards(list);
+    toast('✅ 已同步到本机 bot'+_bridgeSuffix(bridged));
+    return;
+  }
   setTimeout(function(){ _sendToBot(botData,cmd); }, 400);
 }
 
