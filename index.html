@@ -2299,6 +2299,20 @@ function _canSendData(){
   return !!(wa&&typeof wa.sendData==='function');
 }
 /* 发送失败要说话：以前 try/catch 吞掉，用户只看到「正在同步」然后什么都没发生 */
+/* Mini App 环境诊断：sendData 能不能用，取决于它是从「聊天里的按钮/菜单」还是
+   「直链 / 外部浏览器」打开的。initDataUnsafe.chat 为空 = 没有 chat context，
+   这时 sendData 调了也不报错、也不投递，就是当前这种「点了没反应」。 */
+function _tgDiag(){
+  try{
+    const wa=window.Telegram&&window.Telegram.WebApp;
+    if(!wa) return 'WebApp=无（不是 Telegram 环境）';
+    const u=(wa.initDataUnsafe&&wa.initDataUnsafe.user)||{};
+    const chat=(wa.initDataUnsafe&&wa.initDataUnsafe.chat)||null;
+    return '平台='+(wa.platform||'?')+' 版本='+(wa.version||'?')
+      +' 聊天='+(chat?((chat.type||'')+chat.id):'无')
+      +' uid='+(u.id||'无')+' init='+String(wa.initData||'').length;
+  }catch(e){ return '诊断失败'; }
+}
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    这是唯一不依赖 sendData 的通道，必须有。 */
 function _syncFallback(cmd, why){
@@ -2314,7 +2328,9 @@ function _syncFallback(cmd, why){
       ta.remove();
     }catch(e){}
   }
-  toast('⚠️ '+(why||'没送达')+'｜'+(copied?'指令已复制到剪贴板，回 bot 粘贴发送即可同步':'复制失败，请点「💾 保存角色卡」手动复制指令'), 8000);
+  toast('⚠️ '+(why||'没送达')+'\n'
+    +(copied?'指令已复制，回 bot 粘贴发送即可同步':'复制失败，请用「💾 保存角色卡」导出指令')
+    +'\n'+_tgDiag(), 15000);
 }
 function _sendToBot(botData, cmd){
   const wa=window.Telegram&&window.Telegram.WebApp;
