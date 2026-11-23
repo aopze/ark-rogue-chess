@@ -53,12 +53,17 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
   .ability-tag-box{flex:none;width:100%;padding-right:46px;}
   .ability-row-body{border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
 }
-/* 人脉：与能力同款展开行 */
+/* 人脉：压缩成与武器同款的小长条（第一格名字+角色，第二格效果，黄框输入可编辑） */
 .conn-section-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 6px;font-weight:700;color:var(--primary);}
-.conn-role{font-size:.78rem;color:#64748b;}
-.conn-effect{font-size:.88rem;color:#0f172a;margin-top:3px;}
-.conn-note{font-size:.75rem;color:#b45309;margin-top:5px;}
-.conn-rules{margin-top:7px;background:#fff;border:1px solid #e2e8f0;border-left:3px solid #cbd5e1;border-radius:6px;}
+.conn-row{display:grid;grid-template-columns:minmax(80px,120px) minmax(0,1fr);gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;margin-top:6px;}
+.conn-cell{padding:4px 6px;font-size:.76rem;line-height:1.45;background:#f8fafc;min-width:0;overflow-wrap:anywhere;}
+.conn-cell b{display:inline;font-size:.68rem;color:#64748b;margin-right:4px;font-weight:400;}
+.conn-role-mini{display:block;font-size:.68rem;color:#94a3b8;}
+.conn-detail-edit{grid-column:1/-1;display:block;width:100%;box-sizing:border-box;background:#fffbeb;border:1px solid #fde68a;border-left:3px solid var(--warn);border-radius:5px;padding:4px 8px;font-family:inherit;font-size:.78rem;line-height:1.45;color:#78350f;}
+.conn-detail-edit:read-only{background:#fffbeb;border-color:#fde68a;}
+.conn-detail-edit:focus{outline:none;background:#fff;border-color:var(--warn);}
+.conn-detail-edit::placeholder{color:#c2a36b;}
+.conn-rules{grid-column:1/-1;margin:0;background:#fff;border:0;border-top:1px solid #e2e8f0;border-radius:0;}
 .conn-rules summary{cursor:pointer;font-size:.78rem;font-weight:700;color:var(--primary);padding:5px 8px;list-style:none;user-select:none;}
 .conn-rules summary::-webkit-details-marker{display:none;}
 .conn-rules summary::before{content:"▸ ";}
@@ -196,10 +201,12 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .item-section-title.with-add{display:flex;justify-content:space-between;align-items:center;gap:10px;}
 .item-block + .item-block{margin-top:10px;}
 .item-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
-.item-row{display:grid;grid-template-columns:1.15fr 3.4fr .8fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--accent);border-radius:6px;overflow:hidden;}
+.item-row{display:grid;grid-template-columns:1.3fr .7fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--accent);border-radius:6px;overflow:hidden;}
 .item-row + .item-row{margin-top:6px;}
+/* 道具效果独占第二行，过长可换行；和武器备注同款 */
+.item-row .item-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}
 @media (max-width:560px){
-  .item-row{grid-template-columns:1fr;}
+  .item-row{grid-template-columns:1.3fr .7fr;}
 }
 /* 表格化三行：1)属性/等级/业力/耐力 2)信用点/维护费 3)贷款+利息 */
 .base-stats-panel{background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #f59e0b;border-radius:8px;padding:0;margin-bottom:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;align-items:stretch;overflow:hidden;}
@@ -2034,21 +2041,19 @@ function showResult(){
       return s?`<div class="sheet-group-title">${s.name}</div>${s.abilities.map(abilityItemHtml).join('')}`:'';
     }).join(hr)||'—');
 
-  // 人脉：效果很短，改为与「能力」同款展开行，显示在能力列表下方
+  // 人脉：压缩成与武器同款的小长条，黄框文本可在编辑模式修改
   const conn=connectionData.find(c=>c.label===answers.connection);
   const connRowHtml=conn?`<div class="conn-section-title">人脉</div>
     <div class="conn-row">
-      <div class="ability-tag-box">
-        <span class="ability-name">${conn.label}</span>
-        <span class="ability-type">人脉</span>
+      <div class="conn-cell">
+        <b>人脉:</b>${escCardText(conn.label)}
+        <div class="conn-role-mini">${escCardText(conn.role)}</div>
       </div>
-      <div class="ability-row-body">
-        <div class="conn-role">${conn.role}</div>
-        <div class="conn-effect">${conn.effect}</div>
-        ${answers.connectionDetail&&String(answers.connectionDetail).trim()?`<div class="conn-detail">${escCardText(answers.connectionDetail)}</div>`:''}
-        <div class="conn-note">※ 人脉效果不是被动，需按下方任一方式激活后获得。</div>
-        <details class="conn-rules"><summary>如何获得人脉效果</summary><div class="conn-rules-inner">${connectionRuleHtml(false)}</div></details>
-      </div>
+      <div class="conn-cell">${escCardText(conn.effect)}</div>
+      <input class="conn-detail-edit" data-conn-detail="1" type="text"
+        value="${escCardText(answers.connectionDetail||'')}"
+        placeholder="人脉具体信息（点「编辑」后可修改）" readonly>
+      <details class="conn-rules"><summary>如何获得人脉效果</summary><div class="conn-rules-inner">${connectionRuleHtml(false)}</div></details>
     </div>`:'';
 
   const sel=(sec)=>{const v=answers[sec.key];return Array.isArray(v)?v:[v].filter(Boolean);};
@@ -2164,8 +2169,8 @@ function showResult(){
       <div class="item-block-title">${g.cat}</div>
       ${g.items.map(it=>`<div class="item-row">
         ${weaponCell('道具名',it.name)}
-        ${weaponCell('效果',it.effect||'—')}
         ${weaponCell('价格',it.price)}
+        ${weaponCell('效果',it.effect||'—','item-effect')}
       </div>`).join('')}
     </div>`).join('');
   const itemSectionHtml=`<div class="item-section">
@@ -3054,7 +3059,11 @@ function applyEditable(root=document){
     // summary 不能设为 contenteditable：可编辑后会变成选中文本，折叠条点不开
     if(tag==='summary') return;
     // textarea / input 自带输入机制，不套 contenteditable，避免 oninput 实时存值被干扰
-    if(tag==='textarea'||tag==='input') return;
+    if(tag==='textarea'||tag==='input'){
+      // 人脉黄框：调试模式下解除只读，值由 syncEdits 写回 answers
+      if(el.classList&&el.classList.contains('conn-detail-edit')) el.readOnly=false;
+      return;
+    }
     // 排除调试控制按钮本身，避免误编辑导致无法保存/退出
     if(el.id==='debug-btn'||el.id==='save-edit-btn') return;
     // 直接包含非空文本节点才设为可编辑；按钮文字、span、div 全都覆盖
@@ -3068,6 +3077,11 @@ function applyEditable(root=document){
 // 复制前把编辑过的卡片摘要/详情同步回数据，保证「复制全部」拿到修改后的文本
 function syncEdits(){
   const box=$('#result-area');
+  // 人脉黄框（初始人脉的具体信息）：写回 answers，建卡指令/详情都以它为准
+  if(box){
+    const cd=box.querySelector('.conn-detail-edit');
+    if(cd) answers.connectionDetail=String(cd.value||'').trim();
+  }
   const readVal=el=>{
     if(!el) return '';
     const ins=el.querySelectorAll('.num-input');
@@ -4049,7 +4063,7 @@ setInterval(function(){
     if(!box) return false;
     on=!!on;
     box.classList.toggle('card-editing',on);
-    [].slice.call(box.querySelectorAll('.conn-note-input')).forEach(function(inp){
+    [].slice.call(box.querySelectorAll('.conn-note-input,.conn-detail-edit')).forEach(function(inp){
       inp.readOnly=!on;
       if(on) inp.removeAttribute('readonly'); else inp.setAttribute('readonly','readonly');
     });
@@ -4256,7 +4270,7 @@ setInterval(function(){
         }
         appendTo(block,mk('item-row',
           rawCell('道具名','<strong>'+esc(it.name)+'</strong> '+rm(rec))+
-          cell('效果',it.effect||'—')+cell('价格',it.price||0),rec.key));
+          cell('价格',it.price||0)+cellCls('效果',it.effect||'—','item-effect'),rec.key));
       });
     }
     // 装备 → 按大类归入对应 equip-block（如「电子装备」）
