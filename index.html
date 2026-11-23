@@ -2313,6 +2313,13 @@ function _tgDiag(){
       +' uid='+(u.id||'无')+' init='+String(wa.initData||'').length;
   }catch(e){ return '诊断失败'; }
 }
+/* 有没有 chat context：决定 sendData 能不能投递 */
+function _hasChatCtx(){
+  try{
+    const wa=window.Telegram&&window.Telegram.WebApp;
+    return !!(wa&&wa.initDataUnsafe&&wa.initDataUnsafe.chat);
+  }catch(e){ return false; }
+}
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    这是唯一不依赖 sendData 的通道，必须有。 */
 function _syncFallback(cmd, why){
@@ -2328,9 +2335,10 @@ function _syncFallback(cmd, why){
       ta.remove();
     }catch(e){}
   }
+  const hint=_hasChatCtx()?'':'\n回 bot 私聊发 /card，点消息里的按钮重新进入才能同步';
   toast('⚠️ '+(why||'没送达')+'\n'
     +(copied?'指令已复制，回 bot 粘贴发送即可同步':'复制失败，请用「💾 保存角色卡」导出指令')
-    +'\n'+_tgDiag(), 15000);
+    +hint+'\n'+_tgDiag(), 15000);
 }
 function _sendToBot(botData, cmd){
   const wa=window.Telegram&&window.Telegram.WebApp;
