@@ -2283,6 +2283,22 @@ function _updateCopyBtn(){
   if(btn){btn.disabled=!ok;btn.style.opacity=ok?'1':'.5';btn.style.cursor=ok?'pointer':'not-allowed';}
   if(warn) warn.style.display=ok?'none':'block';
 }
+/* 保存即入库：把 .char add 指令原样回传 bot，bot 解析后写进「发消息的那个聊天」的卡槽。
+   sendData 会让 Telegram 关掉 Mini App，所以先 toast 再延后发送。 */
+function _canSendData(){
+  const wa=window.Telegram&&window.Telegram.WebApp;
+  return !!(wa&&typeof wa.sendData==='function');
+}
+function _botAddPayload(cmd){
+  if(!cmd) return null;
+  try{
+    const data=JSON.stringify({kind:'card_ops',ops:[{a:'add',cmd:cmd}]});
+    // sendData 上限 4096 字节，留点余量；超了就不发，退回手动粘贴
+    let bytes=0;
+    try{ bytes=new TextEncoder().encode(data).length; }catch(e){ bytes=data.length*3; }
+    return bytes>4000?null:data;
+  }catch(e){ return null; }
+}
 function copyResult(){
   syncEdits();
   if(!_currentCardName()){
@@ -2298,11 +2314,15 @@ function copyResult(){
   let saved=false;
   try{ saved=window._onCardCopied(cmd, fullHTML, payload); }catch(e){}
   if(saved===false){ toast('⚠️ 本地空间不足，保存失败'); return; }
-  toast('✅ 已保存');
-  /* 命令静默存入剪贴板兜底（界面不提示）；想让 bot 建卡时粘贴即可 */
+  /* 命令静默存入剪贴板兜底：浏览器直开或下面发失败时，手动粘贴给 bot 也能建卡 */
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).catch(()=>{});
   }catch(e){}
+  if(!_canSendData()){ toast('✅ 已保存'); return; }
+  const botData=_botAddPayload(cmd);
+  if(!botData){ toast('⚠️ 卡片过大，指令已复制，请粘贴给 bot 建卡'); return; }
+  toast('☁️ 已保存，正在建卡…');
+  setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
