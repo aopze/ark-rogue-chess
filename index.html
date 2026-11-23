@@ -2281,8 +2281,10 @@ function _currentCardName(){
 }
 function _updateCopyBtn(){
   const btn=$('#copy-all-btn'), warn=$('#name-warn'), ok=!!_currentCardName();
-  if(btn){btn.disabled=!ok;btn.style.opacity=ok?'1':'.5';btn.style.cursor=ok?'pointer':'not-allowed';}
+  // 不真的 disable：disabled 的按钮点了毫无反应，用户看不到任何提示
+  if(btn){btn.style.opacity=ok?'1':'.5';btn.style.cursor=ok?'pointer':'not-allowed';}
   if(warn) warn.style.display=ok?'none':'block';
+  return ok;
 }
 /* ============ 同步（双向，以时间更晚的一方为准）============
    点「☁️ 同步」：
@@ -2294,6 +2296,16 @@ function _updateCopyBtn(){
 function _canSendData(){
   const wa=window.Telegram&&window.Telegram.WebApp;
   return !!(wa&&typeof wa.sendData==='function');
+}
+/* 发送失败要说话：以前 try/catch 吞掉，用户只看到「正在同步」然后什么都没发生 */
+function _sendToBot(botData){
+  try{
+    window.Telegram.WebApp.sendData(botData);
+    return true;
+  }catch(e){
+    toast('⚠️ 发送失败：'+((e&&e.message)||e));
+    return false;
+  }
 }
 function _botAddPayload(cmd, ts, extra){
   if(!cmd) return null;
@@ -2388,12 +2400,19 @@ function _newCardId(){
   return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 }
 /* 拉 bot 上的卡（cards.json 由 bot 每次存盘时推送，是回程通道）
-   先按 id 认，老卡没有 id 才退回按名字 */
+   先按 id 认，老卡没有 id 才退回按名字。
+   必须带超时：GitHub Pages 偶尔很慢，没有超时就会「点了没反应」卡在这里。 */
 async function _fetchRemoteCard(name, cid){
   const uid=_tgUserId(); if(!uid) return null;
   if(!name && !cid) return null;
+  let ctl=null, timer=null;
   try{
-    const r=await fetch(CARDS_JSON_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(typeof AbortController==='function'){
+      ctl=new AbortController();
+      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },4000);
+    }
+    const r=await fetch(CARDS_JSON_URL+'?t='+Date.now(),
+      {cache:'no-store',signal:ctl?ctl.signal:undefined});
     if(!r.ok) return null;
     const p=await r.json();
     const list=(((p.users||{})[uid]||{}).cards)||[];
@@ -2403,6 +2422,7 @@ async function _fetchRemoteCard(name, cid){
     }
     return list.find(c=>c&&c.name===name)||null;
   }catch(e){ return null; }
+  finally{ if(timer) clearTimeout(timer); }
 }
 /* bot 版本更晚：数值回填表单 + 写回本地卡片（保留能力/装备等 app 独有内容） */
 function _pullFromRemote(uid, name, remote){
@@ -2435,11 +2455,13 @@ async function copyResult(){
   if(!_currentCardName()){
     _updateCopyBtn();
     const el=$('#card-name-input'); if(el) el.focus();
+    toast('⚠️ 先填角色姓名，再点同步');
     return;
   }
   window._cardName=_currentCardName();
   const name=_currentCardName();
   const uid=_tgUserId();
+  toast('☁️ 同步中…');   // 先给个反应：后面要 await 拉 cards.json，别让用户觉得点了没动
   /* 记住同步前本地这张卡的时间戳/id：刚存完本地会变成 now，必须用旧值比较 */
   let prevTs=0, prevId='';
   try{
@@ -2480,7 +2502,7 @@ async function copyResult(){
   const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
   if(!botData){ toast('⚠️ 卡片过大，指令已复制，请粘贴给 bot 建卡'); return; }
   toast('☁️ 已保存，正在同步到 bot…');
-  setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
+  setTimeout(function(){ _sendToBot(botData); }, 400);
 }
 
 /* ============ 卡片墙上打开旧卡时的「☁️ 同步」============
@@ -2492,10 +2514,11 @@ async function syncCardFromWall(){
   const name=_cardViewName, cid=_cardViewId;
   const uid=_tgUserId();
   if((!name&&!cid)||!uid){ toast('先打开一张角色卡'); return; }
+  toast('☁️ 同步中…');   // 先给个反应：下面要 await 拉 cards.json
   const list=_loadLocal(uid);
   let i=cid?list.findIndex(c=>c.id===cid):-1;
   if(i<0) i=list.findIndex(c=>c.name===name);
-  if(i<0) return;
+  if(i<0){ toast('⚠️ 找不到这张卡的本地记录，请关掉重开卡片墙'); return; }
   const rec=list[i];
   const localTs=Math.floor(rec.updated_at||0);
 
@@ -2555,7 +2578,7 @@ async function syncCardFromWall(){
   const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
   if(!botData){ toast('⚠️ 卡片过大，无法同步'); return; }
   toast('☁️ 正在同步到 bot…');
-  setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
+  setTimeout(function(){ _sendToBot(botData); }, 400);
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
@@ -2848,6 +2871,14 @@ function toast(msg){
   clearTimeout(toastTimer);
   toastTimer=setTimeout(()=>t.style.opacity=0,1600);
 }
+/* 手机上没有控制台：脚本错误直接弹出来，别再静默失败 */
+window.addEventListener('error',function(e){
+  try{ toast('⚠️ 脚本错误：'+((e&&e.message)||'未知')+' @'+((e&&e.lineno)||'?')); }catch(x){}
+});
+window.addEventListener('unhandledrejection',function(e){
+  const r=e&&e.reason;
+  try{ toast('⚠️ 异步错误：'+((r&&r.message)||r)); }catch(x){}
+});
 /* ============ 调试模式：全页面文本可直接编辑 + 保存写回 HTML ============ */
 // 可编辑范围：页面上所有「直接含文字」的元素（标题/说明/按钮文字/选项/结果……），
 // 排除 script/style。动态渲染后由 render/showResult/openDetail 重新调用。
