@@ -1,7 +1,7 @@
 {
  "version": 1,
- "updated_at": 1795436591,
- "total": 3,
+ "updated_at": 1795439626,
+ "total": 4,
  "users": {
   "5648491503": {
    "cards": [
@@ -103,6 +103,18 @@
      "notes": "",
      "created_at": 1795425168,
      "updated_at": 1795436583
+    },
+    {
+     "id": "c7faf45ae62",
+     "name": "中转账",
+     "state": {
+      "属性": "测试",
+      "等级": "1"
+     },
+     "roll": {},
+     "notes": "",
+     "created_at": 1795439624,
+     "updated_at": 1795439624
     }
    ],
    "groups": [
