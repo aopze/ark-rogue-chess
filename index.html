@@ -2390,7 +2390,7 @@ async function _pushToRelay(botData){
   }catch(e){ return null; }
   finally{ if(timer) clearTimeout(timer); }
 }
-/* 等电脑回执：手机是单向发送，没有这张回执就没法判断口令对不对、bot 有没有在处理 */
+/* 等电脑回执：手机是单向发送，没有这张回执就没法判断电脑到底处理了没有 */
 async function _waitAck(id, ms){
   if(!id) return null;
   const deadline=Date.now()+ms;
