@@ -482,6 +482,7 @@ try {
 <div id="card-full-view" style="display:none;position:fixed;inset:0;z-index:20000;background:#fff;flex-direction:column;">
   <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 14px;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
     <span id="card-full-title" style="flex:1 1 auto;min-width:0;font-weight:700;color:#3730a3;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🧾 角色卡</span>
+    <button id="card-full-sync" onclick="syncCardFromWall()" style="flex:none;border:1px solid #6366f1;background:#eef2ff;color:#4338ca;border-radius:16px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">☁️ 同步</button>
     <button id="card-full-edit" onclick="toggleCardFullEdit()" style="flex:none;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✎ 编辑</button>
     <button onclick="closeCardFull()" style="flex:none;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ 关闭</button>
   </div>
@@ -2294,10 +2295,12 @@ function _canSendData(){
   const wa=window.Telegram&&window.Telegram.WebApp;
   return !!(wa&&typeof wa.sendData==='function');
 }
-function _botAddPayload(cmd, ts){
+function _botAddPayload(cmd, ts, extra){
   if(!cmd) return null;
   try{
-    const data=JSON.stringify({kind:'card_ops',ops:[{a:'add',cmd:cmd,ts:Math.floor(ts||0)}]});
+    const op={a:'add',cmd:cmd,ts:Math.floor(ts||0)};
+    if(extra) Object.keys(extra).forEach(k=>{ op[k]=extra[k]; });
+    const data=JSON.stringify({kind:'card_ops',ops:[op]});
     // sendData 上限 4096 字节，留点余量；超了就不发，退回手动粘贴
     let bytes=0;
     try{ bytes=new TextEncoder().encode(data).length; }catch(e){ bytes=data.length*3; }
@@ -2342,6 +2345,44 @@ function _patchFragNums(frag, nums){
   });
   return out;
 }
+/* 卡片视图（iframe）里当前显示的数值；拿不到就退回记录里存的 frag */
+function _readNums(scope){
+  const out={};
+  try{
+    const root=scope||$('#result-area');
+    if(!root) return out;
+    [].forEach.call(root.querySelectorAll('.num-input[data-field]'),function(inp){
+      const f=inp.getAttribute('data-field');
+      let v=inp.value;
+      if(v===undefined||v===null||String(v).trim()==='') v=inp.getAttribute('value');
+      v=String(v==null?'':v).trim();
+      if(f&&v!=='') out[f]=v;
+    });
+  }catch(e){}
+  return out;
+}
+/* 数值框 → state（只覆盖映射得到的键，其余 state 原样保留） */
+function _applyNumsToState(st, nums){
+  const out=Object.assign({},st||{});
+  const put=(k,v)=>{ if(v!==undefined&&v!==null&&String(v).trim()!=='') out[k]=String(v).trim(); };
+  put('等级',nums.level); put('业力',nums.karma); put('信用点',nums.credit);
+  put('维护费',nums.upkeep); put('利息',nums.interest);
+  if(nums.stamina!==undefined||nums.staminaMax!==undefined)
+    out['耐力']=String(nums.stamina||'0')+'/'+String(nums.staminaMax||'0');
+  if(nums.loan!==undefined||nums.loanLimit!==undefined)
+    out['贷款']=String(nums.loan||'0')+'/'+String(nums.loanLimit||'0');
+  return out;
+}
+/* 由本地卡片记录重建 .char add 指令（老卡没存指令，一律按 state+roll 拼） */
+function _cmdFromRecord(rec){
+  const st=rec.state||{};
+  const kv=Object.keys(st).map(k=>hkSafe(k)+':'+hkSafe(st[k])).join(';');
+  let s='.char add name['+hkSafe(rec.name||'')+']~ state['+kv+';]~';
+  const roll=rec.roll||{};
+  const rk=Object.keys(roll);
+  if(rk.length) s+=' roll['+rk.map(k=>hkSafe(k)+':'+hkSafe(roll[k])).join(';')+';]~';
+  return s;
+}
 /* 拉 bot 上的同名卡（cards.json 由 bot 每次存盘时推送，是回程通道） */
 async function _fetchRemoteCard(name){
   const uid=_tgUserId(); if(!uid||!name) return null;
@@ -2363,6 +2404,7 @@ function _pullFromRemote(uid, name, remote){
   const rec=list[i];
   const nums=_stateToNums(st);
   rec.state=Object.assign({},st);
+  rec.roll=Object.assign({},remote.roll||rec.roll||{});
   rec.notes=remote.notes||'';
   rec.updated_at=remote.updated_at||rec.updated_at;
   if(st['等级']!==undefined) rec.level=st['等级'];
@@ -2419,6 +2461,73 @@ async function copyResult(){
   const botData=_botAddPayload(cmd,myTs);
   if(!botData){ toast('⚠️ 卡片过大，指令已复制，请粘贴给 bot 建卡'); return; }
   toast('☁️ 已保存，正在同步到 bot…');
+  setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
+}
+
+/* ============ 卡片墙上打开旧卡时的「☁️ 同步」============
+   作用对象是当前正在看的这张卡（不是建卡结果页）：
+     · bot 更新更晚 → 拉取数值，重建卡片视图；
+     · 本地更新更晚 / bot 没有 → 按 state+roll 重建指令推给 bot（老卡没有 roll 就带 kr=1，别清空 bot 的检定项）。 */
+let _cardViewName='';
+async function syncCardFromWall(){
+  const name=_cardViewName;
+  const uid=_tgUserId();
+  if(!name||!uid){ toast('先打开一张角色卡'); return; }
+  const list=_loadLocal(uid);
+  const i=list.findIndex(c=>c.name===name);
+  if(i<0) return;
+  const rec=list[i];
+  const localTs=Math.floor(rec.updated_at||0);
+
+  /* 1) 卡片视图里改过的数值先落到记录（不动 updated_at，否则没法判断谁更晚） */
+  let frameNums={};
+  try{
+    const f=_cardFrame();
+    const doc=f&&f.contentDocument;
+    if(doc) frameNums=_readNums(doc);
+  }catch(e){}
+  if(Object.keys(frameNums).length){
+    rec.state=_applyNumsToState(rec.state,frameNums);
+    rec.frag=_patchFragNums(rec.frag||'',frameNums);
+    rec.runtime=Object.assign({},rec.runtime||{});
+    rec.runtime.nums=Object.assign({},rec.runtime.nums||{},frameNums);
+    if(rec.state['等级']!==undefined) rec.level=rec.state['等级'];
+    if(rec.state['信用点']!==undefined) rec.credit=rec.state['信用点'];
+    _saveLocal(uid,list);
+  }
+
+  /* 2) bot 更晚 → 拉取（不推送） */
+  const remote=await _fetchRemoteCard(name);
+  if(remote&&Math.floor(remote.updated_at||0)>localTs+1){
+    const st=remote.state||{};
+    const nums=_stateToNums(st);
+    rec.state=Object.assign({},st);
+    rec.roll=Object.assign({},remote.roll||rec.roll||{});
+    rec.notes=remote.notes||'';
+    rec.updated_at=Math.floor(remote.updated_at||0);
+    rec.frag=_patchFragNums(rec.frag||'',nums);
+    rec.runtime=Object.assign({},rec.runtime||{});
+    rec.runtime.nums=Object.assign({},rec.runtime.nums||{},nums);
+    if(st['等级']!==undefined) rec.level=st['等级'];
+    if(st['信用点']!==undefined) rec.credit=st['信用点'];
+    rec._local=false;
+    list[i]=rec;
+    _saveLocal(uid,list);
+    _renderMyCards(list);
+    _showCardDetail(i);          // 重建视图，显示拉下来的数值
+    toast('☁️ bot 更新更晚，已拉取');
+    return;
+  }
+
+  /* 3) 本地更晚 / bot 没有 → 推送 */
+  if(!_canSendData()){ toast('浏览器直开，无法同步到 bot'); return; }
+  const cmd=_cmdFromRecord(rec);
+  const nowSec=Math.floor(Date.now()/1000);
+  const ts=Math.max(nowSec,localTs+1);
+  const hasRoll=!!(rec.roll&&Object.keys(rec.roll).length);
+  const botData=_botAddPayload(cmd,ts,hasRoll?null:{kr:1});
+  if(!botData){ toast('⚠️ 卡片过大，无法同步'); return; }
+  toast('☁️ 正在同步到 bot…');
   setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
 }
 
@@ -3171,6 +3280,7 @@ let _cardBlobUrl=null;
 function _showCardDetail(idx){
   const c=_myCardsCache[idx];
   if(!c) return;
+  _cardViewName=c.name||'';
   const uid=_tgUserId();
   let migrated=false;
   // 旧卡迁移：有独立 HTML 但未数据化 → 抽 frag 后删大文件
@@ -3365,6 +3475,13 @@ window._onCardCopied=function(cmd, fullHTML, payload){
     const i=p.indexOf(':');
     if(i>0 && p.trim()) state[p.slice(0,i).trim()]=p.slice(i+1).trim();
   });
+  // roll（检定项）也存一份：卡片墙上点同步推给 bot 时要带回去，否则 bot 的检定项会被清空
+  const rollRaw=((cmd||'').match(/roll\[([^\]]*)\]/)||[])[1]||'';
+  const roll={};
+  rollRaw.split(';').forEach(p=>{
+    const i=p.indexOf(':');
+    if(i>0 && p.trim()) roll[p.slice(0,i).trim()]=p.slice(i+1).trim();
+  });
   // 只从完整 HTML 里抽 result-area 片段 + 运行时数值，不再存整页（每卡 ~5-10KB）
   let frag='', runtime=null;
   if(fullHTML){
@@ -3375,7 +3492,7 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   const local=_loadLocal(uid).filter(c=>c.name!==name); // 同名去重（重制卡）
   const now=Math.floor(Date.now()/1000);
   const rt=(payload&&payload.runtimeState)||{};
-  const rec={name:name,state:state,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
+  const rec={name:name,state:state,roll:roll,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
     level:(rt.level!==undefined&&rt.level!==null?rt.level:(state['等级']||'')),
     credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||'')),
     // 只记 id/名字这几个小字段，打开卡片时据此重建「添加」候选项池
@@ -3420,6 +3537,7 @@ async function loadMyCards(){
         // 线上已同步，但本地有完整卡：保留完整功能（frag/候选项池）与摘要，只去掉待同步标记
         byName[c.name]=Object.assign({},byName[c.name],{
           hasFull:true, html:c.html, frag:c.frag, runtime:c.runtime,
+          roll:c.roll||byName[c.name].roll,
           sysIds:c.sysIds, weapons:c.weapons, freeCustom:c.freeCustom, freeEquip:c.freeEquip,
           summary:c.summary, _local:false
         });
