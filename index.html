@@ -2243,8 +2243,8 @@ function showResult(){
         <div class="result-label">${c.label}${c.rightLabel?`<span class="result-label-right">${c.rightLabel}</span>`:''}</div>
         <div class="result-value">${c.value}</div>
       </div>`).join('')}</div>
-    <div class="sheet-btns" style="margin-top:14px;"><button class="sheet-btn" id="copy-all-btn" onclick="copyResult()">💾 保存角色卡</button><button class="sheet-btn" onclick="backToEdit()">↩️ 返回修改</button><button class="sheet-btn" onclick="showHome()">🏠 返回首页</button></div>
-    <div id="name-warn" style="display:none;color:#dc2626;font-size:.85rem;margin-top:8px;text-align:center;">⚠️ 请先填写角色姓名，才能保存</div>`;
+    <div class="sheet-btns" style="margin-top:14px;"><button class="sheet-btn" id="copy-all-btn" onclick="copyResult()">☁️ 同步</button><button class="sheet-btn" onclick="backToEdit()">↩️ 返回修改</button><button class="sheet-btn" onclick="showHome()">🏠 返回首页</button></div>
+    <div id="name-warn" style="display:none;color:#dc2626;font-size:.85rem;margin-top:8px;text-align:center;">⚠️ 请先填写角色姓名，才能同步</div>`;
   ensureCardData();
   if(window.prepareCardDom) window.prepareCardDom(box);
   if(window.initCardRuntime) window.initCardRuntime();
@@ -2283,23 +2283,99 @@ function _updateCopyBtn(){
   if(btn){btn.disabled=!ok;btn.style.opacity=ok?'1':'.5';btn.style.cursor=ok?'pointer':'not-allowed';}
   if(warn) warn.style.display=ok?'none':'block';
 }
-/* 保存即入库：把 .char add 指令原样回传 bot，bot 解析后写进「发消息的那个聊天」的卡槽。
-   sendData 会让 Telegram 关掉 Mini App，所以先 toast 再延后发送。 */
+/* ============ 同步（双向，以时间更晚的一方为准）============
+   点「☁️ 同步」：
+     1) 先存本地卡片墙（离开页面也不丢）；
+     2) 拉一次 bot 的 cards.json，看同名卡谁更新更晚：
+        · bot 更晚 → 拉取：把 bot 的数值回填到当前卡片 + 本地记录，不动 bot；
+        · 本地更晚/新建 → 推送：.char add 指令 + ts 原样 sendData 给 bot。
+   sendData 会让 Telegram 关掉 Mini App，所以推送前先 toast，再延后发送。 */
 function _canSendData(){
   const wa=window.Telegram&&window.Telegram.WebApp;
   return !!(wa&&typeof wa.sendData==='function');
 }
-function _botAddPayload(cmd){
+function _botAddPayload(cmd, ts){
   if(!cmd) return null;
   try{
-    const data=JSON.stringify({kind:'card_ops',ops:[{a:'add',cmd:cmd}]});
+    const data=JSON.stringify({kind:'card_ops',ops:[{a:'add',cmd:cmd,ts:Math.floor(ts||0)}]});
     // sendData 上限 4096 字节，留点余量；超了就不发，退回手动粘贴
     let bytes=0;
     try{ bytes=new TextEncoder().encode(data).length; }catch(e){ bytes=data.length*3; }
     return bytes>4000?null:data;
   }catch(e){ return null; }
 }
-function copyResult(){
+/* bot 的 state 键 → 卡片数值框的 data-field */
+function _stateToNums(st){
+  const out={}, put=(f,v)=>{
+    if(v===undefined||v===null||String(v).trim()==='') return;
+    out[f]=String(v).trim();
+  };
+  st=st||{};
+  put('level',st['等级']); put('karma',st['业力']);
+  const stam=String(st['耐力']==null?'':st['耐力']).split('/');
+  if(stam[0]){ put('stamina',stam[0]); put('staminaMax',stam[1]); }
+  put('credit',st['信用点']); put('upkeep',st['维护费']);
+  const loan=String(st['贷款']==null?'':st['贷款']).split('/');
+  if(loan[0]){ put('loan',loan[0]); put('loanLimit',loan[1]); }
+  put('interest',st['利息']);
+  return out;
+}
+/* 把数值写进当前结果页的输入框（只改数值，不动已选能力/武器/契约等内容） */
+function _applyStateToForm(st){
+  const box=$('#result-area'); if(!box) return;
+  const nums=_stateToNums(st);
+  Object.keys(nums).forEach(f=>{
+    const inp=box.querySelector('.num-input[data-field="'+f+'"]');
+    if(inp){ inp.value=nums[f]; inp.setAttribute('data-default',nums[f]); }
+  });
+  const attr=box.querySelector('.base-stat-item .base-stat-value');
+  if(attr&&st&&st['属性']&&!attr.querySelector('input')) attr.textContent=String(st['属性']);
+}
+/* 卡片片段里的数值框（data-default="x" value="x"）按新数值改写，保证离线重开也对 */
+function _patchFragNums(frag, nums){
+  if(!frag) return frag;
+  let out=frag;
+  Object.keys(nums||{}).forEach(f=>{
+    const v=String(nums[f]).replace(/"/g,'&quot;');
+    const re=new RegExp('(data-field="'+f+'"[^>]*?data-default=")[^"]*("[^>]*?value=")[^"]*(")');
+    out=out.replace(re,'$1'+v+'$2'+v+'$3');
+  });
+  return out;
+}
+/* 拉 bot 上的同名卡（cards.json 由 bot 每次存盘时推送，是回程通道） */
+async function _fetchRemoteCard(name){
+  const uid=_tgUserId(); if(!uid||!name) return null;
+  try{
+    const r=await fetch(CARDS_JSON_URL+'?t='+Date.now(),{cache:'no-store'});
+    if(!r.ok) return null;
+    const p=await r.json();
+    const list=(((p.users||{})[uid]||{}).cards)||[];
+    return list.find(c=>c&&c.name===name)||null;
+  }catch(e){ return null; }
+}
+/* bot 版本更晚：数值回填表单 + 写回本地卡片（保留能力/装备等 app 独有内容） */
+function _pullFromRemote(uid, name, remote){
+  const st=remote.state||{};
+  _applyStateToForm(st);
+  const list=_loadLocal(uid);
+  const i=list.findIndex(c=>c.name===name);
+  if(i<0) return false;
+  const rec=list[i];
+  const nums=_stateToNums(st);
+  rec.state=Object.assign({},st);
+  rec.notes=remote.notes||'';
+  rec.updated_at=remote.updated_at||rec.updated_at;
+  if(st['等级']!==undefined) rec.level=st['等级'];
+  if(st['信用点']!==undefined) rec.credit=st['信用点'];
+  if(rec.frag) rec.frag=_patchFragNums(rec.frag,nums);
+  rec.runtime=Object.assign({},rec.runtime||{});
+  rec.runtime.nums=Object.assign({},rec.runtime.nums||{},nums);
+  rec._local=false;
+  _saveLocal(uid,list);
+  _renderMyCards(list);
+  return true;
+}
+async function copyResult(){
   syncEdits();
   if(!_currentCardName()){
     _updateCopyBtn();
@@ -2307,21 +2383,42 @@ function copyResult(){
     return;
   }
   window._cardName=_currentCardName();
+  const name=_currentCardName();
+  const uid=_tgUserId();
+  /* 记住同步前本地这张卡的时间戳：刚存完本地会变成 now，必须用旧值比较 */
+  let prevTs=0;
+  try{
+    const prev=uid?_loadLocal(uid).find(c=>c.name===name):null;
+    prevTs=prev?Math.floor(prev.updated_at||0):0;
+  }catch(e){}
+
   const cmd=buildHKTRPGCommand();
-  /* 保存 = 生成完整独立角色卡（和旧导出一致，去掉问卷），存进本地卡片墙 */
+  /* 1) 先存本地（生成完整独立角色卡，进本地卡片墙） */
   let fullHTML='', payload=null;
   try{ fullHTML=buildStandaloneCardHTML(); payload=buildCardPayload(); }catch(e){}
   let saved=false;
   try{ saved=window._onCardCopied(cmd, fullHTML, payload); }catch(e){}
   if(saved===false){ toast('⚠️ 本地空间不足，保存失败'); return; }
-  /* 命令静默存入剪贴板兜底：浏览器直开或下面发失败时，手动粘贴给 bot 也能建卡 */
+  /* 指令静默存入剪贴板兜底：浏览器直开或下面发送失败时，手动粘贴给 bot 也能建卡 */
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).catch(()=>{});
   }catch(e){}
-  if(!_canSendData()){ toast('✅ 已保存'); return; }
-  const botData=_botAddPayload(cmd);
+
+  /* 2) 比对 bot 版本：bot 更晚就拉回来，不覆盖 bot */
+  const remote=uid?await _fetchRemoteCard(name):null;
+  if(remote&&Math.floor(remote.updated_at||0)>prevTs+1){
+    _pullFromRemote(uid,name,remote);
+    toast('☁️ bot 上的卡更新更晚，已拉取到本机');
+    return;
+  }
+
+  /* 3) 本地更晚 / bot 没有 → 推给 bot */
+  if(!_canSendData()){ toast('✅ 已保存（浏览器直开，需粘贴指令给 bot）'); return; }
+  const nowSec=Math.floor(Date.now()/1000);
+  const myTs=Math.max(nowSec,(prevTs||0)+1);
+  const botData=_botAddPayload(cmd,myTs);
   if(!botData){ toast('⚠️ 卡片过大，指令已复制，请粘贴给 bot 建卡'); return; }
-  toast('☁️ 已保存，正在建卡…');
+  toast('☁️ 已保存，正在同步到 bot…');
   setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
 }
 
