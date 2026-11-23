@@ -3559,7 +3559,10 @@ setInterval(function(){
     }
     renderConfirmed();
     renderAdded();
-    if(document.body.getAttribute('data-card-export')==='1'){
+    // 卡片视图（iframe）和独立导出都只有运行时脚本，主页面的 closeDetail 不存在；
+    // 不在这里挂 closeDetail，详情弹窗的 × 和遮罩点击会报 ReferenceError 而关不掉。
+    var standalone=(document.body.getAttribute('data-card-export')==='1'||document.body.getAttribute('data-card-view')==='1');
+    if(standalone){
       window.openDetail=cardOpenDetail;
       window.closeDetail=cardCloseDetail;
     }
