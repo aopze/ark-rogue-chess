@@ -2383,14 +2383,24 @@ function _cmdFromRecord(rec){
   if(rk.length) s+=' roll['+rk.map(k=>hkSafe(k)+':'+hkSafe(roll[k])).join(';')+';]~';
   return s;
 }
-/* 拉 bot 上的同名卡（cards.json 由 bot 每次存盘时推送，是回程通道） */
-async function _fetchRemoteCard(name){
-  const uid=_tgUserId(); if(!uid||!name) return null;
+/* 卡的稳定 id：名字是可改属性，跨端认「同一张卡」全靠它 */
+function _newCardId(){
+  return 'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+}
+/* 拉 bot 上的卡（cards.json 由 bot 每次存盘时推送，是回程通道）
+   先按 id 认，老卡没有 id 才退回按名字 */
+async function _fetchRemoteCard(name, cid){
+  const uid=_tgUserId(); if(!uid) return null;
+  if(!name && !cid) return null;
   try{
     const r=await fetch(CARDS_JSON_URL+'?t='+Date.now(),{cache:'no-store'});
     if(!r.ok) return null;
     const p=await r.json();
     const list=(((p.users||{})[uid]||{}).cards)||[];
+    if(cid){
+      const hit=list.find(c=>c&&c.id===cid);
+      if(hit) return hit;
+    }
     return list.find(c=>c&&c.name===name)||null;
   }catch(e){ return null; }
 }
@@ -2399,11 +2409,14 @@ function _pullFromRemote(uid, name, remote){
   const st=remote.state||{};
   _applyStateToForm(st);
   const list=_loadLocal(uid);
-  const i=list.findIndex(c=>c.name===name);
+  let i=remote.id?list.findIndex(c=>c.id===remote.id):-1;
+  if(i<0) i=list.findIndex(c=>c.name===name);
   if(i<0) return false;
   const rec=list[i];
   const nums=_stateToNums(st);
   rec.state=Object.assign({},st);
+  rec.id=remote.id||rec.id;
+  if(remote.name) rec.name=remote.name;      // 名字也只是属性，跟 bot 走
   rec.roll=Object.assign({},remote.roll||rec.roll||{});
   rec.notes=remote.notes||'';
   rec.updated_at=remote.updated_at||rec.updated_at;
@@ -2427,11 +2440,12 @@ async function copyResult(){
   window._cardName=_currentCardName();
   const name=_currentCardName();
   const uid=_tgUserId();
-  /* 记住同步前本地这张卡的时间戳：刚存完本地会变成 now，必须用旧值比较 */
-  let prevTs=0;
+  /* 记住同步前本地这张卡的时间戳/id：刚存完本地会变成 now，必须用旧值比较 */
+  let prevTs=0, prevId='';
   try{
     const prev=uid?_loadLocal(uid).find(c=>c.name===name):null;
     prevTs=prev?Math.floor(prev.updated_at||0):0;
+    prevId=(prev&&prev.id)||'';
   }catch(e){}
 
   const cmd=buildHKTRPGCommand();
@@ -2447,18 +2461,23 @@ async function copyResult(){
   }catch(e){}
 
   /* 2) 比对 bot 版本：bot 更晚就拉回来，不覆盖 bot */
-  const remote=uid?await _fetchRemoteCard(name):null;
+  let myId=prevId;
+  try{
+    const mine=uid?(_loadLocal(uid)||[]).find(c=>c.name===name):null;
+    if(mine&&mine.id) myId=mine.id;
+  }catch(e){}
+  const remote=uid?await _fetchRemoteCard(name,myId):null;
   if(remote&&Math.floor(remote.updated_at||0)>prevTs+1){
     _pullFromRemote(uid,name,remote);
     toast('☁️ bot 上的卡更新更晚，已拉取到本机');
     return;
   }
 
-  /* 3) 本地更晚 / bot 没有 → 推给 bot */
+  /* 3) 本地更晚 / bot 没有 → 推给 bot（带 id，bot 才能认出是同一张卡） */
   if(!_canSendData()){ toast('✅ 已保存（浏览器直开，需粘贴指令给 bot）'); return; }
   const nowSec=Math.floor(Date.now()/1000);
   const myTs=Math.max(nowSec,(prevTs||0)+1);
-  const botData=_botAddPayload(cmd,myTs);
+  const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
   if(!botData){ toast('⚠️ 卡片过大，指令已复制，请粘贴给 bot 建卡'); return; }
   toast('☁️ 已保存，正在同步到 bot…');
   setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
@@ -2468,13 +2487,14 @@ async function copyResult(){
    作用对象是当前正在看的这张卡（不是建卡结果页）：
      · bot 更新更晚 → 拉取数值，重建卡片视图；
      · 本地更新更晚 / bot 没有 → 按 state+roll 重建指令推给 bot（老卡没有 roll 就带 kr=1，别清空 bot 的检定项）。 */
-let _cardViewName='';
+let _cardViewName='', _cardViewId='';
 async function syncCardFromWall(){
-  const name=_cardViewName;
+  const name=_cardViewName, cid=_cardViewId;
   const uid=_tgUserId();
-  if(!name||!uid){ toast('先打开一张角色卡'); return; }
+  if((!name&&!cid)||!uid){ toast('先打开一张角色卡'); return; }
   const list=_loadLocal(uid);
-  const i=list.findIndex(c=>c.name===name);
+  let i=cid?list.findIndex(c=>c.id===cid):-1;
+  if(i<0) i=list.findIndex(c=>c.name===name);
   if(i<0) return;
   const rec=list[i];
   const localTs=Math.floor(rec.updated_at||0);
@@ -2497,11 +2517,13 @@ async function syncCardFromWall(){
   }
 
   /* 2) bot 更晚 → 拉取（不推送） */
-  const remote=await _fetchRemoteCard(name);
+  const remote=await _fetchRemoteCard(rec.name||name, rec.id||cid);
   if(remote&&Math.floor(remote.updated_at||0)>localTs+1){
     const st=remote.state||{};
     const nums=_stateToNums(st);
     rec.state=Object.assign({},st);
+    rec.id=remote.id||rec.id;
+    if(remote.name) rec.name=remote.name;   // bot 改过名，本地跟着改
     rec.roll=Object.assign({},remote.roll||rec.roll||{});
     rec.notes=remote.notes||'';
     rec.updated_at=Math.floor(remote.updated_at||0);
@@ -2514,6 +2536,8 @@ async function syncCardFromWall(){
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(list);
+    _cardViewName=rec.name||_cardViewName;
+    _cardViewId=rec.id||_cardViewId;
     _showCardDetail(i);          // 重建视图，显示拉下来的数值
     toast('☁️ bot 更新更晚，已拉取');
     return;
@@ -2525,7 +2549,10 @@ async function syncCardFromWall(){
   const nowSec=Math.floor(Date.now()/1000);
   const ts=Math.max(nowSec,localTs+1);
   const hasRoll=!!(rec.roll&&Object.keys(rec.roll).length);
-  const botData=_botAddPayload(cmd,ts,hasRoll?null:{kr:1});
+  const extra={};
+  if(rec.id) extra.id=rec.id;        // 带 id：bot 才知道这是改名/改数值，而不是新建一张
+  if(!hasRoll) extra.kr=1;
+  const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
   if(!botData){ toast('⚠️ 卡片过大，无法同步'); return; }
   toast('☁️ 正在同步到 bot…');
   setTimeout(function(){ try{ window.Telegram.WebApp.sendData(botData); }catch(e){} }, 400);
@@ -3281,6 +3308,7 @@ function _showCardDetail(idx){
   const c=_myCardsCache[idx];
   if(!c) return;
   _cardViewName=c.name||'';
+  _cardViewId=c.id||'';
   const uid=_tgUserId();
   let migrated=false;
   // 旧卡迁移：有独立 HTML 但未数据化 → 抽 frag 后删大文件
@@ -3412,13 +3440,14 @@ function confirmCardAction(){
   const c=_myCardsCache[idx];
   if(!uid||!c) return closeCardAction();
   const oldName=c.name||'未命名';
+  const cid=c.id||'';
   const cards=_loadLocal(uid);
   if(mode==='delete'){
-    const target=cards.find(x=>x.name===oldName);
+    const target=cid?cards.find(x=>x.id===cid):cards.find(x=>x.name===oldName);
     if(target&&target.hasFull) _delCardHtml(uid,oldName);
-    const next=cards.filter(x=>x.name!==oldName);
+    const next=cards.filter(x=>cid?x.id!==cid:x.name!==oldName);
     _addDeleted(uid,oldName);
-    _addPending(uid,{a:'del',name:oldName});   // 排队同步给 bot
+    _addPending(uid,{a:'del',id:cid,name:oldName});   // 排队同步给 bot（带 id，改名后也能删对）
     _saveLocal(uid,next);
     _renderMyCards(next);
     toast('🗑 已删除「'+oldName+'」');
@@ -3426,8 +3455,8 @@ function confirmCardAction(){
     const newName=String($('#ca-newname').value||'').trim().replace(/[\\/:*?"<>|]/g,'').slice(0,40);
     if(!newName){ toast('⚠️ 新名字不能为空'); return; }
     if(newName===oldName) return closeCardAction();
-    if(cards.some(x=>x.name===newName)){ toast('⚠️ 已有同名角色卡'); return; }
-    const target=cards.find(x=>x.name===oldName);
+    if(cards.some(x=>x.name===newName&&(!cid||x.id!==cid))){ toast('⚠️ 已有同名角色卡'); return; }
+    const target=cid?cards.find(x=>x.id===cid):cards.find(x=>x.name===oldName);
     // 迁移完整 HTML：旧 key → 新 key，并把卡内姓名写成新名
     if(target&&target.hasFull){
       let html=_getCardHtml(uid,oldName);
@@ -3437,13 +3466,16 @@ function confirmCardAction(){
         _saveCardHtml(uid,newName,html);
       }
       _delCardHtml(uid,oldName);
-      target.name=newName; target.updated_at=Math.floor(Date.now()/1000);
+      target.name=newName;
     }else{
       // 线上同步来的卡（无完整 HTML）：只改索引名
       target.name=newName;
     }
+    // 改名也算一次内容修改：id 不变，名字随同步带给 bot
+    target.name=newName;
+    target.updated_at=Math.floor(Date.now()/1000);
     _addDeleted(uid,oldName);  // 旧名加墓碑，防止对账把旧卡加回
-    _addPending(uid,{a:'ren',old:oldName,new:newName});   // 排队同步给 bot
+    _addPending(uid,{a:'ren',id:cid,old:oldName,new:newName});   // 排队同步给 bot（带 id，改名后仍是同一张卡）
     _saveLocal(uid,cards);
     _renderMyCards(cards);
     toast('✎ 已改名为「'+newName+'」');
@@ -3489,10 +3521,14 @@ window._onCardCopied=function(cmd, fullHTML, payload){
     frag=snap.frag;
     runtime=(snap.payload&&snap.payload.runtimeState)||null;
   }
-  const local=_loadLocal(uid).filter(c=>c.name!==name); // 同名去重（重制卡）
+  const all=_loadLocal(uid);
+  const prevSame=all.find(c=>c.name===name);
+  // 同名再存 = 同一张卡（重制/同步），沿用原 id；没有才新建
+  const cid=(prevSame&&prevSame.id)||_newCardId();
+  const local=all.filter(c=>c.name!==name);
   const now=Math.floor(Date.now()/1000);
   const rt=(payload&&payload.runtimeState)||{};
-  const rec={name:name,state:state,roll:roll,notes:'',created_at:now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
+  const rec={id:cid,name:name,state:state,roll:roll,notes:'',created_at:(prevSame&&prevSame.created_at)||now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
     level:(rt.level!==undefined&&rt.level!==null?rt.level:(state['等级']||'')),
     credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||'')),
     // 只记 id/名字这几个小字段，打开卡片时据此重建「添加」候选项池
@@ -3529,23 +3565,32 @@ async function loadMyCards(){
     // 墓碑过滤：已删除/已改名的卡不再从线上加回
     const deleted=_getDeleted(uid);
     remote=remote.filter(c=>deleted.indexOf(c.name)<0);
-    // 合并：线上卡为准（去掉 _local），但保留本地已存的完整卡 HTML
-    const byName={};
-    remote.forEach(c=>{ byName[c.name]=Object.assign({},c,{_local:false}); });
+    // 合并：按 id 认同一张卡（名字只是属性，改名不该变成两张卡）；老记录没 id 才退回按名字
+    const keyOf=c=>c.id?('i:'+c.id):('n:'+(c.name||''));
+    const map={};
+    remote.forEach(c=>{ map[keyOf(c)]=Object.assign({},c,{_local:false}); });
     local.forEach(c=>{
-      if(c.hasFull && byName[c.name]){
+      let k=keyOf(c), t=map[k];
+      if(!t){
+        // 本地没 id（老记录）→ 按名字找到远程卡，顺手学会远程 id
+        t=Object.values(map).find(r=>r&&r.name===c.name)||null;
+        if(t) k=keyOf(t);
+      }
+      if(t&&c.hasFull){
         // 线上已同步，但本地有完整卡：保留完整功能（frag/候选项池）与摘要，只去掉待同步标记
-        byName[c.name]=Object.assign({},byName[c.name],{
+        map[k]=Object.assign({},t,{
           hasFull:true, html:c.html, frag:c.frag, runtime:c.runtime,
-          roll:c.roll||byName[c.name].roll,
+          id:t.id||c.id, roll:c.roll||t.roll,
           sysIds:c.sysIds, weapons:c.weapons, freeCustom:c.freeCustom, freeEquip:c.freeEquip,
           summary:c.summary, _local:false
         });
-      }else if(c._local && !byName[c.name]){
-        byName[c.name]=c; // 线上还没有，保留待同步
+      }else if(t){
+        map[k]=Object.assign({},t,{id:t.id||c.id,_local:false});
+      }else if(c._local){
+        map[k]=c; // 线上还没有，保留待同步
       }
     });
-    const merged=Object.values(byName).sort((a,b)=>(b.updated_at||0)-(a.updated_at||0));
+    const merged=Object.values(map).sort((a,b)=>(b.updated_at||0)-(a.updated_at||0));
     _saveLocal(uid,merged);
     _renderMyCards(merged);
   }catch(e){ /* 网络失败：本地缓存继续显示，不影响体验 */ }
