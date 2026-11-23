@@ -2347,8 +2347,13 @@ function _bridgeSuffix(r){
    手机里的 127.0.0.1 指向手机自己，本机桥必然失败；Telegram 的 sendData 在没有
    chat context 时既不报错也不投递，还会顺手关掉 Mini App。所以手机上走这条：
    POST 到一个只有本 bot 知道的长随机 topic，电脑上的 bot 轮询取回并落盘。
-   只在手机平台启用 —— 桌面能直连时不会把卡片数值外发到第三方。 */
+   只在手机平台启用 —— 桌面能直连时不会把卡片数值外发到第三方。
+   防滥用：payload 带 sec = sha256(同步口令)。口令原文只在电脑的
+   card_relay_secret.txt 和手机 localStorage 里，光看页面源码拿不到，
+   所以知道 topic 也写不了卡。 */
 const RELAY_URL='https://ntfy.sh/yu7cards-4f7c1a9e2b6d8f30';
+const RELAY_ACK_URL=RELAY_URL+'-a';
+const SECRET_KEY='yu7_relay_secret';
 function _isMobile(){
   try{
     const wa=window.Telegram&&window.Telegram.WebApp;
@@ -2358,11 +2363,60 @@ function _isMobile(){
   }catch(e){}
   return /iPhone|iPad|iPod|Android/i.test((navigator&&navigator.userAgent)||'');
 }
+function _getSecret(){ try{ return localStorage.getItem(SECRET_KEY)||''; }catch(e){ return ''; } }
+function _setSecret(s){ try{ localStorage.setItem(SECRET_KEY,s); }catch(e){} }
+function _dropSecret(){ try{ localStorage.removeItem(SECRET_KEY); }catch(e){} }
+async function _sha256Hex(s){
+  try{
+    if(!(window.crypto&&window.crypto.subtle)) return '';
+    const buf=await window.crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));
+    const arr=new Uint8Array(buf), out=[];
+    for(let i=0;i<arr.length;i++) out.push(('0'+arr[i].toString(16)).slice(-2));
+    return out.join('');
+  }catch(e){ return ''; }
+}
+/* 第一次同步时问一次口令，存本地，以后不再问 */
+function _askRelaySecret(){
+  return new Promise(function(resolve){
+    try{
+      const old=document.getElementById('secret-sheet'); if(old) old.remove();
+      const wrap=document.createElement('div');
+      wrap.id='secret-sheet';
+      wrap.style.cssText='position:fixed;inset:0;z-index:40000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
+      wrap.innerHTML=
+        '<div style="width:100%;max-width:420px;background:#fff;border-radius:14px;padding:16px;box-sizing:border-box;">'
+        +'<div style="font-weight:700;font-size:1rem;color:#0f172a;margin-bottom:6px;">🔑 同步口令</div>'
+        +'<div style="font-size:.82rem;color:#475569;line-height:1.55;margin-bottom:10px;">手机同步要过一次口令，只需输一次。电脑上 <b>yu7_bot_full/card_relay_secret.txt</b> 里那一串。</div>'
+        +'<input id="secret-input" type="text" autocapitalize="off" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font-size:.95rem;font-family:ui-monospace,monospace;">'
+        +'<div style="display:flex;gap:10px;margin-top:12px;">'
+        +'<button id="secret-ok" style="flex:1;border:0;background:#4f46e5;color:#fff;border-radius:10px;padding:11px;font-size:.92rem;font-weight:700;font-family:inherit;">确定</button>'
+        +'<button id="secret-cancel" style="flex:1;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:10px;padding:11px;font-size:.92rem;font-weight:700;font-family:inherit;">取消</button>'
+        +'</div></div>';
+      document.body.appendChild(wrap);
+      const inp=wrap.querySelector('#secret-input');
+      setTimeout(function(){ try{ inp.focus(); }catch(e){} },50);
+      wrap.querySelector('#secret-ok').addEventListener('click',function(){
+        const v=String(inp.value||'').trim();
+        wrap.remove();
+        if(!v){ resolve(null); return; }
+        _setSecret(v); resolve(v);
+      });
+      wrap.querySelector('#secret-cancel').addEventListener('click',function(){
+        wrap.remove(); resolve(null);
+      });
+    }catch(e){ resolve(null); }
+  });
+}
+/* 发送成功返回 {id}（ntfy 给的消息 id，用来等回执）；失败返回 null */
 async function _pushToRelay(botData){
   const uid=_tgUserId();
-  if(!uid||!window.fetch) return false;
+  if(!uid||!window.fetch) return null;
+  let sec=_getSecret();
+  if(!sec){ sec=await _askRelaySecret(); if(!sec) return null; }
+  const hash=await _sha256Hex(sec);
+  if(!hash){ toast('⚠️ 当前环境不支持加密，同步改用剪贴板'); return null; }
   let body=botData;
-  try{ const o=JSON.parse(botData); o.uid=uid; body=JSON.stringify(o); }catch(e){ return false; }
+  try{ const o=JSON.parse(botData); o.uid=uid; o.sec=hash; body=JSON.stringify(o); }catch(e){ return null; }
   let ctl=null, timer=null;
   try{
     if(typeof AbortController==='function'){
@@ -2376,14 +2430,43 @@ async function _pushToRelay(botData){
       cache:'no-store',
       signal:ctl?ctl.signal:undefined
     });
-    return !!r.ok;
-  }catch(e){ return false; }
+    if(!r.ok) return null;
+    let j=null;
+    try{ j=await r.json(); }catch(e){}
+    return {id:(j&&j.id)||''};
+  }catch(e){ return null; }
   finally{ if(timer) clearTimeout(timer); }
 }
+/* 等电脑回执：手机是单向发送，没有这张回执就没法判断口令对不对、bot 有没有在处理 */
+async function _waitAck(id, ms){
+  if(!id) return null;
+  const deadline=Date.now()+ms;
+  while(Date.now()<deadline){
+    await new Promise(function(r){ setTimeout(r,1500); });
+    try{
+      const r=await window.fetch(RELAY_ACK_URL+'/json?poll=1&since=10m',{cache:'no-store'});
+      if(!r.ok) continue;
+      const txt=await r.text();
+      const lines=String(txt||'').split('\n');
+      for(let i=0;i<lines.length;i++){
+        const ln=lines[i]; if(!ln||!ln.trim()) continue;
+        let ev=null, a=null;
+        try{ ev=JSON.parse(ln); }catch(e){ continue; }
+        if(!ev||ev.event!=='message') continue;
+        try{ a=JSON.parse(ev.message||''); }catch(e){ continue; }
+        if(a&&a.msg===id) return a;
+      }
+    }catch(e){}
+  }
+  return null;
+}
 /* 统一投递：桌面先本机桥，手机先中转；两条都不行才回退剪贴板。
-   返回 {via:'bridge',res} / {via:'relay'} / null。 */
+   返回 {via:'bridge',res} / {via:'relay',ack} / null。 */
 async function _sendOps(botData){
-  if(_isMobile()&&await _pushToRelay(botData)) return {via:'relay'};
+  if(_isMobile()){
+    const pushed=await _pushToRelay(botData);
+    if(pushed) return {via:'relay',ack:await _waitAck(pushed.id,9000)};
+  }
   const bridged=await _pushToBridge(botData);
   if(bridged) return {via:'bridge',res:bridged};
   return null;
@@ -2391,7 +2474,19 @@ async function _sendOps(botData){
 function _sendToast(sent){
   if(!sent) return '';
   if(sent.via==='bridge') return '✅ 已同步到本机 bot'+_bridgeSuffix(sent.res);
-  return '☁️ 已发到电脑，几秒内生效';
+  const a=sent.ack;
+  if(a&&a.ok) return '✅ 已同步到电脑'+_bridgeSuffix(a.res||{});
+  if(a&&!a.ok) return '⚠️ 电脑拒绝：'+(a.err||'口令不对');
+  return '☁️ 已发到电脑，未收到回执（口令可能不对，发 .char show 核对）';
+}
+/* 电脑明确拒绝（多半是口令错）→ 清掉本地口令，下次重新输入
+   返回 true 表示「已被拒绝，调用方应停止当成功处理」 */
+function _rejected(sent){
+  if(!sent||sent.via!=='relay'||!sent.ack) return false;
+  if(sent.ack.ok) return false;
+  _dropSecret();
+  toast('⚠️ 电脑拒绝：'+(sent.ack.err||'口令不对')+'\n口令已清除，请再点一次同步重新输入');
+  return true;
 }
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    剪贴板在 Telegram WebView 里可能被拒（Write permission denied），所以：
@@ -2657,6 +2752,7 @@ async function copyResult(){
   toast('☁️ 已保存，正在同步…');
   /* 桌面走本机桥，手机走 ntfy 中转；都不通才把指令丢剪贴板 */
   const sent=await _sendOps(botData);
+  if(_rejected(sent)) return;
   if(sent){ toast(_sendToast(sent)); return; }
   _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
 }
@@ -2741,6 +2837,7 @@ async function syncCardFromWall(){
   toast('☁️ 正在同步…');
   /* 桌面走本机桥（在页面内完成，不会关掉 App），手机走 ntfy 中转 */
   const sent=await _sendOps(botData);
+  if(_rejected(sent)) return;
   if(sent){
     rec._local=false;
     rec.updated_at=Math.max(rec.updated_at||0,ts);
@@ -3401,9 +3498,10 @@ async function _flushPendingOps(){
   const pending=_getPending(uid);
   if(!pending.length) return false;
   const sent=await _sendOps(JSON.stringify({kind:'card_ops',uid:uid,ops:pending}));
+  if(_rejected(sent)) return false;      // 口令错：队列留着，别丢用户改动
   if(!sent) return false;
   _clearPending(uid);
-  if(sent.via==='relay'){ toast('☁️ 改动已发到电脑，几秒内生效'); return true; }
+  if(sent.via==='relay'){ toast(_sendToast(sent)); return true; }
   const r=sent.res||{};
   const parts=[];
   if(r.add_new&&r.add_new.length) parts.push('新建 '+r.add_new.join('、'));
