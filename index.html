@@ -3768,12 +3768,15 @@ async function loadMyCards(){
         t=Object.values(map).find(r=>r&&r.name===c.name)||null;
         if(t) k=keyOf(t);
       }
-      if(t&&c.hasFull){
-        // 线上已同步，但本地有完整卡：保留完整功能（frag/候选项池）与摘要，只去掉待同步标记
+      // 本地有完整内容就别被线上精简卡冲掉：frag 是能力行本身，
+      // resultCards/financeCards 是能力/契约/人脉详情弹窗的数据源，漏掉就会「能力不见」
+      const hasRich=!!(c.hasFull||c.frag||c.resultCards||c.financeCards||c.runtime);
+      if(t&&hasRich){
         map[k]=Object.assign({},t,{
-          hasFull:true, html:c.html, frag:c.frag, runtime:c.runtime,
+          hasFull:!!(c.hasFull||c.frag), html:c.html, frag:c.frag, runtime:c.runtime,
           id:t.id||c.id, roll:c.roll||t.roll,
           sysIds:c.sysIds, weapons:c.weapons, freeCustom:c.freeCustom, freeEquip:c.freeEquip,
+          resultCards:c.resultCards, financeCards:c.financeCards,
           summary:c.summary, _local:false
         });
       }else if(t){
