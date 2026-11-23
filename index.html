@@ -118,7 +118,8 @@ button.nav-btn{padding:10px 24px;background:var(--primary);color:#fff;border:non
 button.nav-btn:disabled{background:#ccc;cursor:not-allowed;}
 button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5db;}
 #result-area{display:none;margin-top:20px;}
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:10px 20px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:30000;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:10px 20px;border-radius:20px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:30000;max-width:86%;white-space:normal;word-break:break-word;text-align:center;line-height:1.5;font-size:.9rem;}
+.toast.warn{background:#ef4444;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
 .sticky-header{position:sticky;top:8px;z-index:100;background:#fff;padding:9px 12px;border-radius:8px;border:2px solid #fca5a5;box-shadow:0 4px 10px rgba(0,0,0,.1);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
 .sticky-header .credit-text{font-size:.98rem;font-weight:bold;color:#dc2626;}
@@ -2298,14 +2299,39 @@ function _canSendData(){
   return !!(wa&&typeof wa.sendData==='function');
 }
 /* 发送失败要说话：以前 try/catch 吞掉，用户只看到「正在同步」然后什么都没发生 */
-function _sendToBot(botData){
+/* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
+   这是唯一不依赖 sendData 的通道，必须有。 */
+function _syncFallback(cmd, why){
+  let copied=false;
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(cmd); copied=true; } }catch(e){}
+  if(!copied){
+    // 老 WebView 没有 clipboard API：退回 execCommand，别让它弹自己的 toast 盖掉这条提示
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=cmd; ta.style.position='fixed'; ta.style.left='-9999px';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      copied=document.execCommand('copy');
+      ta.remove();
+    }catch(e){}
+  }
+  toast('⚠️ '+(why||'没送达')+'｜'+(copied?'指令已复制到剪贴板，回 bot 粘贴发送即可同步':'复制失败，请点「💾 保存角色卡」手动复制指令'), 8000);
+}
+function _sendToBot(botData, cmd){
+  const wa=window.Telegram&&window.Telegram.WebApp;
+  if(!wa||typeof wa.sendData!=='function'){ _syncFallback(cmd,'当前环境不支持发送'); return false; }
   try{
-    window.Telegram.WebApp.sendData(botData);
-    return true;
+    wa.sendData(botData);
   }catch(e){
-    toast('⚠️ 发送失败：'+((e&&e.message)||e));
+    _syncFallback(cmd,'发送失败：'+((e&&e.message)||e));
     return false;
   }
+  // 送达时 Telegram 会马上关掉 Mini App；900ms 后页面还活着 = 大概率没投递（老客户端/网页版常见）
+  setTimeout(function(){
+    let alive=true;
+    try{ alive=document.visibilityState==='visible'; }catch(e){}
+    if(alive) _syncFallback(cmd,'未确认送达');
+  },900);
+  return true;
 }
 function _botAddPayload(cmd, ts, extra){
   if(!cmd) return null;
@@ -2496,13 +2522,13 @@ async function copyResult(){
   }
 
   /* 3) 本地更晚 / bot 没有 → 推给 bot（带 id，bot 才能认出是同一张卡） */
-  if(!_canSendData()){ toast('✅ 已保存（浏览器直开，需粘贴指令给 bot）'); return; }
+  if(!_canSendData()){ _syncFallback(cmd,'已保存到本地，浏览器直开无法发送'); return; }
   const nowSec=Math.floor(Date.now()/1000);
   const myTs=Math.max(nowSec,(prevTs||0)+1);
   const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
-  if(!botData){ toast('⚠️ 卡片过大，指令已复制，请粘贴给 bot 建卡'); return; }
+  if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 已保存，正在同步到 bot…');
-  setTimeout(function(){ _sendToBot(botData); }, 400);
+  setTimeout(function(){ _sendToBot(botData,cmd); }, 400);
 }
 
 /* ============ 卡片墙上打开旧卡时的「☁️ 同步」============
@@ -2567,8 +2593,14 @@ async function syncCardFromWall(){
   }
 
   /* 3) 本地更晚 / bot 没有 → 推送 */
-  if(!_canSendData()){ toast('浏览器直开，无法同步到 bot'); return; }
+  /* 老卡可能只有 frag 没有 state：空 state 推上去会把 bot 里这张卡的数值全清掉，宁可拦下 */
+  const hasState=!!(rec.state&&Object.keys(rec.state).length);
+  if(!hasState){
+    toast('⚠️ 这张卡还没有数值记录，先点「✎ 编辑」改一下数值（再点✓完成）后同步，免得把 bot 上的数值清空');
+    return;
+  }
   const cmd=_cmdFromRecord(rec);
+  if(!_canSendData()){ _syncFallback(cmd,'当前环境不支持发送'); return; }
   const nowSec=Math.floor(Date.now()/1000);
   const ts=Math.max(nowSec,localTs+1);
   const hasRoll=!!(rec.roll&&Object.keys(rec.roll).length);
@@ -2576,9 +2608,9 @@ async function syncCardFromWall(){
   if(rec.id) extra.id=rec.id;        // 带 id：bot 才知道这是改名/改数值，而不是新建一张
   if(!hasRoll) extra.kr=1;
   const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
-  if(!botData){ toast('⚠️ 卡片过大，无法同步'); return; }
+  if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 正在同步到 bot…');
-  setTimeout(function(){ _sendToBot(botData); }, 400);
+  setTimeout(function(){ _sendToBot(botData,cmd); }, 400);
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
@@ -2864,12 +2896,15 @@ function exportResultHTML(){
 
 /* ===================== 杂项 ===================== */
 let toastTimer;
-function toast(msg){
+function toast(msg, ms){
   const t=$('#toast');
   t.textContent=msg;
+  // 失败类提示要留够时间看：默认 1.6s 太快，用户只会觉得「点了没反应」
+  const bad=/^[⚠️❌]/.test(String(msg))||/失败|没送达|无法同步|不能同步/.test(String(msg));
+  t.classList.toggle('warn',bad);
   t.style.opacity=1;
   clearTimeout(toastTimer);
-  toastTimer=setTimeout(()=>t.style.opacity=0,1600);
+  toastTimer=setTimeout(()=>t.style.opacity=0, ms||(bad?5000:1600));
 }
 /* 手机上没有控制台：脚本错误直接弹出来，别再静默失败 */
 window.addEventListener('error',function(e){
