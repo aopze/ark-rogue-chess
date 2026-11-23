@@ -2343,6 +2343,56 @@ function _bridgeSuffix(r){
   if(errs.length) parts.push(errs[0]);
   return parts.length?'（'+parts.join('；')+'）':'';
 }
+/* ===== 公网中转（手机端）= ntfy.sh =====
+   手机里的 127.0.0.1 指向手机自己，本机桥必然失败；Telegram 的 sendData 在没有
+   chat context 时既不报错也不投递，还会顺手关掉 Mini App。所以手机上走这条：
+   POST 到一个只有本 bot 知道的长随机 topic，电脑上的 bot 轮询取回并落盘。
+   只在手机平台启用 —— 桌面能直连时不会把卡片数值外发到第三方。 */
+const RELAY_URL='https://ntfy.sh/yu7cards-4f7c1a9e2b6d8f30';
+function _isMobile(){
+  try{
+    const wa=window.Telegram&&window.Telegram.WebApp;
+    const p=(wa&&wa.platform)?wa.platform:'';
+    if(p==='android'||p==='ios') return true;
+    if(p==='tdesktop'||p==='macos'||p==='web') return false;
+  }catch(e){}
+  return /iPhone|iPad|iPod|Android/i.test((navigator&&navigator.userAgent)||'');
+}
+async function _pushToRelay(botData){
+  const uid=_tgUserId();
+  if(!uid||!window.fetch) return false;
+  let body=botData;
+  try{ const o=JSON.parse(botData); o.uid=uid; body=JSON.stringify(o); }catch(e){ return false; }
+  let ctl=null, timer=null;
+  try{
+    if(typeof AbortController==='function'){
+      ctl=new AbortController();
+      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },8000);
+    }
+    const r=await window.fetch(RELAY_URL,{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=UTF-8'},
+      body:body,
+      cache:'no-store',
+      signal:ctl?ctl.signal:undefined
+    });
+    return !!r.ok;
+  }catch(e){ return false; }
+  finally{ if(timer) clearTimeout(timer); }
+}
+/* 统一投递：桌面先本机桥，手机先中转；两条都不行才回退剪贴板。
+   返回 {via:'bridge',res} / {via:'relay'} / null。 */
+async function _sendOps(botData){
+  if(_isMobile()&&await _pushToRelay(botData)) return {via:'relay'};
+  const bridged=await _pushToBridge(botData);
+  if(bridged) return {via:'bridge',res:bridged};
+  return null;
+}
+function _sendToast(sent){
+  if(!sent) return '';
+  if(sent.via==='bridge') return '✅ 已同步到本机 bot'+_bridgeSuffix(sent.res);
+  return '☁️ 已发到电脑，几秒内生效';
+}
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    剪贴板在 Telegram WebView 里可能被拒（Write permission denied），所以：
    复制成功 → toast；失败 → 弹一个可长按全选的面板，别让用户无处可抄。 */
@@ -2389,8 +2439,10 @@ function _showCopySheet(cmd, why){
   }
 }
 function _syncFallback(cmd, why){
-  const hint='\n本机 bot 没连上（'+BRIDGE_URL+'）：确认它正在跑 —— 桌面「小雨群管Bot.bat」，'
-    +'日志里应有 [card-bridge] 已监听。';
+  const hint=_isMobile()
+    ? '\n手机端走的是中转（ntfy.sh）：电脑那边要开着 bot，且日志里应有 [card-relay] 已启动。'
+    : '\n本机 bot 没连上（'+BRIDGE_URL+'）：确认它正在跑 —— 桌面「牌库_bot.bat」，'
+      +'日志里应该有 [card-bridge] 已监听。';
   const okToasts=function(){
     toast('⚠️ '+(why||'没送达')+hint+'\n指令已复制到剪贴板，回 bot 粘贴发送也能同步',15000);
   };
@@ -2602,14 +2654,11 @@ async function copyResult(){
   const myTs=Math.max(nowSec,(prevTs||0)+1);
   const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
-  toast('☁️ 已保存，正在同步到本机 bot…');
-  /* 只有本机桥这一条路：连不上就把指令丢剪贴板，让用户手动粘给 bot */
-  const bridged=await _pushToBridge(botData);
-  if(bridged){
-    toast('✅ 已同步到本机 bot'+_bridgeSuffix(bridged));
-    return;
-  }
-  _syncFallback(cmd,'本机 bot 没应答');
+  toast('☁️ 已保存，正在同步…');
+  /* 桌面走本机桥，手机走 ntfy 中转；都不通才把指令丢剪贴板 */
+  const sent=await _sendOps(botData);
+  if(sent){ toast(_sendToast(sent)); return; }
+  _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
 }
 
 /* ============ 卡片墙上打开旧卡时的「☁️ 同步」============
@@ -2690,18 +2739,18 @@ async function syncCardFromWall(){
   const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 正在同步…');
-  /* 只有本机桥这一条路（在页面内完成，不会像 sendData 那样把 App 关掉） */
-  const bridged=await _pushToBridge(botData);
-  if(bridged){
+  /* 桌面走本机桥（在页面内完成，不会关掉 App），手机走 ntfy 中转 */
+  const sent=await _sendOps(botData);
+  if(sent){
     rec._local=false;
     rec.updated_at=Math.max(rec.updated_at||0,ts);
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(list);
-    toast('✅ 已同步到本机 bot'+_bridgeSuffix(bridged));
+    toast(_sendToast(sent));
     return;
   }
-  _syncFallback(cmd,'本机 bot 没应答');
+  _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
@@ -3351,9 +3400,11 @@ async function _flushPendingOps(){
   if(!uid) return false;
   const pending=_getPending(uid);
   if(!pending.length) return false;
-  const r=await _pushToBridge(JSON.stringify({kind:'card_ops',uid:uid,ops:pending}));
-  if(!r) return false;
+  const sent=await _sendOps(JSON.stringify({kind:'card_ops',uid:uid,ops:pending}));
+  if(!sent) return false;
   _clearPending(uid);
+  if(sent.via==='relay'){ toast('☁️ 改动已发到电脑，几秒内生效'); return true; }
+  const r=sent.res||{};
   const parts=[];
   if(r.add_new&&r.add_new.length) parts.push('新建 '+r.add_new.join('、'));
   if(r.add_upd&&r.add_upd.length) parts.push('覆盖 '+r.add_upd.join('、'));
