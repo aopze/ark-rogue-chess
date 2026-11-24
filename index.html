@@ -175,24 +175,25 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-section{margin-top:10px;}
 .weapon-section-title{font-size:1rem;font-weight:700;color:var(--primary);border-left:4px solid var(--primary);padding-left:8px;margin:10px 0 6px;}
 .weapon-block + .weapon-block{margin-top:10px;}
-.weapon-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
+.weapon-block-title{font-size:.85rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .weapon-row,.weapon-custom-row{display:grid;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
 .weapon-row{grid-template-columns:repeat(4,minmax(0,1fr));}   /* 武器名 伤害 射程 维护费：四格等宽 */
-.weapon-row .weapon-cell{padding:4px 3px;font-size:.68rem;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
-.weapon-row .weapon-cell b{display:inline;margin:0;font-size:.66rem;}
+.weapon-row .weapon-cell{padding:5px 4px;font-size:.85rem;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.weapon-row .weapon-cell b{display:inline;margin:0;font-size:.78rem;}
 .weapon-row .weapon-note{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 备注独占第二行，过长可换行 */
 .weapon-custom-row{grid-template-columns:minmax(0,1fr);}
 .weapon-custom-item{display:grid;grid-template-columns:1.7fr .9fr;gap:1px;background:#cbd5e1;}  /* 定制名（更宽）/ 维护费 */
-/* 定制 / 装备 / 道具：与武器同款「标签:值 同一行」的单行格，字号比武器大一档 */
+/* 定制 / 装备 / 道具：与武器同款「标签:值 同一行」的单行格，字号统一到能力正文 .85rem */
 .weapon-custom-item .weapon-cell,
 .equip-row .weapon-cell,
-.item-row .weapon-cell{padding:5px 5px;font-size:.76rem;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.item-row .weapon-cell{padding:5px 5px;font-size:.85rem;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
 .weapon-custom-item .weapon-cell b,
 .equip-row .weapon-cell b,
-.item-row .weapon-cell b{display:inline;font-size:.74rem;margin:0;}
+.item-row .weapon-cell b{display:inline;font-size:.78rem;margin:0;}
+/* 效果行：独占下一行、可换行，并与正文同色同粗，一眼能看到 */
 .weapon-custom-item .custom-effect,
 .equip-row .equip-effect,
-.item-row .item-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 效果独占下一行，过长可换行 */
+.item-row .item-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;font-weight:700;}
 /* 「效果 / 备注」统一用角色姓名那套琥珀色（#92400e）：
    卡里要一眼分清「标签」和「内容」—— 标签仍是灰的，内容跟姓名同色。 */
 .conn-cell-effect,
@@ -200,9 +201,9 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .equip-row .equip-effect,
 .item-row .item-effect,
 .weapon-row .weapon-note{color:#92400e;}
-.weapon-cell{min-width:0;background:#f8fafc;padding:6px 8px;font-size:.78rem;line-height:1.5;color:#334155;overflow-wrap:anywhere;}
-.weapon-cell b{display:block;font-size:.7rem;color:#64748b;margin-bottom:2px;}
-.weapon-custom-title{font-size:.78rem;font-weight:700;color:var(--primary);margin:6px 0 3px;display:flex;align-items:center;gap:8px;}
+.weapon-cell{min-width:0;background:#f8fafc;padding:6px 8px;font-size:.85rem;line-height:1.5;color:#334155;overflow-wrap:anywhere;}
+.weapon-cell b{display:block;font-size:.78rem;color:#64748b;margin-bottom:2px;}
+.weapon-custom-title{font-size:.85rem;font-weight:700;color:var(--primary);margin:6px 0 3px;display:flex;align-items:center;gap:8px;}
 /* 合计维护费胶囊（武器定制 / 装备共用） */
 .upkeep-pill{font-size:.74rem;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:1px 8px;white-space:nowrap;}
 /* ==== 装备：与武器同样整块展开（不塞进 result-grid 小卡片） ==== */
@@ -211,7 +212,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .equip-section-title.with-add{display:flex;justify-content:space-between;align-items:center;gap:10px;}
 .equip-title-main{display:flex;align-items:center;gap:8px;min-width:0;}
 .equip-block + .equip-block{margin-top:10px;}
-.equip-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
+.equip-block-title{font-size:.85rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .equip-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}   /* 装备名/价格/维护费：三格等宽 */
 .equip-row + .equip-row{margin-top:6px;}
 .equip-empty{font-size:.82rem;color:#94a3b8;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:8px 10px;}
@@ -220,7 +221,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .item-section-title{font-size:1rem;font-weight:700;color:var(--accent);border-left:4px solid var(--accent);padding-left:8px;margin:10px 0 6px;}
 .item-section-title.with-add{display:flex;justify-content:space-between;align-items:center;gap:10px;}
 .item-block + .item-block{margin-top:10px;}
-.item-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
+.item-block-title{font-size:.85rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .item-row{display:grid;grid-template-columns:1.3fr .7fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--accent);border-radius:6px;overflow:hidden;}
 .item-row + .item-row{margin-top:6px;}
 /* 道具格：道具名 / 价格 两格（标签和值同一行），效果整行放在下面 —— 与武器/装备同款 */
