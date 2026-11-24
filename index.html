@@ -66,14 +66,16 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
 .conn-label{font-size:.7rem;color:#64748b;margin-right:6px;}
 .conn-name{font-weight:700;color:#0f172a;font-size:.9rem;}
 /* 具体人脉信息：跟正文同色，平时只靠一条虚线分隔，编辑态才给底色 */
-/* 注意：全局有 input[type="text"]{border:2px solid;border-radius:8px}，权重比单个类高，
-   所以这里必须带上 [type="text"]，否则那条边框会漏进来（试过，看着像又套了一个小框） */
-.conn-detail-edit[type="text"]{flex:1 1 100%;display:block;width:100%;box-sizing:border-box;
+/* 用 textarea 而不是 input：input 是单行的，长句子会被截在右边只看到前半截。
+   textarea + resize:none + overflow:hidden，高度交给 JS 按 scrollHeight 自适应。 */
+.conn-detail-edit{flex:1 1 100%;display:block;width:100%;box-sizing:border-box;
   margin-top:8px;padding:8px 0 0;background:transparent;border:0;border-top:1px dashed #e2e8f0;
-  border-radius:0;font-family:inherit;font-size:.85rem;line-height:1.65;color:#334155;}
-.conn-detail-edit[type="text"]:read-only{background:transparent;}
-.conn-detail-edit[type="text"]:focus{outline:none;background:#fff;border-radius:4px;box-shadow:0 0 0 2px rgba(79,70,229,.18);}
-.conn-detail-edit[type="text"]::placeholder{color:#94a3b8;}
+  border-radius:0;font-family:inherit;font-size:.85rem;line-height:1.65;color:#334155;
+  resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;
+  min-height:calc(1.65em + 8px);}
+.conn-detail-edit:read-only{background:transparent;}
+.conn-detail-edit:focus{outline:none;background:#fff;border-radius:4px;box-shadow:0 0 0 2px rgba(79,70,229,.18);}
+.conn-detail-edit::placeholder{color:#94a3b8;}
 @media (max-width:560px){
   .conn-cell-name,.conn-cell:first-child{flex:1 1 100%;}
   .conn-cell-effect,.conn-cell:last-of-type{flex:1 1 100%;border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
@@ -268,7 +270,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .runtime-remove{flex:none;border:none;background:none;color:#ef4444;cursor:pointer;font-family:inherit;font-size:.75rem;padding:0 2px;}
 .runtime-remove:hover{text-decoration:underline;}
 /* 追加人脉的自填备注：平时只读像正文，编辑态才可写 */
-.conn-note-input{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:5px 9px;border:1px dashed #cbd5e1;border-radius:6px;background:#fff;font-family:inherit;font-size:.82rem;line-height:1.5;color:#334155;}
+.conn-note-input{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:5px 9px;border:1px dashed #cbd5e1;border-radius:6px;background:#fff;font-family:inherit;font-size:.82rem;line-height:1.5;color:#334155;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-height:calc(1.5em + 10px);}
 .conn-note-input:read-only{border-color:transparent;background:transparent;padding-left:0;}
 .conn-note-input:focus{outline:none;border-color:#f59e0b;background:#fffbeb;}
 #result-area.card-editing .conn-note-input{border-color:#f59e0b;background:#fffbeb;}
@@ -2143,9 +2145,8 @@ function showResult(){
         <b class="conn-label">人脉:</b><span class="conn-name">${escCardText(conn.label)}</span>
       </div>
       <div class="conn-cell conn-cell-effect"><b class="conn-label">效果:</b>${escCardText(conn.effect)}</div>
-      <input class="conn-detail-edit" data-conn-detail="1" type="text"
-        value="${escCardText(answers.connectionDetail||'')}"
-        placeholder="人脉具体信息（点「编辑」后可修改）" readonly>
+      <textarea class="conn-detail-edit" data-conn-detail="1" rows="1"
+        placeholder="人脉具体信息（点「编辑」后可修改）" readonly>${escCardText(answers.connectionDetail||'')}</textarea>
     </div>`:'';
 
   const sel=(sec)=>{const v=answers[sec.key];return Array.isArray(v)?v:[v].filter(Boolean);};
@@ -2349,6 +2350,8 @@ function showResult(){
   if(window.initCardRuntime) window.initCardRuntime();
   applyEditable($('#result-area'));
   if(window._updateCopyBtn) window._updateCopyBtn();
+  // 人脉框（textarea）按内容撑高：布局一落地就要量一次，否则长句只显示一行
+  if(window.yu7GrowConn){ try{ window.yu7GrowConn(); }catch(e){} setTimeout(function(){ try{ window.yu7GrowConn(); }catch(e){} },60); }
   _resultDirty=true;   // 结果页已生成：返回首页时自动保存+同步（不再有手动同步按钮）
 }
 /* 结果页是否已生成、尚未自动同步：返回首页 / 启动时消费一次 */
@@ -4882,6 +4885,26 @@ setInterval(function(){
     }
   };
 
+  /* 人脉框（具体信息 / 备注）改成 textarea 后必须自己撑高：
+     textarea 默认固定行高，长句子只会被内部滚动条截住，看起来就像「文字缩进去了」。
+     这里按 scrollHeight 把高度顶到位，并把 overflow 收掉，做到「有几句显示几句」。 */
+  function growConnBox(el){
+    if(!el||!el.style||el.tagName!=='TEXTAREA') return;
+    el.style.height='auto';
+    var h=el.scrollHeight||0;
+    if(!h) return;
+    // box-sizing:border-box 下 height 含边框，而 scrollHeight 只含内边距，
+    // 所以要把上下边框补回去，否则最后一行底边正好被 border 压掉 1～2px。
+    var bd=(el.offsetHeight||0)-(el.clientHeight||0);
+    el.style.height=(h+(bd>0?bd:0))+'px';
+  }
+  function growAllConn(){
+    var box=document.getElementById('result-area');
+    if(!box) return;
+    [].slice.call(box.querySelectorAll('.conn-note-input,.conn-detail-edit')).forEach(growConnBox);
+  }
+  window.yu7GrowConn=growAllConn;
+
   /* 编辑态统一入口：切换 .card-editing、同步输入框可编辑性、同步可能的箱内按钮 */
   function applyEditing(on){
     var box=document.getElementById('result-area');
@@ -4896,6 +4919,7 @@ setInterval(function(){
       t.classList.toggle('on',on);
       t.textContent=on?'✓ 完成':'✎ 编辑';
     });
+    growAllConn();      // 按钮/字号变化会改宽度，高度要重算一次
     return on;
   }
   window.yu7IsEditing=function(){
@@ -5179,7 +5203,7 @@ setInterval(function(){
       ||box.querySelector('.result-grid');
     groups.connection.forEach(function(rec){
       var l=labelOf('connection',rec.item);
-      var note='<input type="text" class="conn-note-input" data-note-rid="'+esc(recId(rec))+'" value="'+esc(rec.note||'')+'" placeholder="填写这位人脉的备注（编辑模式可修改）" readonly>';
+      var note='<textarea class="conn-note-input" data-note-rid="'+esc(recId(rec))+'" rows="1" placeholder="填写这位人脉的备注（编辑模式可修改）" readonly>'+esc(rec.note||'')+'</textarea>';
       var el=mk('ability-row runtime-connection','<div class="ability-tag-box"><span class="ability-name">'+esc(l.name)+'</span><span class="ability-type">人脉</span></div><div class="ability-row-body">'+esc(l.desc)+rm(rec)+note+'</div>',recId(rec));
       after(cAnchor,el);cAnchor=el;
     });
@@ -5444,7 +5468,10 @@ setInterval(function(){
   // 人脉备注输入：实时写回记录并落盘（不重建 DOM，保持光标位置）
   document.addEventListener('input',function(e){
     var inp=e.target;
-    if(!inp||!inp.classList||!inp.classList.contains('conn-note-input')) return;
+    if(!inp||!inp.classList) return;
+    // 文字增减后重新撑高（两个框都适用）
+    if(inp.classList.contains('conn-note-input')||inp.classList.contains('conn-detail-edit')) growConnBox(inp);
+    if(!inp.classList.contains('conn-note-input')) return;
     var rid=inp.getAttribute('data-note-rid'); if(!rid) return;
     var hit=null;
     confirmed.forEach(function(a){ if(!hit&&(a.rid||a.key)===rid) hit=a; });
@@ -5455,6 +5482,8 @@ setInterval(function(){
   document.addEventListener('DOMContentLoaded',function(){
     var box=document.getElementById('result-area');
     if(box&&box.style.display!=='none'){prepareCardDom(box);initCardRuntime();}
+    growAllConn();
+    setTimeout(growAllConn,80);   // 字体/宽度落地后再量一次，避免只算出一行高
   });
 })();
 </script>
