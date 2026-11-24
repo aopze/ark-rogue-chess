@@ -4728,6 +4728,20 @@ setInterval(function(){
   window.prepareCardDom=function(box){
     if(!box) return;
     try{ normalizeCardRows(box); }catch(e){}
+    // 老存档里人脉正文/备注还是单行 input，长句只能横向截断。
+    // 这里统一换成 textarea，后面的 growAllConn 会按 scrollHeight 撑高，做到自动换行。
+    // 不复制旧 style（可能带 nowrap/白底），只保留语义属性。
+    [].slice.call(box.querySelectorAll('input.conn-detail-edit,input.conn-note-input')).forEach(function(old){
+      var ta=document.createElement('textarea');
+      ta.className=old.className;
+      ['data-conn-detail','data-note-rid','placeholder','maxlength'].forEach(function(k){
+        if(old.hasAttribute(k)) ta.setAttribute(k,old.getAttribute(k));
+      });
+      if(old.readOnly) ta.setAttribute('readonly','readonly');
+      ta.rows=1;
+      ta.value=old.value||'';
+      old.parentNode.replaceChild(ta,old);
+    });
     // 数值框（只处理最外层字段，耐力上限/贷款明细由父节点一并渲染）
     [].slice.call(box.querySelectorAll('[data-num-field]'))
       .filter(el=>!el.parentElement.closest('[data-num-field]')&&!el.querySelector('.num-input'))
