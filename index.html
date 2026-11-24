@@ -569,7 +569,7 @@ try {
     <div class="card-sheet-mask" onclick="closeCardListSheet()"></div>
     <div class="card-sheet">
       <div class="card-sheet-head">
-        <span class="card-sheet-title">📋 我的角色卡</span>
+        <span class="card-sheet-title" id="card-list-sheet-title">📋 我的角色卡</span>
         <button class="card-sheet-close" onclick="closeCardListSheet()" aria-label="收起">×</button>
       </div>
       <div class="card-sheet-grid" id="card-list-sheet-grid"></div>
@@ -4048,18 +4048,44 @@ function closeCardFull(){
   _syncCardEditBtn(false);
 }
 /* ===== 顶栏「📋」：从顶部向下弹出的角色卡列表（只列名字，一行两张） ===== */
+/* 全屏卡顶栏「📋」：列出「当前这张卡是谁的」那些卡。
+   自己的卡 → 我的卡墙；GM 模式里打开的成员卡 → 那位成员的卡（不是自己的）。
+   以前这里不管在谁的卡上都列自己的卡，GM 想切到同一成员的别的卡就会串到自己身上。 */
+let _gmSheetCards=[];
 function openCardListSheet(){
-  const wrap=$('#card-list-sheet'), grid=$('#card-list-sheet-grid');
+  const wrap=$('#card-list-sheet'), grid=$('#card-list-sheet-grid'), title=$('#card-list-sheet-title');
   if(!wrap||!grid) return;
-  const cards=_myCardsCache||[];
+  const owner=_cardOwnerUid||_tgUserId();
+  const mine=!owner||owner===_tgUserId();
   const cur=String(_cardViewName||'');
-  grid.innerHTML=cards.length
-    ?cards.map(function(c,i){
-        const nm=String((c&&c.name)||'').trim()||('未命名 '+(i+1));
-        const on=nm===cur?' active':'';
-        return '<div class="card-sheet-item'+on+'" onclick="pickCardFromSheet('+i+')">'+escCardText(nm)+'</div>';
-      }).join('')
-    :'<div class="card-sheet-empty">还没有角色卡</div>';
+  if(mine){
+    _gmSheetCards=[];
+    const cards=_myCardsCache||[];
+    if(title) title.textContent='📋 我的角色卡';
+    grid.innerHTML=cards.length
+      ?cards.map(function(c,i){
+          const nm=String((c&&c.name)||'').trim()||('未命名 '+(i+1));
+          const on=nm===cur?' active':'';
+          return '<div class="card-sheet-item'+on+'" onclick="pickCardFromSheet('+i+')">'+escCardText(nm)+'</div>';
+        }).join('')
+      :'<div class="card-sheet-empty">还没有角色卡</div>';
+  }else{
+    // GM 看成员：用 cards.json 里这位成员的卡列表（active 保持 bot 那边的顺序）
+    const u=(_gmData&&_gmData.users&&_gmData.users[owner])||{};
+    let cards=(u.cards||[]).filter(function(c){ return c&&(c.id||c.name); });
+    if(!cards.length){       // 云端没拉到就退回这位成员在本机缓存过的卡
+      cards=(_loadLocal(owner)||[]).filter(function(c){ return c&&(c.id||c.name); });
+    }
+    if(title) title.textContent='📋 '+_gmNameOf(_gmData,owner)+' 的角色卡';
+    _gmSheetCards=cards.map(function(c){ return {cid:c.id||'',name:c.name||''}; });
+    grid.innerHTML=cards.length
+      ?cards.map(function(c,i){
+          const nm=String(c.name||'未命名').trim()||('未命名 '+(i+1));
+          const on=nm===cur?' active':'';
+          return '<div class="card-sheet-item'+on+'" onclick="pickGmCardFromSheet('+i+')">'+escCardText(nm)+'</div>';
+        }).join('')
+      :'<div class="card-sheet-empty">这位成员还没有角色卡</div>';
+  }
   wrap.classList.add('show');
 }
 function closeCardListSheet(){
@@ -4071,6 +4097,42 @@ function pickCardFromSheet(i){
   closeCardListSheet();
   if(!_myCardsCache||!_myCardsCache[i]) return;
   openCardRemoteFirst(i);
+}
+/* GM 模式里切到同一成员的别的卡：按成员 uid 打开，保存/同步都还落在成员身上 */
+function pickGmCardFromSheet(i){
+  const it=_gmSheetCards[i];
+  const uid=_cardOwnerUid;
+  closeCardListSheet();
+  if(!it||!uid) return;
+  _gmOpenCardById(uid, it.cid, it.name);
+}
+function _gmOpenCardById(uid, cid, name){
+  if(!uid) return;
+  const list=_loadLocal(uid);
+  let k=cid?list.findIndex(function(x){return x&&x.id===cid;}):-1;
+  if(k<0) k=list.findIndex(function(x){return x&&x.name===name;});
+  if(k<0){
+    list.push({id:cid||'',name:name||'',state:{},roll:{},notes:'',_local:false});
+    k=list.length-1;
+  }
+  _saveLocal(uid,list);
+  // 先把视图指向这张卡：_showCardDetail 也会设，这里提前设是为了让后台刷新的「没切卡」判定对得上
+  _cardViewId=cid||''; _cardViewName=name||'';
+  _showCardDetail(k,uid,list);
+  void _bgRefreshGmCardById(uid,cid,name);
+}
+async function _bgRefreshGmCardById(uid,cid,name){
+  if(!uid||!cid) return;
+  const remote=await _requestFullCard(uid,cid);
+  if(!remote||!remote.frag) return;                    // 线上没有就保留本地
+  if(_cardOwnerUid!==uid||_cardViewId!==cid) return;   // 用户已切卡 → 不打断
+  const list=_loadLocal(uid);
+  let k=list.findIndex(function(x){return x&&x.id===cid;});
+  if(k<0) k=list.findIndex(function(x){return x&&x.name===(remote.name||name);});
+  const merged=Object.assign({},(k>=0?list[k]:{}),remote,{_local:false,hasFull:true});
+  if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
+  _saveLocal(uid,list);
+  _showCardDetail(k,uid,list);
 }
 /* ===== 顶栏「✎ 编辑 / ✓ 完成」：控制 iframe 内 #result-area.card-editing ===== */
 let _cardEditing=false;
