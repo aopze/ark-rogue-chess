@@ -293,6 +293,31 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .card-runtime-bar button{padding:5px 12px;border:1px solid #f59e0b;border-radius:16px;background:#fffbeb;color:#92400e;font-family:inherit;font-size:.76rem;cursor:pointer;}
 .card-runtime-bar button:hover{background:#fef3c7;}
 #add-msg{color:#b45309;font-size:.78rem;min-height:1.1em;}
+/* ===== 全屏角色卡顶栏「📋」：从顶部向下弹出的角色卡列表抽屉 ===== */
+/* 默认 pointer-events:none，只靠 transform 做动画，不用 display 切换（display 切换会吃掉过渡） */
+#card-list-sheet{position:fixed;inset:0;z-index:20500;pointer-events:none;}
+#card-list-sheet.show{pointer-events:auto;}
+.card-sheet-mask{position:absolute;inset:0;background:rgba(15,23,42,.38);opacity:0;transition:opacity .22s ease;}
+#card-list-sheet.show .card-sheet-mask{opacity:1;}
+.card-sheet{position:absolute;left:0;right:0;top:0;transform:translateY(-102%);transition:transform .26s cubic-bezier(.22,.61,.36,1);
+  background:#fff;border-radius:0 0 16px 16px;box-shadow:0 12px 28px rgba(15,23,42,.20);
+  padding:12px 14px 16px;max-height:72vh;overflow:auto;-webkit-overflow-scrolling:touch;}
+#card-list-sheet.show .card-sheet{transform:translateY(0);}
+.card-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 10px;}
+.card-sheet-title{font-size:.9rem;font-weight:700;color:#3730a3;}
+.card-sheet-close{border:0;background:#eef2ff;color:#4338ca;width:28px;height:28px;border-radius:14px;font-size:1.1rem;line-height:1;cursor:pointer;font-family:inherit;flex:none;}
+.card-sheet-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+/* 只显示名字：两列等宽，名字长就换行，不乱撑 */
+.card-sheet-item{display:flex;align-items:center;justify-content:center;min-height:54px;padding:10px 12px;
+  border:2px solid #c7d2fe;border-radius:12px;background:linear-gradient(160deg,#eef2ff,#fff);
+  color:#312e81;font-size:.92rem;font-weight:700;line-height:1.35;text-align:center;
+  word-break:break-all;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+.card-sheet-item:active{transform:scale(.985);}
+.card-sheet-item.active{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 3px rgba(99,102,241,.18);}
+.card-sheet-empty{grid-column:1/-1;padding:18px 0;text-align:center;color:#94a3b8;font-size:.85rem;}
+@media (max-width:360px){
+  .card-sheet-item{font-size:.85rem;padding:8px 10px;min-height:48px;}
+}
 </style>
 <style>.Po4BvhR1CK2tJaywJ6AN path {
   fill: var(--icon-path-fill);
@@ -502,8 +527,20 @@ try {
   <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 14px;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
     <span id="card-full-title" style="flex:1 1 auto;min-width:0;font-weight:700;color:#3730a3;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🧾 角色卡</span>
     <button id="card-full-sync" onclick="syncCardFromWall()" style="flex:none;border:1px solid #6366f1;background:#eef2ff;color:#4338ca;border-radius:16px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">☁️ 同步</button>
+    <button id="card-full-list" onclick="openCardListSheet()" title="角色卡列表" aria-label="角色卡列表" style="flex:none;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 9px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;">📋</button>
     <button id="card-full-edit" onclick="toggleCardFullEdit()" style="flex:none;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✎ 编辑</button>
     <button onclick="closeCardFull()" style="flex:none;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ 关闭</button>
+  </div>
+  <!-- 角色卡列表：从顶部向下弹出的抽屉，只列名字，一行两张 -->
+  <div id="card-list-sheet">
+    <div class="card-sheet-mask" onclick="closeCardListSheet()"></div>
+    <div class="card-sheet">
+      <div class="card-sheet-head">
+        <span class="card-sheet-title">📋 我的角色卡</span>
+        <button class="card-sheet-close" onclick="closeCardListSheet()" aria-label="收起">×</button>
+      </div>
+      <div class="card-sheet-grid" id="card-list-sheet-grid"></div>
+    </div>
   </div>
   <iframe id="card-full-frame" src="" style="flex:1 1 auto;min-height:0;width:100%;height:100%;border:0;background:#fff;"></iframe>
 </div>
@@ -3674,11 +3711,37 @@ function _showCardDetail(idx){
   $('#detail-modal').classList.add('show');
 }
 function closeCardFull(){
+  closeCardListSheet();
   const box=$('#card-full-view');
   if(box) box.style.display='none';
   const f=box&&box.querySelector('iframe'); if(f) f.src='';
   if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} _cardBlobUrl=null; }
   _syncCardEditBtn(false);
+}
+/* ===== 顶栏「📋」：从顶部向下弹出的角色卡列表（只列名字，一行两张） ===== */
+function openCardListSheet(){
+  const wrap=$('#card-list-sheet'), grid=$('#card-list-sheet-grid');
+  if(!wrap||!grid) return;
+  const cards=_myCardsCache||[];
+  const cur=String(_cardViewName||'');
+  grid.innerHTML=cards.length
+    ?cards.map(function(c,i){
+        const nm=String((c&&c.name)||'').trim()||('未命名 '+(i+1));
+        const on=nm===cur?' active':'';
+        return '<div class="card-sheet-item'+on+'" onclick="pickCardFromSheet('+i+')">'+escCardText(nm)+'</div>';
+      }).join('')
+    :'<div class="card-sheet-empty">还没有角色卡</div>';
+  wrap.classList.add('show');
+}
+function closeCardListSheet(){
+  const w=$('#card-list-sheet');
+  if(w) w.classList.remove('show');
+}
+/* 点列表里的卡：收起抽屉再切卡（_showCardDetail 会重建 iframe，当前卡也在其中） */
+function pickCardFromSheet(i){
+  closeCardListSheet();
+  if(!_myCardsCache||!_myCardsCache[i]) return;
+  _showCardDetail(i);
 }
 /* ===== 顶栏「✎ 编辑 / ✓ 完成」：控制 iframe 内 #result-area.card-editing ===== */
 let _cardEditing=false;
