@@ -2456,6 +2456,17 @@ async function _pushFullCard(uid, rec){
   }catch(e){ return false; }
   finally{ if(timer) clearTimeout(timer); }
 }
+/* 统一入口：桌面优先本机 bridge（快），否则 ntfy 加密分片 → 私有仓库。 */
+async function _routeFullCard(uid, rec){
+  if(!uid||!rec) return false;
+  if(!_isMobile()){
+    const local=await _pushFullCard(uid,rec);
+    if(local) return true;
+  }
+  // 手机 / 桌面 bridge 不通 → 加密分片走 ntfy（R18 密文）
+  const r=await _pushFullCardRelay(uid,rec);
+  return !!(r&&r.ok);
+}
 async function _fetchFullCard(uid, cid){
   if(!uid||!cid||!window.fetch) return null;
   let ctl=null,timer=null;
@@ -2535,6 +2546,119 @@ async function _pushToRelay(botData){
     return {id:(j&&j.id)||''};
   }catch(e){ return null; }
   finally{ if(timer) clearTimeout(timer); }
+}
+/* ===== 完整卡加密分片（R18 只进私有仓库，ntfy 上全是密文）=====
+   密钥派生必须与 bot 端 bot_fullcard_crypto._key() 完全一致：
+   SHA-256('yu7-fullcard-v1::yu7cards-4f7c1a9e2b6d8f30')，AES-256-GCM，
+   密文 = base64(nonce12 + tag16 + ciphertext)，切成 <=2400 的片发 ntfy。 */
+const FULLCARD_CHUNK=2400;
+const FULLCARD_KEY_SRC='yu7-fullcard-v1::yu7cards-4f7c1a9e2b6d8f30';
+let _fcKeyPromise=null;
+function _fcKey(){
+  if(!_fcKeyPromise){
+    _fcKeyPromise=(async function(){
+      const sc=window.crypto&&window.crypto.subtle;
+      if(!sc) throw new Error('no subtle crypto');
+      const raw=new TextEncoder().encode(FULLCARD_KEY_SRC);
+      return await sc.digest('SHA-256',raw);
+    })();
+  }
+  return _fcKeyPromise;
+}
+function _fcB64ToBytes(b64){
+  const bin=atob(b64), out=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
+  return out;
+}
+function _fcBytesToB64(bytes){
+  let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+async function _fcEncrypt(obj){
+  const sc=window.crypto.subtle, key=await _fcKey();
+  const nonce=window.crypto.getRandomValues(new Uint8Array(12));
+  const plain=new TextEncoder().encode(JSON.stringify(obj));
+  const aes=await sc.importKey('raw',key,{name:'AES-GCM'},false,['encrypt']);
+  const ct=new Uint8Array(await sc.encrypt({name:'AES-GCM',iv:nonce},aes,plain));
+  const all=new Uint8Array(nonce.length+ct.length);
+  all.set(nonce,0); all.set(ct,nonce.length);
+  return _fcBytesToB64(all);
+}
+async function _fcDecrypt(b64){
+  const sc=window.crypto.subtle, key=await _fcKey();
+  const all=_fcB64ToBytes(b64);
+  const nonce=all.slice(0,12), ct=all.slice(12);
+  const aes=await sc.importKey('raw',key,{name:'AES-GCM'},false,['decrypt']);
+  const plain=await sc.decrypt({name:'AES-GCM',iv:nonce},aes,ct);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+/* 上传完整卡：加密 → 分片 → 逐片 POST ntfy。返回 {ok,n} */
+async function _pushFullCardRelay(uid, card){
+  if(!uid||!card) return {ok:false};
+  try{
+    const b64=await _fcEncrypt(card);
+    const pieces=[];
+    for(let i=0;i<b64.length;i+=FULLCARD_CHUNK) pieces.push(b64.slice(i,i+FULLCARD_CHUNK));
+    const me=_tgUserId(), req='fc'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    for(let i=0;i<pieces.length;i++){
+      const o={kind:'fullcard',act:'put',uid:String(uid),cid:String(card.id||''),
+               n:pieces.length,i:i,data:pieces[i],req:req};
+      if(me&&me!==uid) o.gm=me;
+      const r=await fetch(RELAY_URL,{method:'POST',
+        headers:{'Content-Type':'text/plain;charset=UTF-8'},
+        body:JSON.stringify(o),cache:'no-store'});
+      if(!r.ok) return {ok:false,err:'第'+(i+1)+'片发送失败'};
+    }
+    return {ok:true,n:pieces.length,req:req};
+  }catch(e){ return {ok:false,err:String(e&&e.message||e)}; }
+}
+/* 请求完整卡：发 get → 轮询回执收分片 → 解密。返回卡片对象或 null */
+let _fcRx={};
+async function _requestFullCard(uid, cid){
+  if(!uid||!cid) return null;
+  const me=_tgUserId(), req='fc'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  try{
+    const o={kind:'fullcard',act:'get',uid:String(uid),cid:String(cid),req:req};
+    if(me&&me!==uid) o.gm=me;
+    const r=await fetch(RELAY_URL,{method:'POST',
+      headers:{'Content-Type':'text/plain;charset=UTF-8'},
+      body:JSON.stringify(o),cache:'no-store'});
+    if(!r.ok) return null;
+    const posted=await r.json().catch(function(){return null;});
+    const msgId=(posted&&posted.id)||'';
+    _fcRx[req]={n:0,pieces:{},at:Date.now()};
+    const deadline=Date.now()+14000;
+    while(Date.now()<deadline){
+      await new Promise(function(res){ setTimeout(res,1200); });
+      try{
+        const rr=await window.fetch(RELAY_ACK_URL+'/json?poll=1&since=12m',{cache:'no-store'});
+        if(!rr.ok) continue;
+        const lines=String(await rr.text()).split('\n');
+        for(let li=0;li<lines.length;li++){
+          let ev=null; try{ ev=JSON.parse(lines[li]); }catch(e){ continue; }
+          if(!ev||ev.event!=='message') continue;
+          let a=null; try{ a=JSON.parse(ev.message||''); }catch(e){ continue; }
+          if(!a) continue;
+          if(a.req===req&&typeof a.fullcard_n==='number'){
+            _fcRx[req].n=a.fullcard_n;
+            if(a.ok===0){ delete _fcRx[req]; return null; }
+          }
+          if(a.req===req&&typeof a.fullcard_i==='number'&&a.data){
+            _fcRx[req].pieces[a.fullcard_i]=a.data;
+          }
+        }
+        const st=_fcRx[req];
+        if(st&&st.n>0&&Object.keys(st.pieces).length>=st.n){
+          const parts=[];
+          for(let j=0;j<st.n;j++){ parts.push(st.pieces[j]||''); }
+          delete _fcRx[req];
+          return await _fcDecrypt(parts.join(''));
+        }
+      }catch(e){}
+    }
+    delete _fcRx[req];
+    return null;
+  }catch(e){ delete _fcRx[req]; return null; }
 }
 /* 等电脑回执：手机是单向发送，没有这张回执就没法判断电脑到底处理了没有 */
 async function _waitAck(id, ms){
@@ -2950,7 +3074,7 @@ async function syncCardFromWall(){
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(_loadLocal(_tgUserId()));
-    try{ _pushFullCard(uid,rec); }catch(e){}   // 完整卡同步到本机（桌面可达时）
+    try{ _routeFullCard(uid,rec); }catch(e){}   // 完整卡外发（bridge 或加密分片）
     toast(_sendToast(sent));
     return;
   }
@@ -4231,7 +4355,9 @@ async function openGmCardAt(i){
   const puid=item.uid;
   // 关键：先从本机 bot 拉完整卡（含能力行/装备/人脉的 HTML）。
   // 只有精简 cards.json 时 _materializeBotCard 会用空问卷造骨架 → 信息大部分缺失。
-  const remoteFull=await _fetchFullCard(puid, item.rec.id||'');
+  // 先试本机 bridge；不通（手机端）就走 ntfy 加密请求 → bot 读私有仓库
+  let remoteFull=await _fetchFullCard(puid, item.rec.id||'');
+  if(!remoteFull) remoteFull=await _requestFullCard(puid, item.rec.id||'');
   const base=remoteFull
     ? Object.assign({},item.rec,remoteFull,{_local:false,hasFull:!!remoteFull.frag})
     : item.rec;
@@ -4257,7 +4383,7 @@ async function openGmCardAt(i){
     });
   }
   _saveLocal(puid,list);
-  if(!remoteFull) toast('⚠️ 本机没有这张卡的完整内容（成员需在电脑端建卡/同步）');
+  if(!remoteFull) toast('⚠️ 私有仓库里还没有这张卡的完整内容（成员需先同步一次）');
   _showCardDetail(k,puid,list);
 }
 function showHome(){
@@ -4328,9 +4454,9 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   local.unshift(rec);
   if(!_saveLocal(uid,local)) return false;
   _renderMyCards(local);
-  /* 完整卡只写本机 bot（R18 不上云）。fire-and-forget：失败不影响建卡主流程，
-     手机端 bridge 不可达就自然跳过，只靠 ntfy 传精简数值。 */
-  try{ _pushFullCard(uid,rec); }catch(e){}
+  /* 完整卡外发：桌面走本机 bridge；手机走 ntfy 加密分片 → bot → 私有仓库。
+     fire-and-forget，失败不影响建卡主流程。 */
+  try{ _routeFullCard(uid,rec); }catch(e){}
   return true;
 };
 /* 本地缓存 + 云端列表 → 卡片墙用的最终列表（纯函数，方便单测）
