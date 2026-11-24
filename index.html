@@ -2911,6 +2911,11 @@ function hkFixRoll(state,roll){
   const raw=parseFloat(st['等级加值']);
   const bonus=isNaN(raw)?0:raw;
   delete st['等级加值'];
+  // state 里「缴械无效加值」这类由误判产生的加值键一并清掉（卡上不再有对应检定项）
+  Object.keys(st).forEach(function(k){
+    const m=/^(.+)加值$/.exec(k);
+    if(m&&HK_NOT_SKILL.test(m[1])) delete st[k];
+  });
   const out={};
   Object.keys(roll||{}).forEach(function(k){
     let nk=String(k).replace(/^业力/,'');
