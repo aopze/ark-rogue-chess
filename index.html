@@ -576,7 +576,6 @@ try {
 <div id="card-full-view" style="display:none;position:fixed;inset:0;z-index:20000;background:#fff;flex-direction:column;">
   <div style="flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:8px 14px;background:#eef2ff;border-bottom:1px solid #c7d2fe;">
     <span id="card-full-title" style="flex:1 1 auto;min-width:0;font-weight:700;color:#3730a3;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🧾 角色卡</span>
-    <button id="card-full-sync" onclick="syncCardFromWall()" style="flex:none;border:1px solid #6366f1;background:#eef2ff;color:#4338ca;border-radius:16px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">☁️ 同步</button>
     <button id="card-full-list" onclick="openCardListSheet()" title="角色卡列表" aria-label="角色卡列表" style="flex:none;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 9px;font-size:.9rem;font-weight:700;cursor:pointer;font-family:inherit;line-height:1.2;white-space:nowrap;">📋</button>
     <button id="card-full-edit" onclick="toggleCardFullEdit()" style="flex:none;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✎ 编辑</button>
     <button onclick="closeCardFull()" style="flex:none;border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 14px;font-size:.85rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ 关闭</button>
@@ -2343,14 +2342,17 @@ function showResult(){
         <div class="result-label">${c.label}${c.rightLabel?`<span class="result-label-right">${c.rightLabel}</span>`:''}</div>
         <div class="result-value">${c.value}</div>
       </div>`).join('')}</div>
-    <div class="sheet-btns" style="margin-top:14px;"><button class="sheet-btn" id="copy-all-btn" onclick="copyResult()">☁️ 同步</button><button class="sheet-btn" onclick="backToEdit()">↩️ 返回修改</button><button class="sheet-btn" onclick="showHome()">🏠 返回首页</button></div>
-    <div id="name-warn" style="display:none;color:#dc2626;font-size:.85rem;margin-top:8px;text-align:center;">⚠️ 请先填写角色姓名，才能同步</div>`;
+    <div class="sheet-btns" style="margin-top:14px;"><button class="sheet-btn" onclick="backToEdit()">↩️ 返回修改</button><button class="sheet-btn" onclick="showHome()">🏠 返回首页（自动保存同步）</button></div>
+    <div id="name-warn" style="display:none;color:#dc2626;font-size:.85rem;margin-top:8px;text-align:center;">⚠️ 请先填写角色姓名，才能保存同步</div>`;
   ensureCardData();
   if(window.prepareCardDom) window.prepareCardDom(box);
   if(window.initCardRuntime) window.initCardRuntime();
   applyEditable($('#result-area'));
   if(window._updateCopyBtn) window._updateCopyBtn();
+  _resultDirty=true;   // 结果页已生成：返回首页时自动保存+同步（不再有手动同步按钮）
 }
+/* 结果页是否已生成、尚未自动同步：返回首页 / 启动时消费一次 */
+let _resultDirty=false;
 function backToEdit(){
   $('#result-area').style.display='none';
   $('#result-area').innerHTML='';
@@ -2386,7 +2388,7 @@ function _updateCopyBtn(){
   return ok;
 }
 /* ============ 同步（双向，以时间更晚的一方为准）============
-   点「☁️ 同步」：
+   建卡返回首页 / 全屏卡点✓完成 时自动触发：
      1) 先存本地卡片墙（离开页面也不丢）；
      2) 拉一次 bot 的 cards.json，看同名卡谁更新更晚：
         · bot 更晚 → 拉取：把 bot 的数值回填到当前卡片 + 本地记录，不动 bot；
@@ -2908,7 +2910,7 @@ async function copyResult(){
   if(!_currentCardName()){
     _updateCopyBtn();
     const el=$('#card-name-input'); if(el) el.focus();
-    toast('⚠️ 先填角色姓名，再点同步');
+    toast('⚠️ 请先填写角色姓名，才能保存同步');
     return;
   }
   window._cardName=_currentCardName();
@@ -2963,7 +2965,7 @@ async function copyResult(){
   _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
 }
 
-/* ============ 卡片墙上打开旧卡时的「☁️ 同步」============
+/* ============ 卡片墙当前卡双向同步（由✓完成自动调用）============
    作用对象是当前正在看的这张卡（不是建卡结果页）：
      · bot 更新更晚 → 拉取数值，重建卡片视图；
      · 本地更新更晚 / bot 没有 → 按 state+roll 重建指令推给 bot（老卡没有 roll 就带 kr=1，别清空 bot 的检定项）。 */
@@ -3028,7 +3030,7 @@ async function syncCardFromWall(){
   /* 老卡可能只有 frag 没有 state：空 state 推上去会把 bot 里这张卡的数值全清掉，宁可拦下 */
   const hasState=!!(rec.state&&Object.keys(rec.state).length);
   if(!hasState){
-    toast('⚠️ 这张卡还没有数值记录，先点「✎ 编辑」改一下数值（再点✓完成）后同步，免得把 bot 上的数值清空');
+    toast('⚠️ 这张卡还没有数值记录，先点「✎ 编辑」改一下数值再点✓完成，避免把 bot 上的数值清空');
     return;
   }
   const cmd=_cmdFromRecord(rec);
@@ -3677,7 +3679,8 @@ function _migrateCardsToData(uid){
   });
   if(changed) _saveLocal(uid,list);
 }
-/* 卡片模板里点保存：把最新面板与数值写回卡片墙 */
+/* 卡片模板里点保存：把最新面板与数值写回卡片墙。
+   全屏卡顶栏已无「☁️ 同步」按钮：点「✓ 完成」保存后自动推送这次改动。 */
 window.addEventListener('message',function(e){
   const d=e.data;
   if(!d || d.type!=='yu7-card-save') return;
@@ -3687,6 +3690,8 @@ window.addEventListener('message',function(e){
     ? Object.assign({},c,{frag:d.frag,runtime:d.runtime,hasFull:true,updated_at:Math.floor(Date.now()/1000)}) : c);
   _saveLocal(uid,list);
   _renderMyCards(_loadLocal(_tgUserId()));   // 只刷新自己的卡墙；GM 模式会自动转去渲染成员
+  // 自动同步：iframe 里的数值已写回本地，直接走双向推送（拉取已由 openCardRemoteFirst 在开卡时做过）
+  try{ void syncCardFromWall(); }catch(e){}
 });
 /* 单张完整卡 HTML 单独存，key 按 uid+卡名，避免主索引过大 */
 function _cardHtmlKey(uid,name){ return 'yu7_card_html_'+uid+'_'+encodeURIComponent(name); }
@@ -3788,6 +3793,13 @@ function _addPending(uid,op){
   }catch(e){}
 }
 function _clearPending(uid){ try{ localStorage.removeItem(_pendingKey(uid)); }catch(e){} }
+/* 删除/改名后立即自动推送（原来要点「N 项待同步」/退出编辑模式才发）。
+   不去重：flush 内部按队列快照发，失败时队列保留，下次对账/再操作会重试。 */
+function _autoFlushOps(){
+  const uid=_tgUserId();
+  if(!uid||!_getPending(uid).length) return;
+  void _flushPendingOps();
+}
 /* 删除/改名批量推送：走同一条回环桥，不再依赖 Telegram sendData。
    返回 true = 桥收到并处理了（队列已清空）；false = 桥没连上，队列留着下次再发。 */
 async function _flushPendingOps(){
@@ -3842,18 +3854,13 @@ function _renderMyCards(cards){
   const uid=_tgUserId();
   const pendingOps=_getPending(uid).length;
   if(cnt){
+    // 删除/改名已改为自动同步：这里只保留数量提示，不再是可点的「同步」入口。
+    // 偶发没连上 bot 时队列会留着，回到前台/每 30 秒对账时自动重试（见文末定时器）。
     cnt.textContent=_myCardsCache.length
-      ? '共 '+_myCardsCache.length+' 张'+(pendingOps?' · '+pendingOps+' 项待同步（点此同步）':'')
+      ? '共 '+_myCardsCache.length+' 张'+(pendingOps?' · '+pendingOps+' 项待同步（自动重试中）':'')
       : '';
-    cnt.style.cursor=pendingOps?'pointer':'default';
-    cnt.onclick=pendingOps?function(){
-      if(cnt.dataset.busy) return;
-      cnt.dataset.busy='1';
-      _flushPendingOps().then(function(ok){
-        delete cnt.dataset.busy;
-        if(!ok) toast('⚠️ 本机 bot 没连上（127.0.0.1:18765），改动还留在本地');
-      });
-    }:null;
+    cnt.style.cursor='default';
+    cnt.onclick=null;
   }
   // 卡片：保持 4/3 尺寸不变，把完整数值压成两列四行（属性/等级、业力/耐力、
   // 信用点/维护费、贷款/利息），和打开后的数值栏同序；待同步仍是黄底。
@@ -4160,6 +4167,7 @@ function confirmCardAction(){
     _saveLocal(uid,next);
     _renderMyCards(next);
     toast('🗑 已删除「'+oldName+'」');
+    _autoFlushOps();   // 删除即自动同步，不再等手动点「待同步」
   }else if(mode==='rename'){
     const newName=String($('#ca-newname').value||'').trim().replace(/[\\/:*?"<>|]/g,'').slice(0,40);
     if(!newName){ toast('⚠️ 新名字不能为空'); return; }
@@ -4188,6 +4196,7 @@ function confirmCardAction(){
     _saveLocal(uid,cards);
     _renderMyCards(cards);
     toast('✎ 已改名为「'+newName+'」');
+    _autoFlushOps();   // 改名即自动同步，不再等手动点「待同步」
   }
   closeCardAction();
 }
@@ -4395,7 +4404,15 @@ function openGmCardAt(i){
   _gmOpenLocal(i);            // ① 秒开
   _bgRefreshGmCard(i);        // ② 后台更新（void，不 await）
 }
+/* 返回首页时自动保存+同步刚生成的结果卡（结果页没同步按钮了）。
+   必须在隐藏 result-area 之前调用 copyResult：它要从 DOM 读姓名/数值/完整 HTML。 */
+function _autoSyncResultOnHome(){
+  if(!_resultDirty) return;
+  _resultDirty=false;                 // 先清标志：即使这次同步失败也不重复弹提示/重复推送
+  try{ void copyResult(); }catch(e){} // 内部自带 toast 与单/双通道兜底
+}
 function showHome(){
+  _autoSyncResultOnHome();
   $('#result-area').style.display='none';
   $('#quiz-wrap').style.display='none';
   $('#home-view').style.display='block';
@@ -4553,6 +4570,7 @@ function _cardsHint(text){
 }
 /* 云端有卡、本地却不显示：只可能是「删除/改名的标记把云端那张挡住了，
    而删除请求还排在待同步队列里没发出去」。把两张都摆出来，让用户自己选。 */
+let _cardsHiddenFlushBusy=false;
 function _cardsHiddenHint(names){
   let el=null;
   try{ el=document.getElementById('my-cards-hint'); }catch(e){ return; }
@@ -4561,26 +4579,25 @@ function _cardsHiddenHint(names){
   el.style.cssText='display:block;text-align:center;color:#b45309;font-size:.76rem;line-height:1.6;'
     +'background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin:-8px 0 12px;';
   const tip=document.createElement('div');
-  tip.textContent='⚠️ 云端还有 '+names.length+' 张（'+names.join('、')+'）被本机的删除标记挡着，正在等电脑/云端同步';
+  tip.textContent='⚠️ 云端还有 '+names.length+' 张（'+names.join('、')+'）被本机的删除标记挡着，正在自动同步删除';
   el.appendChild(tip);
   const bar=document.createElement('div');
   bar.style.cssText='margin-top:7px;display:flex;gap:8px;justify-content:center;';
-  const bDel=document.createElement('button');
-  bDel.textContent='同步删除这 '+names.length+' 张';
-  bDel.style.cssText='border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;border-radius:9px;padding:4px 10px;font-size:.74rem;font-weight:700;font-family:inherit;cursor:pointer;';
-  bDel.onclick=function(){
-    bDel.disabled=true; bDel.textContent='同步中…';
-    _flushPendingOps().then(function(ok){
-      if(!ok){ bDel.disabled=false; bDel.textContent='同步删除这 '+names.length+' 张'; return; }
-      _cardsHint(''); loadMyCards();
-    });
-  };
   const bBack=document.createElement('button');
   bBack.textContent='取消删除，恢复显示';
   bBack.style.cssText='border:1px solid #a5b4fc;background:#eef2ff;color:#4338ca;border-radius:9px;padding:4px 10px;font-size:.74rem;font-weight:700;font-family:inherit;cursor:pointer;';
   bBack.onclick=function(){ _restoreHidden(names); };
-  bar.appendChild(bDel); bar.appendChild(bBack);
+  bar.appendChild(bBack);
   el.appendChild(bar);
+  // 删除意图已排队：改为自动同步（原来的手动同步删除按钮已取消）。
+  // 用标志避免对账反复触发；失败时队列保留，下一次对账/操作再试。
+  if(!_cardsHiddenFlushBusy){
+    _cardsHiddenFlushBusy=true;
+    _flushPendingOps().then(function(ok){
+      _cardsHiddenFlushBusy=false;
+      if(ok){ _cardsHint(''); loadMyCards(); }
+    });
+  }
 }
 /* 撤销这几张的删除/改名意图：清墓碑 + 清队列，云端那几张就会重新出现 */
 function _restoreHidden(names){
@@ -4616,10 +4633,16 @@ if(_autoCreate) startCreate(); else showHome();
 loadMyCards();
 /* bot 新建/删除卡后：切回前台或每 30 秒静默对账，刷新即可见 */
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible' && !_editMode) loadMyCards();
+  if(document.visibilityState==='visible' && !_editMode){
+    loadMyCards();
+    _autoFlushOps();   // 自动同步：上次删除/改名没连上 bot 的，回来后补推
+  }
 });
 setInterval(function(){
-  if(document.visibilityState==='visible' && !_editMode) loadMyCards();
+  if(document.visibilityState==='visible' && !_editMode){
+    loadMyCards();
+    _autoFlushOps();   // 自动同步：队列里残留的删除/改名定时重试
+  }
 },30000);
 </script>
 
