@@ -3593,6 +3593,7 @@ window.addEventListener('message',function(e){
     // 卡里改了姓名 → 外墙名字跟着变（外部名就是内部名），并把改名带给 bot（id 不变）
     _cardViewName=d.name;
     _addDeleted(uid,renamedFrom);   // 旧名立墓碑，防止对账把旧名那张又加回来
+    _dropDeleted(uid,d.name);       // 新名若有旧墓碑要撤掉，否则这张卡会被自己挡成「已删除」
     if(viewId) _addPending(uid,{a:'ren',id:viewId,old:renamedFrom,new:d.name});
   }
   _renderMyCards(_loadLocal(_tgUserId()));   // 只刷新自己的卡墙；GM 模式会自动转去渲染成员
@@ -3639,6 +3640,13 @@ function _addDeleted(uid,name){
 }
 function _clearDeleted(uid){
   try{ localStorage.removeItem(_deletedKey(uid)); }catch(e){}
+}
+/* 只撤掉某一个名字的墓碑。
+   卡里改姓名是 A→B→A 这种来回改的常态：A→B 时给 A 立了墓碑，
+   再改回 A 时若不清掉，_mergeCards 会把「名字叫 A 的卡」自己过滤掉，卡就凭空消失了。 */
+function _dropDeleted(uid,name){
+  const arr=_getDeleted(uid).filter(x=>x&&x.name!==name);
+  _setDeleted(uid,arr);
 }
 /* 删除/改名之后，云端不可能「立刻」跟上，中间有两段延迟：
      ① 队列里的 op 还没发出去（bot 没开/没点同步）
