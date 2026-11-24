@@ -2505,16 +2505,29 @@ async function _waitAck(id, ms){
   }
   return null;
 }
-/* 统一投递：桌面先本机桥，手机先中转；两条都不行才回退剪贴板。
+/* 统一投递：桌面先本机桥，手机先中转；任何一条通了就送达，都不行才回退剪贴板。
+   关键：回环桥只在「跑 bot 的那台电脑」上有效。其他人用 Telegram 桌面版打开
+   Mini App 时，127.0.0.1 指向他们自己的电脑，桥必然失败 —— 这时必须继续走
+   ntfy 中转，不能一失败就弹「本机 bot 没连上」让人复制粘贴。
    返回 {via:'bridge',res} / {via:'relay',ack} / null。 */
 async function _sendOps(botData){
-  if(_isMobile()){
+  const mobile=_isMobile();
+  if(mobile){
     const pushed=await _pushToRelay(botData);
     if(pushed) return {via:'relay',ack:await _waitAck(pushed.id,9000)};
   }
   const bridged=await _pushToBridge(botData);
   if(bridged) return {via:'bridge',res:bridged};
+  if(!mobile){
+    // 非 bot 所在电脑的桌面端：桥失败后补一次中转（手机端上面已经试过）
+    const pushed=await _pushToRelay(botData);
+    if(pushed) return {via:'relay',ack:await _waitAck(pushed.id,9000)};
+  }
   return null;
+}
+/* 中转回执明确说「没落盘」（例如 GM 代存被拒）时，不能当成同步成功 */
+function _relayRejected(sent){
+  return !!(sent&&sent.via==='relay'&&sent.ack&&!sent.ack.ok);
 }
 function _sendToast(sent){
   if(!sent) return '';
@@ -2572,8 +2585,8 @@ function _showCopySheet(cmd, why){
 function _syncFallback(cmd, why){
   const hint=_isMobile()
     ? '\n手机端走的是中转（ntfy.sh）：电脑那边要开着 bot，且日志里应有 [card-relay] 已启动。'
-    : '\n本机 bot 没连上（'+BRIDGE_URL+'）：确认它正在跑 —— 桌面「牌库_bot.bat」，'
-      +'日志里应该有 [card-bridge] 已监听。';
+    : '\n本机桥（'+BRIDGE_URL+'）和中转（ntfy.sh）都没连上：确认跑 bot 的电脑开着机，'
+      +'日志里应有 [card-bridge] 已监听 / [card-relay] 已启动。';
   const okToasts=function(){
     toast('⚠️ '+(why||'没送达')+hint+'\n指令已复制到剪贴板，回 bot 粘贴发送也能同步',15000);
   };
@@ -2789,7 +2802,10 @@ async function copyResult(){
   toast('☁️ 已保存，正在同步…');
   /* 桌面走本机桥，手机走 ntfy 中转；都不通才把指令丢剪贴板 */
   const sent=await _sendOps(botData);
-  if(sent){ toast(_sendToast(sent)); return; }
+  if(sent){
+    if(_relayRejected(sent)){ toast(_sendToast(sent)); return; }  // 电脑明确拒收：别报成功
+    toast(_sendToast(sent)); return;
+  }
   _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
 }
 
@@ -2874,6 +2890,7 @@ async function syncCardFromWall(){
   /* 桌面走本机桥（在页面内完成，不会关掉 App），手机走 ntfy 中转 */
   const sent=await _sendOps(botData);
   if(sent){
+    if(_relayRejected(sent)){ toast(_sendToast(sent)); return; }  // 被拒就别标记已同步
     rec._local=false;
     rec.updated_at=Math.max(rec.updated_at||0,ts);
     list[i]=rec;
