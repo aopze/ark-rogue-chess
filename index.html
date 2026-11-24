@@ -4362,10 +4362,13 @@ function _restoreHidden(names){
   toast('↩️ 已恢复「'+names.join('、')+'」，正在重新对账');
   loadMyCards();
 }
-/* 启动：显示首页卡片墙 + 后台对账 */
+/* 启动：默认显示首页卡片墙 + 后台对账；
+   bot 的 /create 按钮带 ?create=1 时，跳过卡片墙直接进建卡流程 */
 try{ _gmMode=localStorage.getItem('yu7_gm_mode')==='1'; }catch(e){}
 if(_gmMode) _applyGmModeUi(true);
-showHome();
+let _autoCreate=false;
+try{ _autoCreate=new URLSearchParams(location.search).get('create')==='1'; }catch(e){}
+if(_autoCreate) startCreate(); else showHome();
 loadMyCards();
 /* bot 新建/删除卡后：切回前台或每 30 秒静默对账，刷新即可见 */
 document.addEventListener('visibilitychange',function(){
