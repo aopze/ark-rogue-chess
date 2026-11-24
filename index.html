@@ -2672,10 +2672,11 @@ function _applyNumsToState(st, nums){
 }
 /* 由本地卡片记录重建 .char add 指令（老卡没存指令，一律按 state+roll 拼） */
 function _cmdFromRecord(rec){
-  const st=rec.state||{};
+  const fx=hkFixRoll(rec.state,rec.roll);      // 旧键（业力交涉/等级加值）在推回 bot 前一次迁掉
+  const st=fx.state;
   const kv=Object.keys(st).map(k=>hkSafe(k)+':'+hkSafe(st[k])).join(';');
   let s='.char add name['+hkSafe(rec.name||'')+']~ state['+kv+';]~';
-  const roll=rec.roll||{};
+  const roll=fx.roll;
   const rk=Object.keys(roll);
   if(rk.length) s+=' roll['+rk.map(k=>hkSafe(k)+':'+hkSafe(roll[k])).join(';')+';]~';
   return s;
@@ -2899,6 +2900,27 @@ const hkItem=s=>{
   if(HK_RESERVED.test(v)) v='r_'+v;
   return v;
 };
+/* 这些是武器/护甲的特性词，不是检定项：文本里被扫到也不能变成 roll 的一项 */
+const HK_NOT_SKILL=/^(缴械无效|伤害减轻|压制|突袭|潜行状态|无法常用|战斗噪音|优势|屏障|重启|GB)$/;
+/* 检定项规范化（老卡、老指令都过一遍，幂等）：
+   1. 「业力交涉」→「交涉」，其余五项同理（业力只是判定属性，不是检定名）
+   2. 等级检定用「等级」本身当加值：{等级加值} → {等级}，原「等级加值」的固定加成内联成常量
+   3. 武器特性词（缴械无效等）从 roll 里剔掉 */
+function hkFixRoll(state,roll){
+  const st=Object.assign({},state||{});
+  const raw=parseFloat(st['等级加值']);
+  const bonus=isNaN(raw)?0:raw;
+  delete st['等级加值'];
+  const out={};
+  Object.keys(roll||{}).forEach(function(k){
+    let nk=String(k).replace(/^业力/,'');
+    if(nk==='等级加值') nk='等级';
+    if(HK_NOT_SKILL.test(nk)) return;
+    const tail=bonus?(bonus>0?'+'+bonus:String(bonus)):'';
+    out[nk]=String(roll[k]==null?'':roll[k]).replace(/\{等级加值\}/g,'{等级}'+tail);
+  });
+  return {state:st,roll:out};
+}
 const hkNum=(v,d)=>{const n=parseFloat(v);return isNaN(n)?d:n;};
 /* 读取结果页上用户可直接修改的数值（DOM 优先，回退到计算值） */
 function readNumFields(){
@@ -2929,6 +2951,8 @@ function extractModifiers(text,out){
   const pickMod=(mods,i)=>mods.length===1?mods[0]:(mods[i]||mods[mods.length-1]);
   const addSkill=(name,n,dice)=>{
     const k=String(name).trim(); if(!k) return;
+    // 武器/护甲特性词（缴械无效、伤害减轻…）常和「等级判定」出现在同一句，不能当检定项
+    if(HK_NOT_SKILL.test(k)) return;
     if(!out.skills[k]) out.skills[k]={n:0,dice:0};
     const v=parseFloat(n);
     if(dice) out.skills[k].dice+=(isNaN(v)?1:v); else if(!isNaN(v)) out.skills[k].n+=v;
@@ -2962,9 +2986,10 @@ function extractModifiers(text,out){
         named=true;
       }
     }
-    // 「X」相关等级判定
+    // 「X」相关等级判定：词和「等级判定」之间不能再夹另一对「」，否则
+    // 「该武器获得「缴械无效」，进行「偷袭」相关等级判定」会把缴械无效当成检定名
     if(!named){
-      names=takeNames(/[「]([^」]+)[」][^。；;]{0,30}?等级判定/g);
+      names=takeNames(/[「]([^」]+)[」][^「」。；;]{0,30}?等级判定/g);
       mods=modsOf(rest);
       if(names.length&&mods.length){names.forEach((name,i)=>{const n=pickMod(mods,i);addSkill(name,n,/D/i.test(n));});named=true;}
     }
@@ -3029,21 +3054,23 @@ function buildHKTRPGCommand(){
   S('属性',n.attr); S('等级',n.level); S('业力',n.karma);
   S('耐力',n.stamina+'/'+n.staminaMax); S('信用点',n.credit); S('维护费',n.upkeep);
   S('贷款',n.loan+'/'+n.loanLimit); S('利息',n.interest);
-  S('等级加值',out.level||0);
   skillKeys.forEach(k=>{
     const info=out.skills[k]||{n:0,dice:0};
     S(hkSafe(k)+'加值',info.n||0);
   });
 
-  // roll：2D6 + 加值；6 种业力检定始终输出，即使没有加值
+  // roll：2D6 + 加值。等级检定直接用「等级」本身当加值（没有「等级加值」这个字段）；
+  // 6 项业力技能检定始终输出，检定名就是技能名（不再加「业力」前缀）
   const roll=[];
-  let lvExpr=HK_DICE+(out.levelDice?'+'+out.levelDice+'D6':'')+'+{等级加值}';
+  const lvBonus=out.level?(out.level>0?'+'+out.level:String(out.level)):'';
+  const lvExpr=HK_DICE+(out.levelDice?'+'+out.levelDice+'D6':'')+'+{等级}'+lvBonus;
   roll.push('等级:'+lvExpr);
   skillKeys.forEach(k=>{
+    if(HK_NOT_SKILL.test(k)) return;          // 武器特性（缴械无效等）不是检定
     const info=out.skills[k]||{n:0,dice:0};
     const key=hkSafe(k)+'加值';
     const expr=HK_DICE+(info.dice?'+'+info.dice+'D6':'')+'+{'+key+'}';
-    roll.push(hkItem('业力'+k)+':'+expr);
+    roll.push(hkItem(k)+':'+expr);
   });
 
   // 仅输出影响检定的 name / state / roll，不再带 notes
@@ -4132,9 +4159,11 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   const local=all.filter(c=>c.name!==name);
   const now=Math.floor(Date.now()/1000);
   const rt=(payload&&payload.runtimeState)||{};
-  const rec={id:cid,name:name,state:state,roll:roll,notes:'',created_at:(prevSame&&prevSame.created_at)||now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
-    level:(rt.level!==undefined&&rt.level!==null?rt.level:(state['等级']||'')),
-    credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(state['信用点']||'')),
+  const fx=hkFixRoll(state,roll);            // 新指令本来就在生成时规范化过，这里兜住旧格式
+  const st=fx.state;
+  const rec={id:cid,name:name,state:st,roll:fx.roll,notes:'',created_at:(prevSame&&prevSame.created_at)||now,updated_at:now,_local:true,hasFull:!!frag,frag:frag,runtime:runtime,
+    level:(rt.level!==undefined&&rt.level!==null?rt.level:(st['等级']||'')),
+    credit:(rt.credit!==undefined&&rt.credit!==null?rt.credit:(st['信用点']||'')),
     // 只记 id/名字这几个小字段，打开卡片时据此重建「添加」候选项池
     sysIds:finalSysIds(),
     weapons:(payload&&payload.selectedWeaponNames)||[],
