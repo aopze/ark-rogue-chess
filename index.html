@@ -4322,7 +4322,7 @@ function _gmOpenLocal(i){
 async function _bgRefreshGmCard(i){
   const item=_gmCardsCache[i];
   if(!item) return;
-  const puid=item.uid, cid=item.rec.id||'';
+  const puid=item.uid, cid=item.rec.id||_cardViewId||'';   // 兜底用当前视图 id，别因为缺 id 就放弃拉完整卡
   if(!cid) return;
   const remote=await _requestFullCard(puid,cid);     // 所有设备统一走 ntfy 分片（明文）
   if(!remote||!remote.frag) return;                  // 线上没有/失败 → 保留本地
