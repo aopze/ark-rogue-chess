@@ -54,18 +54,17 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
   .ability-row-body{border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
 }
 /* 人脉：与能力行同一套视觉 —— 浅底 + 左侧主色条 + 虚线分隔。
-   以前它是 grid + background:#cbd5e1，又继承了 .ability-row 的 padding，
-   padding 区域把灰底露成一圈边框，看着像"框里再套一格"。现在只留一块。 */
+   栏内只有两项：人脉:名字 / 效果:内容（角色类型示例与「如何获得人脉效果」都已去掉）。 */
 .conn-section-title{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0 6px;font-weight:700;color:var(--primary);}
 .conn-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:0;
   background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid var(--primary);
   border-radius:8px;padding:10px 12px;margin-top:8px;}
 .conn-cell{font-size:.85rem;line-height:1.65;color:#334155;min-width:0;overflow-wrap:anywhere;}
-.conn-cell:first-child{flex:0 0 110px;}
-.conn-cell:last-of-type{flex:1 1 0;border-left:1px dashed #cbd5e1;padding-left:12px;}
+/* 老片段（存档里的卡片 HTML）没有 conn-cell-name/-effect 类，位置选择器兜底，避免闪一下未套样式 */
+.conn-cell-name,.conn-cell:first-child{flex:0 0 110px;}
+.conn-cell-effect,.conn-cell:last-of-type{flex:1 1 0;border-left:1px dashed #cbd5e1;padding-left:12px;}
 .conn-label{font-size:.7rem;color:#64748b;margin-right:6px;}
 .conn-name{font-weight:700;color:#0f172a;font-size:.9rem;}
-.conn-role-mini{display:block;font-size:.75rem;color:#94a3b8;margin-top:2px;}
 /* 具体人脉信息：跟正文同色，平时只靠一条虚线分隔，编辑态才给底色 */
 /* 注意：全局有 input[type="text"]{border:2px solid;border-radius:8px}，权重比单个类高，
    所以这里必须带上 [type="text"]，否则那条边框会漏进来（试过，看着像又套了一个小框） */
@@ -76,8 +75,8 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
 .conn-detail-edit[type="text"]:focus{outline:none;background:#fff;border-radius:4px;box-shadow:0 0 0 2px rgba(79,70,229,.18);}
 .conn-detail-edit[type="text"]::placeholder{color:#94a3b8;}
 @media (max-width:560px){
-  .conn-cell:first-child{flex:1 1 100%;}
-  .conn-cell:last-of-type{flex:1 1 100%;border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
+  .conn-cell-name,.conn-cell:first-child{flex:1 1 100%;}
+  .conn-cell-effect,.conn-cell:last-of-type{flex:1 1 100%;border-left:none;border-top:1px dashed #cbd5e1;padding-left:0;padding-top:8px;}
 }
 /* 第四页人脉：具体身份 / 补充说明输入框 */
 .conn-detail-box{margin-top:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 14px;}
@@ -159,8 +158,6 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .result-card.result-equip .result-value{display:block;white-space:normal;overflow:visible;text-overflow:clip;}
 .equip-line{display:flex;justify-content:space-between;gap:8px;}
 .equip-line + .equip-line{margin-top:2px;}
-.connection-rule{margin-top:8px;padding:8px 10px;background:#f8fafc;border-left:3px solid #cbd5e1;border-radius:4px;font-size:.86rem;line-height:1.65;color:#334155;}
-.connection-rule strong{color:#0f172a;}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;z-index:10000;justify-content:center;align-items:center;padding:20px;}
 .modal-overlay.show{display:flex;}
 .modal-box{background:#fff;border-radius:12px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto;padding:24px;position:relative;box-shadow:0 20px 25px -5px rgba(0,0,0,.1);}
@@ -182,13 +179,16 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-row .weapon-note{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 备注独占第二行，过长可换行 */
 .weapon-custom-row{grid-template-columns:minmax(0,1fr);}
 .weapon-custom-item{display:grid;grid-template-columns:1.7fr .9fr;gap:1px;background:#cbd5e1;}  /* 定制名（更宽）/ 维护费 */
-/* 定制 / 装备：与武器同款「标签:值 同一行」的单行格，字号比武器大一档 */
+/* 定制 / 装备 / 道具：与武器同款「标签:值 同一行」的单行格，字号比武器大一档 */
 .weapon-custom-item .weapon-cell,
-.equip-row .weapon-cell{padding:5px 5px;font-size:.76rem;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.equip-row .weapon-cell,
+.item-row .weapon-cell{padding:5px 5px;font-size:.76rem;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
 .weapon-custom-item .weapon-cell b,
-.equip-row .weapon-cell b{display:inline;font-size:.74rem;margin:0;}
+.equip-row .weapon-cell b,
+.item-row .weapon-cell b{display:inline;font-size:.74rem;margin:0;}
 .weapon-custom-item .custom-effect,
-.equip-row .equip-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 效果独占下一行，过长可换行 */
+.equip-row .equip-effect,
+.item-row .item-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 效果独占下一行，过长可换行 */
 .weapon-cell{min-width:0;background:#f8fafc;padding:6px 8px;font-size:.78rem;line-height:1.5;color:#334155;overflow-wrap:anywhere;}
 .weapon-cell b{display:block;font-size:.7rem;color:#64748b;margin-bottom:2px;}
 .weapon-custom-title{font-size:.78rem;font-weight:700;color:var(--primary);margin:6px 0 3px;display:flex;align-items:center;gap:8px;}
@@ -212,8 +212,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .item-block-title{font-size:.82rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .item-row{display:grid;grid-template-columns:1.3fr .7fr;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--accent);border-radius:6px;overflow:hidden;}
 .item-row + .item-row{margin-top:6px;}
-/* 道具效果独占第二行，过长可换行；和武器备注同款 */
-.item-row .item-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}
+/* 道具格：道具名 / 价格 两格（标签和值同一行），效果整行放在下面 —— 与武器/装备同款 */
 @media (max-width:560px){
   .item-row{grid-template-columns:1.3fr .7fr;}
 }
@@ -1045,18 +1044,6 @@ const connectionData=[
   {label:"附身",role:"魔术师、占卜师、妖精、神",effect:"你获得1点「重启」。"},
   {label:"后援",role:"资产家、保护者、技术人员、主人",effect:"跑团结尾时，你所需要的支付维护费最多减少20信用点。"}
 ];
-/* 人脉效果不是被动：获取方式的口径说明。
-   卡面上那一栏（details「如何获得人脉效果」）已按需求删掉，所以目前没有调用点；
-   文案先留在这里，将来要挂到「人脉的选择」页或帮助里可以直接用。 */
-function connectionRuleHtml(withTitle=true){
-  return `${withTitle?'<div class="sheet-group-title">如何获得人脉效果</div>':''}
-  <div>人脉效果不是被动。得到效果不需要进行判定；从以下任一方式中选择一种激活。</div>
-  <div class="connection-rule"><strong>● 与人脉对象的 ERP</strong><br>从人脉中选择一人进行 ERP，直接见面、加深关系，从对方那里获得恩惠。因为可以同时减少业力，所以是最推荐的手段。没有时间时，GM 允许可以只简单描述加深关系的过程；GM 允许且 ERP 合理时，可以同时与多个人脉加深关系，获得多个效果。</div>
-  <div class="connection-rule"><strong>● 耐力减少</strong><br>从人脉中选择一人，使 PC 的耐力降低 1D6 点。以恳求、下跪、乞求，或简单的屈辱游戏描写作为获得效果的方式。对话通常耗时 3 小时；GM 允许时可以用几分钟程度的通话结束。</div>
-  <div class="connection-rule"><strong>● 10 信用点</strong><br>从人脉中选择一人，使 PC 的信用点减少 10 点；如果贷款没有超过限额，也可以改为贷款增加 10 点。通过礼物、接待、现金贿赂等方式获得效果。对话通常耗时 3 小时；GM 允许时可以用几分钟程度的通话结束。</div>
-  <div style="font-size:.8rem;color:#64748b;margin-top:8px;">※ 每次获得人脉效果时选择一种方式；人脉效果不是常驻被动。</div>`;
-}
-
 const roleTypeData=[
   {category:"外表",items:[
     {name:"俊男靓女",desc:"大多数人都能接受的特性。内容过多也不必赘述。"},
@@ -2053,15 +2040,14 @@ function showResult(){
       return s?`<div class="sheet-group-title">${s.name}</div>${s.abilities.map(abilityItemHtml).join('')}`:'';
     }).join(hr)||'—');
 
-  // 人脉：与上方能力行同一套视觉（浅底 + 左侧主色条 + 虚线分隔），不再额外套框
+  // 人脉：只留「人脉:名字」和「效果:…」两格（不再显示角色类型示例、不再有获取方式说明）
   const conn=connectionData.find(c=>c.label===answers.connection);
   const connRowHtml=conn?`<div class="conn-section-title">人脉</div>
     <div class="conn-row">
-      <div class="conn-cell">
-        <span class="conn-label">人脉</span><span class="conn-name">${escCardText(conn.label)}</span>
-        <div class="conn-role-mini">${escCardText(conn.role)}</div>
+      <div class="conn-cell conn-cell-name">
+        <b class="conn-label">人脉:</b><span class="conn-name">${escCardText(conn.label)}</span>
       </div>
-      <div class="conn-cell">${escCardText(conn.effect)}</div>
+      <div class="conn-cell conn-cell-effect"><b class="conn-label">效果:</b>${escCardText(conn.effect)}</div>
       <input class="conn-detail-edit" data-conn-detail="1" type="text"
         value="${escCardText(answers.connectionDetail||'')}"
         placeholder="人脉具体信息（点「编辑」后可修改）" readonly>
@@ -4071,6 +4057,29 @@ setInterval(function(){
         row.insertBefore(pc,merged); row.insertBefore(uc,merged); merged.remove();
       }
       if(row.children.length>=2) reorder(row,['装备名','价格','维护费','效果'],{'效果':'equip-effect'});
+    });
+    // 道具：老片段顺序一致，但可能缺 item-effect 类
+    [].slice.call(box.querySelectorAll('.item-row')).forEach(function(row){
+      if(row.children.length>=2) reorder(row,['道具名','价格','效果'],{'效果':'item-effect'});
+    });
+    // 人脉：老片段里有角色类型小字、标签没冒号、效果没有「效果:」前缀 → 只留 人脉:名字 / 效果:内容
+    [].slice.call(box.querySelectorAll('.conn-rules')).forEach(function(el){ el.remove(); });
+    [].slice.call(box.querySelectorAll('.conn-row')).forEach(function(row){
+      var mini=row.querySelector('.conn-role-mini'); if(mini) mini.remove();
+      var cells=[].slice.call(row.children).filter(function(c){return c.classList.contains('conn-cell');});
+      if(!cells.length) return;
+      var nameCell=cells[0];
+      nameCell.classList.add('conn-cell-name');
+      var lab=nameCell.querySelector('.conn-label');
+      if(lab && !/[:：]\s*$/.test(String(lab.textContent).trim())) lab.textContent=String(lab.textContent).trim()+':';
+      var effCell=cells[1];
+      if(effCell){
+        effCell.classList.add('conn-cell-effect');
+        if(!effCell.querySelector('b')){
+          var b=document.createElement('b'); b.className='conn-label'; b.textContent='效果:';
+          effCell.insertBefore(b, effCell.firstChild);
+        }
+      }
     });
   }
   window.prepareCardDom=function(box){
