@@ -3922,7 +3922,7 @@ function _renderMyCards(cards){
         +'<button onclick="event.stopPropagation();askDeleteCard('+i+')" style="padding:2px 6px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;border-radius:10px;font-size:.64rem;cursor:pointer;">🗑 删除</button>'
         +'</div>'
       : '';
-    return '<div onclick="'+( _editMode?'void(0)':'_showCardDetail('+i+')')+'" style="cursor:'+( _editMode?'default':'pointer')+';aspect-ratio:4/3;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:10px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
+    return '<div onclick="'+( _editMode?'void(0)':'openCardRemoteFirst('+i+')')+'" style="cursor:'+( _editMode?'default':'pointer')+';aspect-ratio:4/3;border:2px solid '+(c._local?'#fcd34d':'#c7d2fe')+';border-radius:12px;background:'+(c._local?'#fffbeb':'linear-gradient(160deg,#eef2ff,#fff)')+';padding:10px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06);transition:transform .15s;">'
       +ops
       +'<div style="font-weight:700;color:#1e293b;text-align:center;font-size:.9rem;line-height:1.3;word-break:break-all;">'+escCardText(c.name||'未命名')+'</div>'
       +brief
@@ -3982,6 +3982,34 @@ let _cardBlobUrl=null;
    保存/同步/本地缓存都按这个走，否则 GM 改的数值会写进自己那张卡。 */
 let _cardOwnerUid='';
 function _cardOwner(){ return _cardOwnerUid||_tgUserId(); }
+/* 统一开卡入口：线上是唯一真源，本地只做加速缓存。
+   用户点自己的卡 → 先拉私有仓库完整卡；拿到就用线上，失败才用本地。
+   GM 走 openGmCardAt（同一套远端读取，只是 uid 是成员）。 */
+async function openCardRemoteFirst(i){
+  const c=_myCardsCache[i];
+  if(!c) return;
+  const uid=_tgUserId();
+  let remote=null;
+  if(c.id){
+    if(!_isMobile()) remote=await _fetchFullCard(uid,c.id);   // 桌面：本机 bridge
+    if(!remote) remote=await _requestFullCard(uid,c.id);       // 手机/兜底：ntfy 加密
+  }
+  if(remote&&remote.frag){
+    // 线上完整卡覆盖本地：真源以线上为准
+    const list=_loadLocal(uid);
+    let k=c.id?list.findIndex(function(x){return x&&x.id===c.id;}):-1;
+    if(k<0) k=list.findIndex(function(x){return x&&x.name===c.name;});
+    const merged=Object.assign({},list[k]||{},remote,{_local:false,hasFull:true});
+    if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
+    _saveLocal(uid,list);
+    _myCardsCache[i]=merged;
+    _showCardDetail(i,uid,list);
+    return;
+  }
+  // 线上没有 / 拉取失败 → 本地兜底（本地也没有 frag 时 _showCardDetail 会造骨架）
+  if(remote===null && c.id) toast('⚠️ 线上未连上，显示本地缓存');
+  _showCardDetail(i);
+}
 function _showCardDetail(idx, ownerUid, listOverride){
   const src=listOverride||_myCardsCache;
   const c=src[idx];
@@ -4084,7 +4112,7 @@ function closeCardListSheet(){
 function pickCardFromSheet(i){
   closeCardListSheet();
   if(!_myCardsCache||!_myCardsCache[i]) return;
-  _showCardDetail(i);
+  openCardRemoteFirst(i);
 }
 /* ===== 顶栏「✎ 编辑 / ✓ 完成」：控制 iframe 内 #result-area.card-editing ===== */
 let _cardEditing=false;
