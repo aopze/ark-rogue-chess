@@ -347,6 +347,15 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .gm-card-brief{font-size:.72rem;line-height:1.45;color:#475569;text-align:center;word-break:break-all;}
 .gm-card-none{font-size:.78rem;color:#94a3b8;text-align:center;line-height:1.5;}
 #home-title.gm-on{color:#b45309;}
+/* 卡片墙缩略图：8 项数值压成两列四行，卡片仍是 4/3，不靠放大字号 */
+.card-mini-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px 6px;width:100%;margin-top:2px;}
+.card-mini-stat{display:flex;align-items:baseline;gap:3px;min-width:0;font-size:.58rem;line-height:1.3;color:#334155;white-space:nowrap;}
+.card-mini-stat b{color:#92400e;font-weight:700;flex:none;}
+.card-mini-stat span{overflow:hidden;text-overflow:ellipsis;min-width:0;}
+@media (max-width:360px){
+  .card-mini-stats{gap:1px 4px;}
+  .card-mini-stat{font-size:.55rem;gap:2px;}
+}
 </style>
 <style>.Po4BvhR1CK2tJaywJ6AN path {
   fill: var(--icon-path-fill);
@@ -3700,24 +3709,42 @@ function _renderMyCards(cards){
       });
     }:null;
   }
-  // 卡片：矮卡，只显示 出身/领域 + 等级/信用点；待同步黄底
+  // 卡片：保持 4/3 尺寸不变，把完整数值压成两列四行（属性/等级、业力/耐力、
+  // 信用点/维护费、贷款/利息），和打开后的数值栏同序；待同步仍是黄底。
   const pickBrief=(list,label)=>{
     const arr=Array.isArray(list)?list:[];
     const hit=arr.find(x=>x&&String(x.label||'').replace(/[:：]/g,'').trim()===label);
     if(!hit) return '';
     return String(hit.value==null?'':hit.value).replace(/<[^>]*>/g,'').replace(/\s+/g,' ').trim();
   };
+  const statText=(v,summary,label)=>{
+    let s=(v===undefined||v===null)?'':String(v).trim();
+    if(!s&&summary) s=pickBrief(summary,label);
+    return s||'—';
+  };
+  const pairText=v=>String(v==null?'':v).replace(/\s*\/\s*/g,' / ').trim();
   grid.innerHTML=_myCardsCache.map((c,i)=>{
     const sum=c.summary||[], st=c.state||{};
     // 出身/领域：优先摘要，其次 bot 卡的 state；都没有就留空
     const ori=pickBrief(sum,'出身')||pickBrief(sum,'出身领域')||String(st['出身']||'').trim();
     const dom=pickBrief(sum,'领域')||String(st['领域']||'').trim();
     const originDomain=[ori,dom].filter(Boolean).join(' · ');
-    const level=(c.level!==undefined&&c.level!==null&&c.level!=='')?c.level:(st['等级']||'');
-    const credit=(c.credit!==undefined&&c.credit!==null&&c.credit!=='')?c.credit:(pickBrief(sum,'信用点')||st['信用点']||'');
-    const levelCredit=[level?'等级 '+level:'',credit?'信用点 '+credit:''].filter(Boolean).join('　');
-    const brief=(originDomain?'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;word-break:break-all;">'+escCardText(originDomain)+'</div>':'')
-      +(levelCredit?'<div style="font-size:.72rem;line-height:1.45;color:#475569;text-align:center;margin-top:2px;">'+escCardText(levelCredit)+'</div>':'');
+    const level=(c.level!==undefined&&c.level!==null&&c.level!=='')?c.level:statText(st['等级'],sum,'等级');
+    const credit=(c.credit!==undefined&&c.credit!==null&&c.credit!=='')?c.credit:statText(st['信用点'],sum,'信用点');
+    const stats=[
+      ['属性',statText(st['属性'],sum,'属性')],
+      ['等级',level],
+      ['业力',statText(st['业力'],sum,'业力')],
+      ['耐力',pairText(statText(st['耐力'],sum,'耐力'))],
+      ['信用点',credit],
+      ['维护费',statText(st['维护费'],sum,'维护费')],
+      ['贷款',pairText(statText(st['贷款'],sum,'贷款'))],
+      ['利息',statText(st['利息'],sum,'利息')]
+    ];
+    const brief=(originDomain?'<div style="font-size:.68rem;line-height:1.35;color:#475569;text-align:center;word-break:break-all;margin-top:1px;">'+escCardText(originDomain)+'</div>':'')
+      +'<div class="card-mini-stats">'+stats.map(function(it){
+        return '<div class="card-mini-stat"><b>'+escCardText(it[0])+'</b><span>'+escCardText(it[1])+'</span></div>';
+      }).join('')+'</div>';
     // 编辑模式：卡片顶部显示重命名/删除按钮
     const ops=_editMode
       ? '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:3px;">'
