@@ -70,7 +70,7 @@ body{font-family:system-ui,sans-serif;background:var(--bg);color:var(--text);dis
    textarea + resize:none + overflow:hidden，高度交给 JS 按 scrollHeight 自适应。 */
 .conn-detail-edit{flex:1 1 100%;display:block;width:100%;box-sizing:border-box;
   margin-top:8px;padding:8px 0 0;background:transparent;border:0;border-top:1px dashed #e2e8f0;
-  border-radius:0;font-family:inherit;font-size:.85rem;line-height:1.65;color:#334155;
+  border-radius:0;font-family:inherit;font-size:.85rem;line-height:1.65;color:#92400e;
   resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;
   min-height:calc(1.65em + 8px);}
 .conn-detail-edit:read-only{background:transparent;}
@@ -193,6 +193,13 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-custom-item .custom-effect,
 .equip-row .equip-effect,
 .item-row .item-effect{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 效果独占下一行，过长可换行 */
+/* 「效果 / 备注」统一用角色姓名那套琥珀色（#92400e）：
+   卡里要一眼分清「标签」和「内容」—— 标签仍是灰的，内容跟姓名同色。 */
+.conn-cell-effect,
+.weapon-custom-item .custom-effect,
+.equip-row .equip-effect,
+.item-row .item-effect,
+.weapon-row .weapon-note{color:#92400e;}
 .weapon-cell{min-width:0;background:#f8fafc;padding:6px 8px;font-size:.78rem;line-height:1.5;color:#334155;overflow-wrap:anywhere;}
 .weapon-cell b{display:block;font-size:.7rem;color:#64748b;margin-bottom:2px;}
 .weapon-custom-title{font-size:.78rem;font-weight:700;color:var(--primary);margin:6px 0 3px;display:flex;align-items:center;gap:8px;}
@@ -270,7 +277,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .runtime-remove{flex:none;border:none;background:none;color:#ef4444;cursor:pointer;font-family:inherit;font-size:.75rem;padding:0 2px;}
 .runtime-remove:hover{text-decoration:underline;}
 /* 追加人脉的自填备注：平时只读像正文，编辑态才可写 */
-.conn-note-input{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:5px 9px;border:1px dashed #cbd5e1;border-radius:6px;background:#fff;font-family:inherit;font-size:.82rem;line-height:1.5;color:#334155;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-height:calc(1.5em + 10px);}
+.conn-note-input{display:block;width:100%;box-sizing:border-box;margin-top:6px;padding:5px 9px;border:1px dashed #cbd5e1;border-radius:6px;background:#fff;font-family:inherit;font-size:.82rem;line-height:1.5;color:#92400e;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-height:calc(1.5em + 10px);}
 .conn-note-input:read-only{border-color:transparent;background:transparent;padding-left:0;}
 .conn-note-input:focus{outline:none;border-color:#f59e0b;background:#fffbeb;}
 #result-area.card-editing .conn-note-input{border-color:#f59e0b;background:#fffbeb;}
@@ -526,7 +533,8 @@ try {
   <div id="home-view" style="display:block;">
     <div style="display:flex;align-items:center;justify-content:center;position:relative;margin:4px 0 4px;">
       <button id="gm-btn" onclick="toggleGmMode()" title="进入 / 退出 GM 模式" aria-label="GM 模式" style="position:absolute;left:0;top:50%;transform:translateY(-50%);border:1px solid #fcd34d;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">🎲 GM</button>
-      <h1 id="home-title" style="margin:0;font-size:1.35rem;">我的角色卡</h1>
+      <!-- 左右两个按钮是 absolute 定位：标题要留出两侧让位，否则长标题会压到按钮底下 -->
+      <h1 id="home-title" style="margin:0;font-size:1.35rem;padding:0 92px;box-sizing:border-box;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">我的角色卡</h1>
       <button id="edit-mode-btn" onclick="toggleEditModeCards()" style="position:absolute;right:0;top:50%;transform:translateY(-50%);border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 12px;font-size:.82rem;font-weight:700;cursor:pointer;">✎ 编辑</button>
     </div>
     <div id="my-cards-count" style="text-align:center;color:#64748b;font-size:.85rem;margin-bottom:16px;"></div>
@@ -4233,9 +4241,11 @@ async function _renderGmCards(force){
 }
 function _applyGmModeUi(on){
   const t=$('#home-title'), b=$('#gm-btn'), e=$('#edit-mode-btn');
-  if(t){ t.textContent=on?'GM 模式 · 成员角色卡':'我的角色卡'; t.classList.toggle('gm-on',!!on); }
+  // 标题只写「成员角色卡」：原来「GM 模式 · 成员角色卡」太长，会顶到左边的 🎲 GM 按钮底下
+  if(t){ t.textContent=on?'成员角色卡':'我的角色卡'; t.classList.toggle('gm-on',!!on); }
   if(b){
-    b.textContent=on?'🎲 GM ✓':'🎲 GM';
+    // 状态靠底色区分（黄变实心），不再往文字后面加 ✓
+    b.textContent='🎲 GM';
     b.style.background=on?'#f59e0b':'#fffbeb';
     b.style.color=on?'#fff':'#b45309';
     b.style.borderColor=on?'#f59e0b':'#fcd34d';
