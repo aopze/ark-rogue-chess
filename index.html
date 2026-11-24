@@ -2392,100 +2392,22 @@ function _updateCopyBtn(){
      1) 先存本地卡片墙（离开页面也不丢）；
      2) 拉一次 bot 的 cards.json，看同名卡谁更新更晚：
         · bot 更晚 → 拉取：把 bot 的数值回填到当前卡片 + 本地记录，不动 bot；
-        · 本地更晚/新建 → 推送：.char add 指令 + ts 直接 POST 给本机 bot。
-   推送只有一条通路：回环桥 http://127.0.0.1:18765（bot_cards_bridge.py）。
-   不再走 Telegram sendData —— 它要么因为没 chat context 静默不投递，要么会关掉
-   Mini App；本机桥在页面里就完成了，点完能直接看到 bot 回的「覆盖了哪张卡」。 */
-/* ===== 本地桥：直接 POST 给本机 bot（bot_cards_bridge.py，默认 127.0.0.1:18765）=====
-   桌面端从菜单/链接打开时没有 chat context，sendData 静默不投递；而卡片本来就归
-   本机 bot 管，回环请求最直接。https 页面访问 http://127.0.0.1 属浏览器白名单，
-   不会被混合内容拦。手机上的 127.0.0.1 指向手机自己，会很快失败自动回退。 */
-const BRIDGE_URL='http://127.0.0.1:18765';
-async function _pushToBridge(botData){
-  const uid=_cardOwner();          // 卡片归属人（GM 模式里是成员）
-  if(!uid||!window.fetch) return null;
-  let body=botData, o=null;
-  try{
-    o=JSON.parse(botData); o.uid=uid;
-    const me=_tgUserId(); if(me&&me!==uid) o.actor=me;
-    body=JSON.stringify(o);
-  }catch(e){ return null; }
-  let ctl=null, timer=null;
-  try{
-    if(typeof AbortController==='function'){
-      ctl=new AbortController();
-      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },2500);
-    }
-    const r=await window.fetch(BRIDGE_URL+'/card',{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=UTF-8'},   // simple request，少一次预检
-      body:body,
-      cache:'no-store',
-      signal:ctl?ctl.signal:undefined
-    });
-    if(!r.ok) return null;
-    const j=await r.json();
-    return j&&j.ok?j:null;
-  }catch(e){ return null; }
-  finally{ if(timer) clearTimeout(timer); }
-}
-/* ===== 完整卡本机存储（R18 内容不上公有云）=====
+        · 本地更晚/新建 → 推送：.char add 指令 + ts 走公网中转给 bot。
+   所有设备只有一条通路：公网 ntfy 中转（RELAY_URL）。
+   不再走 127.0.0.1 本机桥 —— 别人设备的回环地址指向自己，永远连不上；
+   也不走 Telegram sendData —— 没 chat context 会静默不投递或关掉 Mini App。
+   中转由跑 bot 的电脑轮询取回并落盘，任何人的手机/电脑打开都能用。 */
+/* ===== 完整卡上传：明文分片走 ntfy（R18 明文，topic 需保密）→ 私有仓库 =====
    与 cards.json 分工：cards.json 只有精简数值、推 GitHub Pages；
-   完整卡（能力行 HTML/详情/人脉）只写本机 bot 的 full_cards.json，
-   走 127.0.0.1 的 /fullcard，手机端连不上就静默跳过（不降级外发）。 */
-async function _pushFullCard(uid, rec){
-  if(!uid||!rec||!window.fetch) return false;
-  let body;
-  try{
-    const o={uid:String(uid),card:rec};
-    const me=_tgUserId(); if(me&&me!==uid) o.actor=me;   // GM 代写按 gm_links 校验
-    body=JSON.stringify(o);
-  }catch(e){ return false; }
-  let ctl=null,timer=null;
-  try{
-    if(typeof AbortController==='function'){
-      ctl=new AbortController();
-      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },3000);
-    }
-    const r=await window.fetch(BRIDGE_URL+'/fullcard',{
-      method:'POST',
-      headers:{'Content-Type':'text/plain;charset=UTF-8'},   // simple request，少一次预检
-      body:body, cache:'no-store', signal:ctl?ctl.signal:undefined
-    });
-    if(!r.ok) return false;
-    const j=await r.json();
-    return !!(j&&j.ok);
-  }catch(e){ return false; }
-  finally{ if(timer) clearTimeout(timer); }
-}
-/* 统一入口：桌面优先本机 bridge（快），否则 ntfy 明文分片 → 私有仓库。 */
+   完整卡（能力行 HTML/详情/人脉）经 ntfy 分片 → bot 重组 → 私有仓库 full_cards.json。
+   所有设备统一走这条公网链路，不再有本机桥分支。 */
+/* 统一入口：完整卡一律走 ntfy 明文分片 → bot → 私有仓库。 */
 async function _routeFullCard(uid, rec){
   if(!uid||!rec) return false;
-  if(!_isMobile()){
-    const local=await _pushFullCard(uid,rec);
-    if(local) return true;
-  }
-  // 手机 / 桌面 bridge 不通 → 明文分片走 ntfy（R18 明文，topic 需保密）
   const r=await _pushFullCardRelay(uid,rec);
   return !!(r&&r.ok);
 }
-async function _fetchFullCard(uid, cid){
-  if(!uid||!cid||!window.fetch) return null;
-  let ctl=null,timer=null;
-  try{
-    if(typeof AbortController==='function'){
-      ctl=new AbortController();
-      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },2500);
-    }
-    const url=BRIDGE_URL+'/fullcard?uid='+encodeURIComponent(uid)+'&cid='+encodeURIComponent(cid);
-    const r=await window.fetch(url,{cache:'no-store',signal:ctl?ctl.signal:undefined});
-    if(!r.ok) return null;
-    const j=await r.json();
-    return (j&&j.ok&&j.card)?j.card:null;
-  }catch(e){ return null; }
-  finally{ if(timer) clearTimeout(timer); }
-}
-/* 桥的返回结果转成人话 */
+/* 中转回执的 res 转成人话 */
 function _bridgeSuffix(r){
   if(!r) return '';
   const parts=[];
@@ -2498,16 +2420,13 @@ function _bridgeSuffix(r){
   if(errs.length) parts.push(errs[0]);
   return parts.length?'（'+parts.join('；')+'）':'';
 }
-/* ===== 公网中转（手机端）= ntfy.sh =====
-   手机里的 127.0.0.1 指向手机自己，本机桥必然失败；Telegram 的 sendData 在没有
-   chat context 时既不报错也不投递，还会顺手关掉 Mini App。所以手机上走这条：
-   POST 到一个只有本 bot 知道的长随机 topic，电脑上的 bot 轮询取回并落盘。
-   只在手机平台启用 —— 桌面能直连时不会把卡片数值外发到第三方。
-   写入是开放的（2026-11-23 晚去掉口令）：每个人用自己手机里的 Telegram 身份
-   上传自己的卡，谁都不需要输任何东西，新玩家第一次点同步就会自动建档。
-   为什么以前要口令、现在不要：卡只落进各自的 dm_<uid> 桶，冒充别人得先知道
-   对方的数字 uid，而 uid 只存在于各自手机上，页面源码里没有 —— 那道闸挡住的东西
-   比它带来的麻烦少得多。 */
+/* ===== 公网中转（所有设备）= ntfy.sh =====
+   所有设备统一 POST 到一个只有本 bot 知道的长随机 topic，跑 bot 的电脑轮询取回并落盘。
+   不再有 127.0.0.1 本机桥 —— 别人设备的回环地址指向自己，永远连不上；
+   也不走 Telegram sendData —— 没 chat context 会静默不投递或关掉 Mini App。
+   写入是开放的（2026-11-23 晚去掉口令）：每个人用自己 Telegram 身份上传自己的卡，
+   谁都不需要输任何东西，新玩家第一次同步就会自动建档。
+   卡正文以明文经过公开 topic —— 用户已确认接受此风险。 */
 const RELAY_URL='https://ntfy.sh/yu7cards-4f7c1a9e2b6d8f30';
 const RELAY_ACK_URL=RELAY_URL+'-a';
 function _isMobile(){
@@ -2661,24 +2580,11 @@ async function _waitAck(id, ms){
   }
   return null;
 }
-/* 统一投递：桌面先本机桥，手机先中转；任何一条通了就送达，都不行才回退剪贴板。
-   关键：回环桥只在「跑 bot 的那台电脑」上有效。其他人用 Telegram 桌面版打开
-   Mini App 时，127.0.0.1 指向他们自己的电脑，桥必然失败 —— 这时必须继续走
-   ntfy 中转，不能一失败就弹「本机 bot 没连上」让人复制粘贴。
-   返回 {via:'bridge',res} / {via:'relay',ack} / null。 */
+/* 统一投递：所有设备一律走公网 ntfy 中转，返回 {via:'relay',ack} / null。
+   不再有 127.0.0.1 本机桥 —— 别人设备的回环地址指向自己，永远连不上。 */
 async function _sendOps(botData){
-  const mobile=_isMobile();
-  if(mobile){
-    const pushed=await _pushToRelay(botData);
-    if(pushed) return {via:'relay',ack:await _waitAck(pushed.id,9000)};
-  }
-  const bridged=await _pushToBridge(botData);
-  if(bridged) return {via:'bridge',res:bridged};
-  if(!mobile){
-    // 非 bot 所在电脑的桌面端：桥失败后补一次中转（手机端上面已经试过）
-    const pushed=await _pushToRelay(botData);
-    if(pushed) return {via:'relay',ack:await _waitAck(pushed.id,9000)};
-  }
+  const pushed=await _pushToRelay(botData);
+  if(pushed) return {via:'relay',ack:await _waitAck(pushed.id,9000)};
   return null;
 }
 /* 中转回执明确说「没落盘」（例如 GM 代存被拒）时，不能当成同步成功 */
@@ -2687,11 +2593,10 @@ function _relayRejected(sent){
 }
 function _sendToast(sent){
   if(!sent) return '';
-  if(sent.via==='bridge') return '✅ 已同步到本机 bot'+_bridgeSuffix(sent.res);
   const a=sent.ack;
-  if(a&&a.ok) return '✅ 已同步到电脑'+_bridgeSuffix(a.res||{});
-  if(a&&!a.ok) return '⚠️ 电脑没接收：'+(a.err||'原因不明');
-  return '☁️ 已发出，但没等到电脑回执（确认电脑上的 bot 在跑，再发 .char show 核对）';
+  if(a&&a.ok) return '✅ 已同步到云端'+_bridgeSuffix(a.res||{});
+  if(a&&!a.ok) return '⚠️ 云端没接收：'+(a.err||'原因不明');
+  return '☁️ 已发出，但没等到回执（确认跑 bot 的电脑开着机，再发 .char show 核对）';
 }
 /* 没送达的兜底：把 .char add 指令塞进剪贴板，用户回 bot 粘贴一条消息就能建卡/覆盖。
    剪贴板在 Telegram WebView 里可能被拒（Write permission denied），所以：
@@ -2739,10 +2644,8 @@ function _showCopySheet(cmd, why){
   }
 }
 function _syncFallback(cmd, why){
-  const hint=_isMobile()
-    ? '\n手机端走的是中转（ntfy.sh）：电脑那边要开着 bot，且日志里应有 [card-relay] 已启动。'
-    : '\n本机桥（'+BRIDGE_URL+'）和中转（ntfy.sh）都没连上：确认跑 bot 的电脑开着机，'
-      +'日志里应有 [card-bridge] 已监听 / [card-relay] 已启动。';
+  const hint='\n走的是公网中转（ntfy.sh）：确认跑 bot 的电脑开着机，'
+    +'且日志里应有 [card-relay] 已启动。';
   const okToasts=function(){
     toast('⚠️ '+(why||'没送达')+hint+'\n指令已复制到剪贴板，回 bot 粘贴发送也能同步',15000);
   };
@@ -2946,7 +2849,7 @@ async function copyResult(){
   const remote=uid?await _fetchRemoteCard(name,myId):null;
   if(remote&&Math.floor(remote.updated_at||0)>prevTs+1){
     _pullFromRemote(uid,name,remote);
-    toast('☁️ bot 上的卡更新更晚，已拉取到本机');
+    toast('☁️ 云端的卡更新更晚，已拉取到本地');
     return;
   }
 
@@ -2956,13 +2859,13 @@ async function copyResult(){
   const botData=_botAddPayload(cmd,myTs,myId?{id:myId}:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 已保存，正在同步…');
-  /* 桌面走本机桥，手机走 ntfy 中转；都不通才把指令丢剪贴板 */
+  /* 所有设备走公网 ntfy 中转；不通才把指令丢剪贴板 */
   const sent=await _sendOps(botData);
   if(sent){
-    if(_relayRejected(sent)){ toast(_sendToast(sent)); return; }  // 电脑明确拒收：别报成功
+    if(_relayRejected(sent)){ toast(_sendToast(sent)); return; }  // 云端明确拒收：别报成功
     toast(_sendToast(sent)); return;
   }
-  _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
+  _syncFallback(cmd, '云端中转没连上');
 }
 
 /* ============ 卡片墙当前卡双向同步（由✓完成自动调用）============
@@ -3043,7 +2946,7 @@ async function syncCardFromWall(){
   const botData=_botAddPayload(cmd,ts,Object.keys(extra).length?extra:null);
   if(!botData){ _syncFallback(cmd,'指令过长（超过 4000 字节）'); return; }
   toast('☁️ 正在同步…');
-  /* 桌面走本机桥（在页面内完成，不会关掉 App），手机走 ntfy 中转 */
+  /* 所有设备走公网 ntfy 中转；不通才把指令丢剪贴板 */
   const sent=await _sendOps(botData);
   if(sent){
     if(_relayRejected(sent)){ toast(_sendToast(sent)); return; }  // 被拒就别标记已同步
@@ -3052,11 +2955,11 @@ async function syncCardFromWall(){
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(_loadLocal(_tgUserId()));
-    try{ _routeFullCard(uid,rec); }catch(e){}   // 完整卡外发（bridge 或明文分片）
+    try{ _routeFullCard(uid,rec); }catch(e){}   // 完整卡外发（ntfy 明文分片）
     toast(_sendToast(sent));
     return;
   }
-  _syncFallback(cmd, _isMobile()?'电脑上的 bot 没连上' : '本机 bot 没应答');
+  _syncFallback(cmd, '云端中转没连上');
 }
 
 /* ============ HKTRPG Bot 角色卡指令生成 ============ */
@@ -3779,7 +3682,7 @@ function _activeDeleted(uid,remote,nowSec){
 function _delCardHtml(uid,name){
   try{ localStorage.removeItem(_cardHtmlKey(uid,name)); }catch(e){}
 }
-/* 待同步操作队列：删除/改名先记本地，点「完成」/「N 项待同步」时一次性推给本机 bot */
+/* 待同步操作队列：删除/改名先记本地，随后自动推给云端（公网中转） */
 function _pendingKey(uid){ return 'yu7_pending_ops_'+(uid||'guest'); }
 function _getPending(uid){
   try{ const a=JSON.parse(localStorage.getItem(_pendingKey(uid))||'[]'); return Array.isArray(a)?a:[]; }
@@ -3800,43 +3703,33 @@ function _autoFlushOps(){
   if(!uid||!_getPending(uid).length) return;
   void _flushPendingOps();
 }
-/* 删除/改名批量推送：走同一条回环桥，不再依赖 Telegram sendData。
-   返回 true = 桥收到并处理了（队列已清空）；false = 桥没连上，队列留着下次再发。 */
+/* 删除/改名批量推送：走公网 ntfy 中转。
+   返回 true = 云端收到并处理了（队列已清空）；false = 没连上/被拒，队列留着下次再发。 */
 async function _flushPendingOps(){
   const uid=_tgUserId();
   if(!uid) return false;
   const pending=_getPending(uid);
   if(!pending.length) return false;
   const sent=await _sendOps(JSON.stringify({kind:'card_ops',uid:uid,ops:pending}));
-  if(!sent) return false;                // 两条路都没通：队列留着，别丢用户改动
-  if(sent.via==='relay'&&sent.ack&&!sent.ack.ok){
-    toast('⚠️ 电脑没接收：'+(sent.ack.err||'原因不明'));   // 被拒也是没落盘，队列留着
+  if(!sent) return false;                // 没送达：队列留着，别丢用户改动
+  if(sent.ack&&!sent.ack.ok){
+    toast('⚠️ 云端没接收：'+(sent.ack.err||'原因不明'));   // 被拒也是没落盘，队列留着
     return false;
   }
   _clearPending(uid);
-  if(sent.via==='relay'){ toast(_sendToast(sent)); return true; }
-  const r=sent.res||{};
-  const parts=[];
-  if(r.add_new&&r.add_new.length) parts.push('新建 '+r.add_new.join('、'));
-  if(r.add_upd&&r.add_upd.length) parts.push('覆盖 '+r.add_upd.join('、'));
-  if(r.del) parts.push('删除 '+r.del+' 张');
-  if(r.ren&&r.ren.length) parts.push('改名 '+r.ren.join('、'));
-  const errs=Array.isArray(r.err)?r.err:[];
-  if(parts.length) toast('✅ 已同步到本机 bot（'+parts.join('、')+'）');
-  else if(errs.length) toast('⚠️ '+errs[0]);
-  else toast('✅ 已同步到本机 bot');
+  toast(_sendToast(sent));
   return true;
 }
 /* 显示我创建的卡片墙（含末尾加号卡片） */
 let _editMode=false;
 function toggleEditModeCards(){
   const wasEdit=_editMode;
-  // 退出编辑模式：把攒下的删除/改名一次性推给本机 bot（不再发 Telegram 消息）
+  // 退出编辑模式：把攒下的删除/改名一次性推给云端（不再发 Telegram 消息）
   if(wasEdit){
     const uid=_tgUserId();
     if(_getPending(uid).length){
       _flushPendingOps().then(function(ok){
-        if(!ok) toast('⚠️ 本机 bot 没连上，删除/改名已存本地，下次点「待同步」再发');
+        if(!ok) toast('⚠️ 云端中转没连上，删除/改名已存本地，会自动重试');
       });
     }
   }
@@ -3976,9 +3869,7 @@ function openCardRemoteFirst(i){
 }
 async function _bgRefreshOwnCard(i, cid){
   const uid=_tgUserId();
-  let remote=null;
-  if(!_isMobile()) remote=await _fetchFullCard(uid,cid);   // 桌面：本机 bridge（快）
-  if(!remote) remote=await _requestFullCard(uid,cid);       // 手机/兜底：ntfy 分片
+  const remote=await _requestFullCard(uid,cid);              // 所有设备统一走 ntfy 分片
   if(!remote||!remote.frag) return;                          // 线上没有/失败 → 保留本地
   if(_cardViewId!==cid) return;                              // 用户已切到别的卡 → 不打断
   const list=_loadLocal(uid);
@@ -4386,9 +4277,7 @@ async function _bgRefreshGmCard(i){
   if(!item) return;
   const puid=item.uid, cid=item.rec.id||'';
   if(!cid) return;
-  // 先本机 bridge，再 ntfy 分片（明文）
-  let remote=await _fetchFullCard(puid,cid);
-  if(!remote) remote=await _requestFullCard(puid,cid);
+  const remote=await _requestFullCard(puid,cid);     // 所有设备统一走 ntfy 分片（明文）
   if(!remote||!remote.frag) return;                  // 线上没有/失败 → 保留本地
   if(_cardOwnerUid!==puid || _cardViewId!==cid) return; // 用户已切卡 → 不打断
   const list=_loadLocal(puid);
@@ -4480,7 +4369,7 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   local.unshift(rec);
   if(!_saveLocal(uid,local)) return false;
   _renderMyCards(local);
-  /* 完整卡外发：桌面走本机 bridge；手机走 ntfy 明文分片 → bot → 私有仓库。
+  /* 完整卡外发：所有设备走 ntfy 明文分片 → bot → 私有仓库。
      fire-and-forget，失败不影响建卡主流程。 */
   try{ _routeFullCard(uid,rec); }catch(e){}
   return true;
