@@ -2456,14 +2456,14 @@ async function _pushFullCard(uid, rec){
   }catch(e){ return false; }
   finally{ if(timer) clearTimeout(timer); }
 }
-/* 统一入口：桌面优先本机 bridge（快），否则 ntfy 加密分片 → 私有仓库。 */
+/* 统一入口：桌面优先本机 bridge（快），否则 ntfy 明文分片 → 私有仓库。 */
 async function _routeFullCard(uid, rec){
   if(!uid||!rec) return false;
   if(!_isMobile()){
     const local=await _pushFullCard(uid,rec);
     if(local) return true;
   }
-  // 手机 / 桌面 bridge 不通 → 加密分片走 ntfy（R18 密文）
+  // 手机 / 桌面 bridge 不通 → 明文分片走 ntfy（R18 明文，topic 需保密）
   const r=await _pushFullCardRelay(uid,rec);
   return !!(r&&r.ok);
 }
@@ -2547,24 +2547,11 @@ async function _pushToRelay(botData){
   }catch(e){ return null; }
   finally{ if(timer) clearTimeout(timer); }
 }
-/* ===== 完整卡加密分片（R18 只进私有仓库，ntfy 上全是密文）=====
-   密钥派生必须与 bot 端 bot_fullcard_crypto._key() 完全一致：
-   SHA-256('yu7-fullcard-v1::yu7cards-4f7c1a9e2b6d8f30')，AES-256-GCM，
-   密文 = base64(nonce12 + tag16 + ciphertext)，切成 <=2400 的片发 ntfy。 */
+/* ===== 完整卡分片（明文 base64，不加密，追求最低延迟）=====
+   只把 JSON 编成 base64（避免中文/emoji 按字节切片截断），切成 <=2400 的片发 ntfy。
+   注意：ntfy topic 是公开的，卡正文会以明文经过它 —— 用户已确认接受此风险。
+   协议与 bot 端 bot_fullcard_crypto 保持一致：encrypt=base64(utf8)，decrypt 反之。 */
 const FULLCARD_CHUNK=2400;
-const FULLCARD_KEY_SRC='yu7-fullcard-v1::yu7cards-4f7c1a9e2b6d8f30';
-let _fcKeyPromise=null;
-function _fcKey(){
-  if(!_fcKeyPromise){
-    _fcKeyPromise=(async function(){
-      const sc=window.crypto&&window.crypto.subtle;
-      if(!sc) throw new Error('no subtle crypto');
-      const raw=new TextEncoder().encode(FULLCARD_KEY_SRC);
-      return await sc.digest('SHA-256',raw);
-    })();
-  }
-  return _fcKeyPromise;
-}
 function _fcB64ToBytes(b64){
   const bin=atob(b64), out=new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) out[i]=bin.charCodeAt(i);
@@ -2575,24 +2562,13 @@ function _fcBytesToB64(bytes){
   return btoa(bin);
 }
 async function _fcEncrypt(obj){
-  const sc=window.crypto.subtle, key=await _fcKey();
-  const nonce=window.crypto.getRandomValues(new Uint8Array(12));
-  const plain=new TextEncoder().encode(JSON.stringify(obj));
-  const aes=await sc.importKey('raw',key,{name:'AES-GCM'},false,['encrypt']);
-  const ct=new Uint8Array(await sc.encrypt({name:'AES-GCM',iv:nonce},aes,plain));
-  const all=new Uint8Array(nonce.length+ct.length);
-  all.set(nonce,0); all.set(ct,nonce.length);
-  return _fcBytesToB64(all);
+  // 纯编码，无加密：同步算法包成 async 是为了不改动调用方的 await 结构
+  return _fcBytesToB64(new TextEncoder().encode(JSON.stringify(obj)));
 }
 async function _fcDecrypt(b64){
-  const sc=window.crypto.subtle, key=await _fcKey();
-  const all=_fcB64ToBytes(b64);
-  const nonce=all.slice(0,12), ct=all.slice(12);
-  const aes=await sc.importKey('raw',key,{name:'AES-GCM'},false,['decrypt']);
-  const plain=await sc.decrypt({name:'AES-GCM',iv:nonce},aes,ct);
-  return JSON.parse(new TextDecoder().decode(plain));
+  return JSON.parse(new TextDecoder().decode(_fcB64ToBytes(b64)));
 }
-/* 上传完整卡：加密 → 分片 → 逐片 POST ntfy。返回 {ok,n} */
+/* 上传完整卡：base64 编码 → 分片 → 逐片 POST ntfy。返回 {ok,n} */
 async function _pushFullCardRelay(uid, card){
   if(!uid||!card) return {ok:false};
   try{
@@ -2612,7 +2588,7 @@ async function _pushFullCardRelay(uid, card){
     return {ok:true,n:pieces.length,req:req};
   }catch(e){ return {ok:false,err:String(e&&e.message||e)}; }
 }
-/* 请求完整卡：发 get → 轮询回执收分片 → 解密。返回卡片对象或 null */
+/* 请求完整卡：发 get → 轮询回执收分片 → 解码。返回卡片对象或 null */
 let _fcRx={};
 async function _requestFullCard(uid, cid){
   if(!uid||!cid) return null;
@@ -3074,7 +3050,7 @@ async function syncCardFromWall(){
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(_loadLocal(_tgUserId()));
-    try{ _routeFullCard(uid,rec); }catch(e){}   // 完整卡外发（bridge 或加密分片）
+    try{ _routeFullCard(uid,rec); }catch(e){}   // 完整卡外发（bridge 或明文分片）
     toast(_sendToast(sent));
     return;
   }
@@ -3982,33 +3958,30 @@ let _cardBlobUrl=null;
    保存/同步/本地缓存都按这个走，否则 GM 改的数值会写进自己那张卡。 */
 let _cardOwnerUid='';
 function _cardOwner(){ return _cardOwnerUid||_tgUserId(); }
-/* 统一开卡入口：线上是唯一真源，本地只做加速缓存。
-   用户点自己的卡 → 先拉私有仓库完整卡；拿到就用线上，失败才用本地。
+/* 统一开卡入口：本地秒开 + 后台静默拉线上覆盖（线上仍是真源，但不阻塞显示）。
+   点开立刻用本地缓存渲染；后台取到线上完整卡后，仅当用户还在看同一张时才重建。
    GM 走 openGmCardAt（同一套远端读取，只是 uid 是成员）。 */
-async function openCardRemoteFirst(i){
+function openCardRemoteFirst(i){
   const c=_myCardsCache[i];
   if(!c) return;
+  _showCardDetail(i);                       // ① 秒开：不等网络
+  if(c.id) _bgRefreshOwnCard(i,c.id);       // ② 后台更新
+}
+async function _bgRefreshOwnCard(i, cid){
   const uid=_tgUserId();
   let remote=null;
-  if(c.id){
-    if(!_isMobile()) remote=await _fetchFullCard(uid,c.id);   // 桌面：本机 bridge
-    if(!remote) remote=await _requestFullCard(uid,c.id);       // 手机/兜底：ntfy 加密
-  }
-  if(remote&&remote.frag){
-    // 线上完整卡覆盖本地：真源以线上为准
-    const list=_loadLocal(uid);
-    let k=c.id?list.findIndex(function(x){return x&&x.id===c.id;}):-1;
-    if(k<0) k=list.findIndex(function(x){return x&&x.name===c.name;});
-    const merged=Object.assign({},list[k]||{},remote,{_local:false,hasFull:true});
-    if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
-    _saveLocal(uid,list);
-    _myCardsCache[i]=merged;
-    _showCardDetail(i,uid,list);
-    return;
-  }
-  // 线上没有 / 拉取失败 → 本地兜底（本地也没有 frag 时 _showCardDetail 会造骨架）
-  if(remote===null && c.id) toast('⚠️ 线上未连上，显示本地缓存');
-  _showCardDetail(i);
+  if(!_isMobile()) remote=await _fetchFullCard(uid,cid);   // 桌面：本机 bridge（快）
+  if(!remote) remote=await _requestFullCard(uid,cid);       // 手机/兜底：ntfy 分片
+  if(!remote||!remote.frag) return;                          // 线上没有/失败 → 保留本地
+  if(_cardViewId!==cid) return;                              // 用户已切到别的卡 → 不打断
+  const list=_loadLocal(uid);
+  let k=cid?list.findIndex(function(x){return x&&x.id===cid;}):-1;
+  if(k<0) k=list.findIndex(function(x){return x&&x.name===remote.name;});
+  const merged=Object.assign({},list[k]||{},remote,{_local:false,hasFull:true});
+  if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
+  _saveLocal(uid,list);
+  _myCardsCache[i]=merged;
+  _showCardDetail(i,uid,list);                               // ③ 静默重建为线上版本
 }
 function _showCardDetail(idx, ownerUid, listOverride){
   const src=listOverride||_myCardsCache;
@@ -4377,42 +4350,50 @@ function toggleGmMode(){
 /* GM 模式里点成员卡：开成和看自己卡一模一样的全屏视图（可编辑、可添加）
    卡片挂在成员自己的本地命名空间下，保存/同步都按成员 uid 走，
    代存时请求体带 actor，bot 侧按 gm_links 校验是不是 TA 的 GM。 */
-async function openGmCardAt(i){
+function _gmOpenLocal(i){
+  // 秒开：用 cards.json 精简 rec + 成员本地命名空间里可能已有的完整卡
   const item=_gmCardsCache[i];
-  if(!item) return;
   const puid=item.uid;
-  // 关键：先从本机 bot 拉完整卡（含能力行/装备/人脉的 HTML）。
-  // 只有精简 cards.json 时 _materializeBotCard 会用空问卷造骨架 → 信息大部分缺失。
-  // 先试本机 bridge；不通（手机端）就走 ntfy 加密请求 → bot 读私有仓库
-  let remoteFull=await _fetchFullCard(puid, item.rec.id||'');
-  if(!remoteFull) remoteFull=await _requestFullCard(puid, item.rec.id||'');
-  const base=remoteFull
-    ? Object.assign({},item.rec,remoteFull,{_local:false,hasFull:!!remoteFull.frag})
-    : item.rec;
   const list=_loadLocal(puid);
   let k=item.rec.id?list.findIndex(function(x){return x&&x.id===item.rec.id;}):-1;
   if(k<0) k=list.findIndex(function(x){return x&&x.name===item.rec.name;});
   if(k<0){
-    list.push(Object.assign({},base));
+    list.push(Object.assign({},item.rec));
     k=list.length-1;
   }else{
-    // 本地有完整卡（成员在这台电脑建过）就别用云端精简字段覆盖它的 frag
     const localFull=!!(list[k].frag||list[k].hasFull);
     list[k]=Object.assign({},list[k],{
-      name:base.name, id:base.id||list[k].id,
-      state:base.state, roll:base.roll, notes:base.notes,
-      frag:remoteFull?base.frag:list[k].frag,
-      runtime:remoteFull?base.runtime:list[k].runtime,
-      resultCards:remoteFull?base.resultCards:list[k].resultCards,
-      financeCards:remoteFull?base.financeCards:list[k].financeCards,
-      sysIds:remoteFull?base.sysIds:list[k].sysIds,
-      weapons:remoteFull?base.weapons:list[k].weapons,
-      hasFull:remoteFull?!!base.frag:localFull
+      name:item.rec.name, id:item.rec.id||list[k].id,
+      state:item.rec.state, roll:item.rec.roll, notes:item.rec.notes,
+      hasFull:localFull
     });
   }
   _saveLocal(puid,list);
-  if(!remoteFull) toast('⚠️ 私有仓库里还没有这张卡的完整内容（成员需先同步一次）');
   _showCardDetail(k,puid,list);
+  return k;
+}
+async function _bgRefreshGmCard(i){
+  const item=_gmCardsCache[i];
+  if(!item) return;
+  const puid=item.uid, cid=item.rec.id||'';
+  if(!cid) return;
+  // 先本机 bridge，再 ntfy 分片（明文）
+  let remote=await _fetchFullCard(puid,cid);
+  if(!remote) remote=await _requestFullCard(puid,cid);
+  if(!remote||!remote.frag) return;                  // 线上没有/失败 → 保留本地
+  if(_cardOwnerUid!==puid || _cardViewId!==cid) return; // 用户已切卡 → 不打断
+  const list=_loadLocal(puid);
+  let k=list.findIndex(function(x){return x&&x.id===cid;});
+  if(k<0) k=list.findIndex(function(x){return x&&x.name===(remote.name||item.rec.name);});
+  const merged=Object.assign({},list[k]||{},item.rec,remote,
+    {_local:false,hasFull:!!remote.frag});
+  if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
+  _saveLocal(puid,list);
+  _showCardDetail(k,puid,list);                      // 静默重建为线上完整卡
+}
+function openGmCardAt(i){
+  _gmOpenLocal(i);            // ① 秒开
+  _bgRefreshGmCard(i);        // ② 后台更新（void，不 await）
 }
 function showHome(){
   $('#result-area').style.display='none';
@@ -4482,7 +4463,7 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   local.unshift(rec);
   if(!_saveLocal(uid,local)) return false;
   _renderMyCards(local);
-  /* 完整卡外发：桌面走本机 bridge；手机走 ntfy 加密分片 → bot → 私有仓库。
+  /* 完整卡外发：桌面走本机 bridge；手机走 ntfy 明文分片 → bot → 私有仓库。
      fire-and-forget，失败不影响建卡主流程。 */
   try{ _routeFullCard(uid,rec); }catch(e){}
   return true;
