@@ -516,13 +516,38 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 </head>
 <body>
 <script>
-/* Telegram Mini App 初始化：浏览器直接打开时静默失败，不影响使用 */
+/* Telegram Mini App 初始化：只允许在 Telegram 内使用 */
 try {
   if (window.Telegram && window.Telegram.WebApp) {
     Telegram.WebApp.ready();
     Telegram.WebApp.expand();
   }
 } catch (e) {}
+/* 浏览器直开拦截：浏览器拿不到 Telegram 身份，无法绑定账号/同步。
+   本地调试（localhost / 127.0.0.1 / file:）和显式 ?dev=1 放行。 */
+(function(){
+  try{
+    var loc = location;
+    var isLocal = loc.protocol === 'file:' || ['localhost','127.0.0.1','[::1]'].indexOf(loc.hostname) >= 0;
+    var isDev = new URLSearchParams(loc.search).get('dev') === '1';
+    if (isLocal || isDev) return;
+    var w = window.Telegram && window.Telegram.WebApp;
+    var uid = w && w.initDataUnsafe && w.initDataUnsafe.user && w.initDataUnsafe.user.id;
+    if (w && w.initData && uid) return;
+    window.__TG_ONLY_GATE__ = true;
+    var gate = document.createElement('div');
+    gate.id = 'tg-only-gate';
+    gate.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:#f8fafc;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;color:#0f172a;';
+    gate.innerHTML = '<div style="max-width:420px;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;box-shadow:0 10px 30px rgba(15,23,42,.08);text-align:center;">' +
+      '<div style="font-size:32px;margin-bottom:8px;">🔒</div>' +
+      '<h2 style="margin:0 0 12px;font-size:1.15rem;">请在 Telegram 内打开</h2>' +
+      '<p style="margin:0;color:#475569;line-height:1.7;font-size:.92rem;">角色卡需要通过 Telegram 账号绑定身份，浏览器里无法绑定。请回到 Telegram，点击机器人发的「✨ 开始创建角色卡」按钮。</p></div>';
+    (document.body || document.documentElement).appendChild(gate);
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.pointerEvents = 'none';
+    gate.style.pointerEvents = 'auto';
+  }catch(e){}
+})();
 </script>
 
 <button id="save-edit-btn" class="nav-btn" style="display: none; position: fixed; top: 20px; right: 168px; z-index: 9999; background: rgb(245, 158, 11); padding: 8px 16px; border-radius: 20px; font-size: 14px; box-shadow: rgba(0, 0, 0, 0.1) 0px 2px 4px;" onclick="saveEditsToFile()">💾 保存到文件</button>
