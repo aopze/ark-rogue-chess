@@ -2540,7 +2540,7 @@ async function _requestFullCard(uid, cid){
     _fcRx[req]={n:0,pieces:{},at:Date.now()};
     const deadline=Date.now()+14000;
     while(Date.now()<deadline){
-      await new Promise(function(res){ setTimeout(res,1200); });
+      await new Promise(function(res){ setTimeout(res,800); });   // 回执轮询间隔（800ms：比 relay 的 5s 轮询细，拿到就立刻换卡）
       try{
         const rr=await window.fetch(RELAY_ACK_URL+'/json?poll=1&since=12m',{cache:'no-store'});
         if(!rr.ok) continue;
@@ -3824,11 +3824,24 @@ function _renderMyCards(cards){
   +'<div style="font-size:.78rem;margin-top:6px;font-weight:600;">创建新角色卡</div>'
   +'</div>';
 }
+/* 判断一条 frag 是不是「旧版伪造的空壳」（_materializeBotCard 的遗留产物）。
+   旧代码用空问卷造面板，造出来的 frag 有个硬特征：没有 resultCards / financeCards，
+   而且面板里连一个装备行/道具行/人脉行/结果格都没有 —— 真卡不可能全空。
+   这类 frag 一旦被当成真卡渲染，用户看到的就是「只有数值、其它全空」的半成品。
+   识别出来就丢掉 frag，让它走「未同步」并重新拉线上，云端有真卡就自动顶上。 */
+function _looksLikeSkeleton(c){
+  if(!c||!c.frag) return false;
+  if((c.resultCards||[]).length||(c.financeCards||[]).length) return false;
+  try{
+    const d=document.createElement('div');
+    d.innerHTML=c.frag;
+    if(d.querySelector('.result-card,.equip-row,.item-row,.conn-row')) return false;
+  }catch(e){ return false; }   // 解析不了就当日志正常，不乱删
+  return true;
+}
 /* 缺完整卡时怎么办：如实说「只有基础数值」，绝不伪造空壳。
-   以前这里用空问卷造一个只有数值的面板（_materializeBotCard），造出来的假 frag
-   还会被当成真卡写进本地缓存 —— 于是一张「数值有、装备/道具/能力/人脉/出身领域全空」
-   的半成品卡就永久留在设备上，后台再拉线上也覆盖不掉它（因为 hasFull 已被置 true）。
-   现在的做法：拿不到完整卡就明确报「还没同步」，并给一个重新拉取的按钮。 */
+   （旧实现用空问卷造面板，假 frag 还会被写进本地缓存并置 hasFull=true，
+     于是半成品卡永久留在设备上、后台再拉线上也覆盖不掉。） */
 function _showNoFullCard(c, ownerUid, note){
   const uid=ownerUid||_tgUserId();
   const box=$('#card-full-view');
@@ -3845,7 +3858,7 @@ function _showNoFullCard(c, ownerUid, note){
     +'<div style="font-weight:800;color:#b45309;font-size:1rem;line-height:1.4;">⚠️ 完整卡还没同步上来</div>'
     +'<div style="color:#92400e;font-size:.86rem;line-height:1.7;margin-top:6px;">'
     +'这台设备现在只拿到<b>基础数值</b>，<b>装备 / 道具 / 能力 / 人脉 / 出身领域</b>都还没有。<br>'
-    +'通常是这张卡上次没上传完，或者云端还没处理完 —— 点下面按钮重新拉一次。</div>'
+    +'正在自动从云端拉取完整卡（一般几秒），拉到会原地换成完整卡；一直没变就点下面按钮再拉一次。</div>'
     +tip
     +'<button id="nofull-retry" style="margin-top:12px;width:100%;border:0;border-radius:10px;background:#f59e0b;color:#fff;font-weight:700;font-size:.92rem;padding:12px 0;font-family:inherit;cursor:pointer;">🔄 重新拉取完整卡</button>'
     +'</div>'
@@ -3922,7 +3935,15 @@ function openCardRemoteFirst(i){
 async function _bgRefreshOwnCard(i, cid){
   const uid=_tgUserId();
   const remote=await _requestFullCard(uid,cid);              // 所有设备统一走 ntfy 分片
-  if(!remote||!remote.frag) return;                          // 线上没有/失败 → 保留本地
+  if(!remote||!remote.frag){
+    // 线上还没有这张完整卡（老卡，或上次上传中途失败）→ 用本机这份真卡补传一次。
+    // 这样成员只要打开一次自己这张卡，云端就会长出完整卡，别人（含 GM）才看得到。
+    const mine=_myCardsCache[i];
+    if(mine&&mine.frag&&!_looksLikeSkeleton(mine)){
+      try{ void _routeFullCard(uid,mine); }catch(e){}
+    }
+    return;                                                  // 保留本地，不覆盖
+  }
   if(_cardViewId!==cid) return;                              // 用户已切到别的卡 → 不打断
   const list=_loadLocal(uid);
   let k=cid?list.findIndex(function(x){return x&&x.id===cid;}):-1;
@@ -3955,6 +3976,20 @@ function _showCardDetail(idx, ownerUid, listOverride){
       c.hasFull=true;
       delete c.html;
       migrated=true;
+    }
+  }
+  // 旧版遗留的伪造空壳（只有数值、装备/道具/能力/人脉/出身领域全空）：
+  // 识别出来后立刻丢掉这份假 frag，改走「未同步」并让后台重新拉线上真卡。
+  if(_looksLikeSkeleton(c)){
+    c.frag=''; c.runtime=null; c.hasFull=false;
+    if(uid){
+      try{
+        const ls=_loadLocal(uid).map(function(x){
+          const same=x&&((c.id&&x.id===c.id)||(!c.id&&x.name===c.name));
+          return same?Object.assign({},x,{frag:'',runtime:null,hasFull:false}):x;
+        });
+        _saveLocal(uid,ls);
+      }catch(e){}
     }
   }
   // 只有 state、没有 frag：不再伪造面板（那会造出永久留存的半成品卡）。
