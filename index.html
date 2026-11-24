@@ -2427,6 +2427,51 @@ async function _pushToBridge(botData){
   }catch(e){ return null; }
   finally{ if(timer) clearTimeout(timer); }
 }
+/* ===== 完整卡本机存储（R18 内容不上公有云）=====
+   与 cards.json 分工：cards.json 只有精简数值、推 GitHub Pages；
+   完整卡（能力行 HTML/详情/人脉）只写本机 bot 的 full_cards.json，
+   走 127.0.0.1 的 /fullcard，手机端连不上就静默跳过（不降级外发）。 */
+async function _pushFullCard(uid, rec){
+  if(!uid||!rec||!window.fetch) return false;
+  let body;
+  try{
+    const o={uid:String(uid),card:rec};
+    const me=_tgUserId(); if(me&&me!==uid) o.actor=me;   // GM 代写按 gm_links 校验
+    body=JSON.stringify(o);
+  }catch(e){ return false; }
+  let ctl=null,timer=null;
+  try{
+    if(typeof AbortController==='function'){
+      ctl=new AbortController();
+      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },3000);
+    }
+    const r=await window.fetch(BRIDGE_URL+'/fullcard',{
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=UTF-8'},   // simple request，少一次预检
+      body:body, cache:'no-store', signal:ctl?ctl.signal:undefined
+    });
+    if(!r.ok) return false;
+    const j=await r.json();
+    return !!(j&&j.ok);
+  }catch(e){ return false; }
+  finally{ if(timer) clearTimeout(timer); }
+}
+async function _fetchFullCard(uid, cid){
+  if(!uid||!cid||!window.fetch) return null;
+  let ctl=null,timer=null;
+  try{
+    if(typeof AbortController==='function'){
+      ctl=new AbortController();
+      timer=setTimeout(function(){ try{ ctl.abort(); }catch(e){} },2500);
+    }
+    const url=BRIDGE_URL+'/fullcard?uid='+encodeURIComponent(uid)+'&cid='+encodeURIComponent(cid);
+    const r=await window.fetch(url,{cache:'no-store',signal:ctl?ctl.signal:undefined});
+    if(!r.ok) return null;
+    const j=await r.json();
+    return (j&&j.ok&&j.card)?j.card:null;
+  }catch(e){ return null; }
+  finally{ if(timer) clearTimeout(timer); }
+}
 /* 桥的返回结果转成人话 */
 function _bridgeSuffix(r){
   if(!r) return '';
@@ -2905,6 +2950,7 @@ async function syncCardFromWall(){
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(_loadLocal(_tgUserId()));
+    try{ _pushFullCard(uid,rec); }catch(e){}   // 完整卡同步到本机（桌面可达时）
     toast(_sendToast(sent));
     return;
   }
@@ -4179,23 +4225,39 @@ function toggleGmMode(){
 /* GM 模式里点成员卡：开成和看自己卡一模一样的全屏视图（可编辑、可添加）
    卡片挂在成员自己的本地命名空间下，保存/同步都按成员 uid 走，
    代存时请求体带 actor，bot 侧按 gm_links 校验是不是 TA 的 GM。 */
-function openGmCardAt(i){
+async function openGmCardAt(i){
   const item=_gmCardsCache[i];
   if(!item) return;
   const puid=item.uid;
+  // 关键：先从本机 bot 拉完整卡（含能力行/装备/人脉的 HTML）。
+  // 只有精简 cards.json 时 _materializeBotCard 会用空问卷造骨架 → 信息大部分缺失。
+  const remoteFull=await _fetchFullCard(puid, item.rec.id||'');
+  const base=remoteFull
+    ? Object.assign({},item.rec,remoteFull,{_local:false,hasFull:!!remoteFull.frag})
+    : item.rec;
   const list=_loadLocal(puid);
   let k=item.rec.id?list.findIndex(function(x){return x&&x.id===item.rec.id;}):-1;
   if(k<0) k=list.findIndex(function(x){return x&&x.name===item.rec.name;});
   if(k<0){
-    list.push(Object.assign({},item.rec));
+    list.push(Object.assign({},base));
     k=list.length-1;
   }else{
+    // 本地有完整卡（成员在这台电脑建过）就别用云端精简字段覆盖它的 frag
+    const localFull=!!(list[k].frag||list[k].hasFull);
     list[k]=Object.assign({},list[k],{
-      name:item.rec.name, id:item.rec.id||list[k].id,
-      state:item.rec.state, roll:item.rec.roll, notes:item.rec.notes
+      name:base.name, id:base.id||list[k].id,
+      state:base.state, roll:base.roll, notes:base.notes,
+      frag:remoteFull?base.frag:list[k].frag,
+      runtime:remoteFull?base.runtime:list[k].runtime,
+      resultCards:remoteFull?base.resultCards:list[k].resultCards,
+      financeCards:remoteFull?base.financeCards:list[k].financeCards,
+      sysIds:remoteFull?base.sysIds:list[k].sysIds,
+      weapons:remoteFull?base.weapons:list[k].weapons,
+      hasFull:remoteFull?!!base.frag:localFull
     });
   }
   _saveLocal(puid,list);
+  if(!remoteFull) toast('⚠️ 本机没有这张卡的完整内容（成员需在电脑端建卡/同步）');
   _showCardDetail(k,puid,list);
 }
 function showHome(){
@@ -4266,6 +4328,9 @@ window._onCardCopied=function(cmd, fullHTML, payload){
   local.unshift(rec);
   if(!_saveLocal(uid,local)) return false;
   _renderMyCards(local);
+  /* 完整卡只写本机 bot（R18 不上云）。fire-and-forget：失败不影响建卡主流程，
+     手机端 bridge 不可达就自然跳过，只靠 ntfy 传精简数值。 */
+  try{ _pushFullCard(uid,rec); }catch(e){}
   return true;
 };
 /* 本地缓存 + 云端列表 → 卡片墙用的最终列表（纯函数，方便单测）
