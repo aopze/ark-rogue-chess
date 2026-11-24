@@ -3526,40 +3526,78 @@ function _getCardHtml(uid,name){
   try{ return localStorage.getItem(_cardHtmlKey(uid,name))||''; }
   catch(e){ return ''; }
 }
-/* 已删除名单（墓碑）：防止 bot 对账把删掉的卡又加回来 */
+/* 已删除名单（墓碑）：防止 bot 对账把删掉的卡又加回来。
+   每条带删除时间 {name,t}（老格式是纯字符串数组，读进来补 t=0）：
+   删掉之后 bot 还要重新生成 cards.json 再推 GitHub，CDN 还有缓存，
+   没有时间戳就没法判断「云端还没跟上」还是「云端真删不掉」。 */
 function _deletedKey(uid){ return 'yu7_deleted_cards_'+uid; }
 function _getDeleted(uid){
-  try{ return JSON.parse(localStorage.getItem(_deletedKey(uid))||'[]'); }
-  catch(e){ return []; }
+  let arr=[];
+  try{ arr=JSON.parse(localStorage.getItem(_deletedKey(uid))||'[]'); }catch(e){ arr=[]; }
+  if(!Array.isArray(arr)) return [];
+  return arr.map(function(x){
+    if(typeof x==='string') return {name:x,t:0};
+    if(x&&x.name) return {name:String(x.name),t:Number(x.t)||0};
+    return null;
+  }).filter(Boolean);
+}
+function _setDeleted(uid,arr){
+  try{
+    if(arr&&arr.length) localStorage.setItem(_deletedKey(uid),JSON.stringify(arr));
+    else localStorage.removeItem(_deletedKey(uid));
+  }catch(e){}
 }
 function _addDeleted(uid,name){
-  try{
-    const arr=_getDeleted(uid);
-    if(arr.indexOf(name)<0) arr.push(name);
-    localStorage.setItem(_deletedKey(uid),JSON.stringify(arr));
-  }catch(e){}
+  const arr=_getDeleted(uid);
+  const t=Math.floor(Date.now()/1000);
+  const hit=arr.find(x=>x.name===name);
+  if(hit) hit.t=t; else arr.push({name:name,t:t});
+  _setDeleted(uid,arr);
 }
 function _clearDeleted(uid){
   try{ localStorage.removeItem(_deletedKey(uid)); }catch(e){}
 }
-/* 墓碑只在「这次删除/改名还没同步到 bot」期间有意义。
-   同步队列空了就说明 bot 那边已经删掉/改好了，云端列表就是权威 ——
-   再拿本地墓碑藏卡，就会出现「bot 明明有 4 张、app 只显示 2 张」而且永远自愈不了。
-   （2026-11-23 的真实故障就是这个：bot 停着的时候在 app 里删了卡，
-     删除请求排队没发出去，墓碑却立刻生效，之后云端那两张被永久藏起来。） */
-function _activeDeleted(uid){
+/* 删除/改名之后，云端不可能「立刻」跟上，中间有两段延迟：
+     ① 队列里的 op 还没发出去（bot 没开/没点同步）
+     ② 发出去了，bot 也删了，但 cards.json 推到 GitHub 后 CDN 还有缓存
+   旧实现在 ① 结束后就作废墓碑，于是 ② 期间刷新会看到删掉的卡「复活」，
+   等 CDN 过期又消失 —— 就是「删了刷新又回来、过一会儿又没了」。
+   现在分三种情况：
+     · 队列里还有对应的 del/ren → 一直挡（这是真的还没发出去）
+     · 队列空了但云端仍返回这张卡 → 继续挡，最多 DELETED_TTL（缓存窗口）
+     · 云端不再返回它 → 墓碑作废，立刻清掉
+   TTL 兜底是为了不重演 2026-11-23：bot 那边永远删不掉时，卡不能被永久藏起来。 */
+const DELETED_TTL=20*60;               // 秒（GitHub Pages 的 CDN 缓存是 10 分钟，留一倍余量）
+function _activeDeleted(uid,remote,nowSec){
+  const tomb=_getDeleted(uid);
+  if(!tomb.length) return [];
+  const now=nowSec||Math.floor(Date.now()/1000);
   const pend=_getPending(uid);
-  if(!pend.length){
-    if(_getDeleted(uid).length) _clearDeleted(uid);   // 队列已清 → 墓碑作废，顺手清掉
-    return [];
-  }
-  const keep={};
+  const queued={};
   pend.forEach(op=>{
     if(!op) return;
-    if(op.a==='del'){ if(op.name) keep[op.name]=1; if(op.id) keep['i:'+op.id]=1; }
-    else if(op.a==='ren'){ if(op.old) keep[op.old]=1; }
+    if(op.a==='del'){ if(op.name) queued[op.name]=1; if(op.id) queued['i:'+op.id]=1; }
+    else if(op.a==='ren'){ if(op.old) queued[op.old]=1; }
   });
-  return _getDeleted(uid).filter(n=>keep[n]);
+  // remote 传了数组才做「云端还有没有」的判断；没传（离线/异常）就按时间兜底
+  const remoteNames=Array.isArray(remote)?remote.map(c=>c&&c.name):null;
+  const keep=[], alive=[];
+  tomb.forEach(function(rec){
+    const nm=rec.name;
+    if(!nm) return;
+    if(queued[nm]){ keep.push(nm); alive.push(rec); return; }      // ① 还没发出去
+    const fresh=!rec.t||now-rec.t<=DELETED_TTL;
+    if(remoteNames){
+      if(remoteNames.indexOf(nm)>=0){                              // ② 云端还没跟上
+        if(fresh){ keep.push(nm); alive.push(rec); }
+        return;                                                    // 超时 → 放弃，别再藏
+      }
+      return;                                                      // ③ 云端已删 → 墓碑作废
+    }
+    if(fresh){ keep.push(nm); alive.push(rec); }
+  });
+  if(alive.length!==tomb.length) _setDeleted(uid,alive);
+  return keep;
 }
 function _delCardHtml(uid,name){
   try{ localStorage.removeItem(_cardHtmlKey(uid,name)); }catch(e){}
@@ -4199,7 +4237,7 @@ function _mergeCards(local, remote, deleted){
   const map={};
   (remote||[]).filter(c=>c&&del.indexOf(c.name)<0)
     .forEach(c=>{ map[keyOf(c)]=Object.assign({},c,{_local:false}); });
-  (local||[]).forEach(c=>{
+  (local||[]).filter(c=>c&&del.indexOf(c.name)<0).forEach(c=>{
     if(!c) return;
     let k=keyOf(c), t=map[k];
     if(!t){
@@ -4239,8 +4277,10 @@ async function loadMyCards(){
     if(!r.ok){ _cardsHint('⚠️ 云端没连上（HTTP '+r.status+'），只显示本机缓存 '+local.length+' 张 · 点此重试'); return; }
     const payload=await r.json();
     const remote=(((payload.users||{})[uid]||{}).cards)||[];
-    // 墓碑只对「还没同步出去的删除」生效，否则 bot 里的卡会被永久藏起来
-    const merged=_mergeCards(local, remote, _activeDeleted(uid));
+    // 墓碑要在「云端还返着这张卡」时继续生效：bot 删完到 CDN 更新之间有个窗口，
+    // 按队列是否为空来判断就会在这个窗口里把卡又并回来（删了 → 刷新复活 → 过会儿又没了）
+    const active=_activeDeleted(uid,remote);
+    const merged=_mergeCards(local, remote, active);
     _cardsHint('');
     _saveLocal(uid,merged);
     _renderMyCards(merged);
@@ -4250,7 +4290,6 @@ async function loadMyCards(){
       return;
     }
     // 被本地墓碑挡住的那几张：说清楚，并给两条出路（这是「bot 4 张、app 2 张」的典型成因）
-    const active=_activeDeleted(uid);
     const blocked=remote.filter(c=>c&&active.indexOf(c.name)>=0).map(c=>c.name||'未命名');
     if(blocked.length) _cardsHiddenHint(blocked);
   }catch(e){
@@ -4278,7 +4317,7 @@ function _cardsHiddenHint(names){
   el.style.cssText='display:block;text-align:center;color:#b45309;font-size:.76rem;line-height:1.6;'
     +'background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin:-8px 0 12px;';
   const tip=document.createElement('div');
-  tip.textContent='⚠️ 云端还有 '+names.length+' 张（'+names.join('、')+'）被本机的删除标记挡着，删除还没同步到电脑';
+  tip.textContent='⚠️ 云端还有 '+names.length+' 张（'+names.join('、')+'）被本机的删除标记挡着，正在等电脑/云端同步';
   el.appendChild(tip);
   const bar=document.createElement('div');
   bar.style.cssText='margin-top:7px;display:flex;gap:8px;justify-content:center;';
@@ -4306,9 +4345,8 @@ function _restoreHidden(names){
   const gone={};
   (names||[]).forEach(n=>{ gone[n]=1; });
   try{
-    const left=_getDeleted(uid).filter(n=>!gone[n]);
-    if(left.length) localStorage.setItem(_deletedKey(uid),JSON.stringify(left));
-    else localStorage.removeItem(_deletedKey(uid));
+    const left=_getDeleted(uid).filter(x=>!gone[x.name]);
+    _setDeleted(uid,left);
   }catch(e){}
   try{
     const keep=_getPending(uid).filter(function(op){
