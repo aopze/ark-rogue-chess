@@ -165,6 +165,8 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .modal-close:hover{color:#ef4444;}
 .modal-title{font-weight:bold;font-size:1.1rem;margin-bottom:12px;padding-right:20px;color:var(--primary);}
 .modal-content{font-size:.9rem;color:#374151;line-height:1.7;}
+/* 出身/领域弹窗里「事件 / 经历」的说明正文 */
+.detail-desc{margin-top:6px;color:#475569;line-height:1.75;}
 .sheet-btns{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
 .sheet-btn{flex:1 1 auto;min-width:120px;padding:8px 10px;border:1px solid var(--primary);border-radius:8px;background:#fff;color:var(--primary);font-size:.8rem;font-weight:700;cursor:pointer;}
 .sheet-btn:hover{background:#eef2ff;}
@@ -2019,12 +2021,19 @@ function showResult(){
   const cards=[];
   const C=(label,value,detail,opts={})=>cards.push({label,value,detail:detail||value,...opts});
 
+  // 出身 / 领域详情弹窗：只讲「关键事件 / 重要经历」本身（事件名 + 事件说明）。
+  // 初始能力不在这里显示 —— 它已经在能力栏里各自成行，这里重复一遍等于同一段文字出现两次。
+  const evSel=ori?((ori.events||[]).find(e=>e.label===answers.event)||null):null;
   C('出身',answers.origin||'—',ori
-    ?`<div class="sheet-group-title">${ori.label}</div><div>${ori.preview}</div>${ori.initialAbility?abilityBox('出身初始能力',ori.initialAbility):''}${hr}<div><strong>关键事件：</strong>${answers.event||'—'}</div>`
+    ?`<div><strong>关键事件：</strong>${answers.event||'—'}</div>${evSel&&evSel.preview?`<div class="detail-desc">${evSel.preview}</div>`:''}`
     :'—');
 
   C('领域',doms.map(d=>d.label).join(' / ')||'—',doms.length
-    ?doms.map(d=>`<div class="sheet-group-title">${d.label}</div><div>${d.preview}</div>${d.initialAbility?abilityBox('领域初始能力',d.initialAbility):''}<div><strong>重要经历：</strong>${(answers.experiences||{})[d.label]||'—'}</div>`).join(hr)
+    ?doms.map(d=>{
+        const expName=(answers.experiences||{})[d.label]||'—';
+        const expSel=(d.experiences||[]).find(e=>e.label===expName);
+        return `<div><strong>重要经历：</strong>${expName}</div>${expSel&&expSel.preview?`<div class="detail-desc">${expSel.preview}</div>`:''}`;
+      }).join(hr)
     :'—');
 
   if(fairy||god){
@@ -2267,7 +2276,7 @@ function openDetail(i,list){
   window._currentDetailList=source;
   window._currentDetailIdx=i;
   $('#modal-title').textContent=c.label;
-  $('#modal-content').innerHTML=c.detail||c.value;
+  $('#modal-content').innerHTML=(window.slimOriginDomainDetail?window.slimOriginDomainDetail(c):(c.detail||c.value));
   $('#detail-modal').classList.add('show');
   applyEditable($('#detail-modal'));
 }
@@ -4685,6 +4694,33 @@ setInterval(function(){
     if(window.exportResultHTML){window.exportResultHTML();msg('已保存角色卡文件');}
     else{msg('当前页面不支持保存');}
   }
+  /* 出身 / 领域详情只讲「关键事件 / 重要经历」：事件名 + 事件说明。
+     老存档的详情里塞着「初始能力」黄框和出身说明，打开时统一摘掉（幂等，新卡本来就是这格式）。
+     初始能力不在这里重复 —— 能力栏已经各自成行。 */
+  function slimOriginDomainDetail(card){
+    if(!card) return '';
+    var lab=String(card.label||'');
+    if(lab!=='出身'&&lab.indexOf('领域')!==0) return card.detail||card.value||'';
+    var html=card.detail||'';
+    if(!html) return '';
+    var box=document.createElement('div');
+    box.innerHTML=html;
+    [].slice.call(box.children).forEach(function(el){
+      if(el.tagName==='HR') return;
+      if(el.classList.contains('detail-desc')) return;   // 新格式的事件说明，保留
+      if(el.querySelector('strong')) return;             // 关键事件 / 重要经历那一行
+      el.remove();                                       // 初始能力黄框、出身/领域说明
+    });
+    // 多领域时中间那条虚线要留，首尾多余的去掉
+    var first=box.firstElementChild;
+    while(first&&first.tagName==='HR'){var nx=first.nextElementSibling;first.remove();first=nx;}
+    var last=box.lastElementChild;
+    while(last&&last.tagName==='HR'){var pv=last.previousElementSibling;last.remove();last=pv;}
+    if(!box.children.length) return '<div>'+esc(card.value||'（无详细说明）')+'</div>';
+    card.detail=box.innerHTML;
+    return card.detail;
+  }
+  window.slimOriginDomainDetail=slimOriginDomainDetail;
   // 老卡没有详情数据时：先用候选池能重建的（契约/能力系统）重建，剩下的退回格子文字
   function rebuildDetail(label,val){
     var opt=(DATA&&DATA.options)||{};
@@ -4733,7 +4769,7 @@ setInterval(function(){
     window._currentDetailList=source;
     window._currentDetailIdx=i;
     document.getElementById('modal-title').textContent=c.label;
-    document.getElementById('modal-content').innerHTML=c.detail||c.value;
+    document.getElementById('modal-content').innerHTML=(slimOriginDomainDetail(c)||c.value);
     document.getElementById('detail-modal').classList.add('show');
     if(window.applyEditable) window.applyEditable(document.getElementById('detail-modal'));
   }
