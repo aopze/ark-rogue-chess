@@ -295,18 +295,17 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .card-runtime-bar button{padding:5px 12px;border:1px solid #f59e0b;border-radius:16px;background:#fffbeb;color:#92400e;font-family:inherit;font-size:.76rem;cursor:pointer;}
 .card-runtime-bar button:hover{background:#fef3c7;}
 #add-msg{color:#b45309;font-size:.78rem;min-height:1.1em;}
-/* ===== 顶部下拉抽屉：角色卡列表（全屏卡顶栏「📋」）+ GM 关系（首页「🎲 GM」）===== */
+/* ===== 顶部下拉抽屉：角色卡列表（全屏卡顶栏「📋」）===== */
 /* 默认 pointer-events:none，只靠 transform 做动画，不用 display 切换（display 切换会吃掉过渡） */
-#card-list-sheet,#gm-sheet{position:fixed;inset:0;pointer-events:none;}
+#card-list-sheet{position:fixed;inset:0;pointer-events:none;}
 #card-list-sheet{z-index:20500;}
-#gm-sheet{z-index:19500;}
-#card-list-sheet.show,#gm-sheet.show{pointer-events:auto;}
+#card-list-sheet.show{pointer-events:auto;}
 .card-sheet-mask{position:absolute;inset:0;background:rgba(15,23,42,.38);opacity:0;transition:opacity .22s ease;}
-#card-list-sheet.show .card-sheet-mask,#gm-sheet.show .card-sheet-mask{opacity:1;}
+#card-list-sheet.show .card-sheet-mask{opacity:1;}
 .card-sheet{position:absolute;left:0;right:0;top:0;transform:translateY(-102%);transition:transform .26s cubic-bezier(.22,.61,.36,1);
   background:#fff;border-radius:0 0 16px 16px;box-shadow:0 12px 28px rgba(15,23,42,.20);
   padding:12px 14px 16px;max-height:72vh;overflow:auto;-webkit-overflow-scrolling:touch;}
-#card-list-sheet.show .card-sheet,#gm-sheet.show .card-sheet{transform:translateY(0);}
+#card-list-sheet.show .card-sheet{transform:translateY(0);}
 .card-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 2px 10px;}
 .card-sheet-title{font-size:.9rem;font-weight:700;color:#3730a3;}
 .card-sheet-close{border:0;background:#eef2ff;color:#4338ca;width:28px;height:28px;border-radius:14px;font-size:1.1rem;line-height:1;cursor:pointer;font-family:inherit;flex:none;}
@@ -322,22 +321,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 @media (max-width:360px){
   .card-sheet-item{font-size:.85rem;padding:8px 10px;min-height:48px;}
 }
-/* ==== GM 关系抽屉的内容 ==== */
-.gm-block{margin:0 2px 12px;}
-.gm-block-title{font-size:.74rem;font-weight:700;color:#b45309;letter-spacing:.03em;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
-.gm-block-title .gm-num{font-weight:700;color:#92400e;background:#fef3c7;border-radius:8px;padding:0 6px;font-size:.7rem;}
-.gm-empty{font-size:.8rem;color:#94a3b8;background:#f8fafc;border:1px dashed #e2e8f0;border-radius:8px;padding:8px 10px;line-height:1.5;}
-.gm-empty b{color:#64748b;}
-.gm-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:.86rem;color:#0f172a;font-weight:700;
-  background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 10px;word-break:break-all;}
-.gm-line .gm-uid{font-size:.72rem;color:#a16207;font-weight:400;}
-.gm-chips{display:flex;flex-wrap:wrap;gap:6px;}
-.gm-chip{font-size:.8rem;font-weight:700;color:#312e81;background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:5px 9px;max-width:100%;word-break:break-all;}
-.gm-chip .gm-uid{font-size:.7rem;color:#6366f1;font-weight:400;margin-left:4px;}
-.gm-switch{display:block;width:100%;margin:2px 0 8px;padding:10px 12px;border-radius:12px;border:0;cursor:pointer;
-  font-family:inherit;font-size:.9rem;font-weight:700;color:#fff;background:linear-gradient(135deg,#6366f1,#4338ca);}
-.gm-switch.on{background:linear-gradient(135deg,#f59e0b,#d97706);}
-.gm-tip{font-size:.72rem;color:#94a3b8;line-height:1.6;margin:0 2px;word-break:break-all;}
+/* ==== GM 关系抽屉的内容已随抽屉一起删除（现在点 🎲 GM 直接切模式）==== */
 /* GM 模式：成员卡（黄框区别于自己的蓝框） */
 .gm-card{cursor:pointer;aspect-ratio:4/3;border:2px solid #fcd34d;border-radius:12px;
   background:linear-gradient(160deg,#fffbeb,#fff);padding:10px;display:flex;flex-direction:column;
@@ -541,7 +525,7 @@ try {
   <!-- 首页：我创建的角色卡（卡片墙） -->
   <div id="home-view" style="display:block;">
     <div style="display:flex;align-items:center;justify-content:center;position:relative;margin:4px 0 4px;">
-      <button id="gm-btn" onclick="openGmSheet()" title="GM 关系 / GM 模式" aria-label="GM 关系" style="position:absolute;left:0;top:50%;transform:translateY(-50%);border:1px solid #fcd34d;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">🎲 GM</button>
+      <button id="gm-btn" onclick="toggleGmMode()" title="进入 / 退出 GM 模式" aria-label="GM 模式" style="position:absolute;left:0;top:50%;transform:translateY(-50%);border:1px solid #fcd34d;background:#fffbeb;color:#b45309;border-radius:16px;padding:5px 10px;font-size:.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">🎲 GM</button>
       <h1 id="home-title" style="margin:0;font-size:1.35rem;">我的角色卡</h1>
       <button id="edit-mode-btn" onclick="toggleEditModeCards()" style="position:absolute;right:0;top:50%;transform:translateY(-50%);border:1px solid #a5b4fc;background:#fff;color:#4338ca;border-radius:16px;padding:5px 12px;font-size:.82rem;font-weight:700;cursor:pointer;">✎ 编辑</button>
     </div>
@@ -550,17 +534,7 @@ try {
     <div id="my-cards-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;"></div>
     <div id="home-hint" style="display:none;"></div>
   </div>
-  <!-- GM 关系：从顶部向下弹出（和角色卡列表同一套抽屉样式） -->
-  <div id="gm-sheet">
-    <div class="card-sheet-mask" onclick="closeGmSheet()"></div>
-    <div class="card-sheet">
-      <div class="card-sheet-head">
-        <span class="card-sheet-title">🎲 GM 关系</span>
-        <button class="card-sheet-close" onclick="closeGmSheet()" aria-label="收起">×</button>
-      </div>
-      <div id="gm-sheet-body"></div>
-    </div>
-  </div>
+  <!-- GM 模式没有面板：点「🎲 GM」直接进/退出（见 toggleGmMode） -->
   <!-- 问卷 / 结果 -->
   <div id="quiz-wrap" style="display:none;">
     <div id="quiz-container" style="display: block;"></div>
@@ -604,16 +578,12 @@ try {
   </div>
 </div>
 
-<!-- 重命名 / 删除确认弹窗 -->
+<!-- 删除确认弹窗（重命名已取消：名字跟卡里的「角色姓名」走） -->
 <div class="modal-overlay" id="card-action-modal" onclick="closeCardAction()">
   <div class="modal-box" onclick="event.stopPropagation()" style="max-width:360px;">
     <button class="modal-close" onclick="closeCardAction()">×</button>
-    <div class="modal-title" id="ca-title" style="font-weight:700;font-size:1.05rem;margin-bottom:12px;">✎ 重命名</div>
-    <div id="ca-rename-body">
-      <input id="ca-newname" type="text" maxlength="40" placeholder="输入新的角色名"
-        style="width:100%;padding:9px 12px;border:1px solid #c7d2fe;border-radius:8px;font-size:.95rem;box-sizing:border-box;">
-    </div>
-    <div id="ca-delete-body" style="display:none;color:#475569;font-size:.9rem;line-height:1.6;"></div>
+    <div class="modal-title" id="ca-title" style="font-weight:700;font-size:1.05rem;margin-bottom:12px;">🗑 删除</div>
+    <div id="ca-delete-body" style="color:#475569;font-size:.9rem;line-height:1.6;"></div>
     <div style="display:flex;gap:8px;margin-top:16px;">
       <button onclick="closeCardAction()" style="flex:1;padding:9px;border:1px solid #cbd5e1;background:#fff;color:#475569;border-radius:8px;cursor:pointer;font-weight:600;">取消</button>
       <button id="ca-confirm" onclick="confirmCardAction()" style="flex:1;padding:9px;border:0;background:#4f46e5;color:#fff;border-radius:8px;cursor:pointer;font-weight:700;">确定</button>
@@ -3606,9 +3576,25 @@ window.addEventListener('message',function(e){
   if(!d || d.type!=='yu7-card-save') return;
   const uid=_cardOwner();
   if(!uid || !d.name) return;
-  const list=_loadLocal(uid).map(c=>c.name===d.name
-    ? Object.assign({},c,{frag:d.frag,runtime:d.runtime,hasFull:true,updated_at:Math.floor(Date.now()/1000)}) : c);
+  const viewId=_cardViewId||'';
+  const oldViewName=_cardViewName||'';
+  let renamedFrom='';
+  // 按 id 认卡（名字只是卡里的「角色姓名」，改了姓名还是同一张卡）
+  const list=_loadLocal(uid).map(function(c){
+    if(!c) return c;
+    const hit=(viewId&&c.id===viewId)||c.name===d.name||(oldViewName&&c.name===oldViewName);
+    if(!hit) return c;
+    if(c.name && c.name!==d.name && !renamedFrom) renamedFrom=c.name;
+    return Object.assign({},c,{name:d.name,frag:d.frag,runtime:d.runtime,hasFull:true,
+      updated_at:Math.floor(Date.now()/1000)});
+  });
   _saveLocal(uid,list);
+  if(renamedFrom){
+    // 卡里改了姓名 → 外墙名字跟着变（外部名就是内部名），并把改名带给 bot（id 不变）
+    _cardViewName=d.name;
+    _addDeleted(uid,renamedFrom);   // 旧名立墓碑，防止对账把旧名那张又加回来
+    if(viewId) _addPending(uid,{a:'ren',id:viewId,old:renamedFrom,new:d.name});
+  }
   _renderMyCards(_loadLocal(_tgUserId()));   // 只刷新自己的卡墙；GM 模式会自动转去渲染成员
   // 自动同步：iframe 里的数值已写回本地，直接走双向推送（拉取已由 openCardRemoteFirst 在开卡时做过）
   try{ void syncCardFromWall(); }catch(e){}
@@ -3808,10 +3794,9 @@ function _renderMyCards(cards){
       +'<div class="card-mini-stats">'+stats.map(function(it){
         return '<div class="card-mini-stat"><b>'+escCardText(it[0])+'</b><span>'+escCardText(it[1])+'</span></div>';
       }).join('')+'</div>';
-    // 编辑模式：卡片顶部显示重命名/删除按钮
+    // 编辑模式：卡片顶部只留删除。名字跟卡里的「角色姓名」走，不再提供外部重命名。
     const ops=_editMode
       ? '<div style="display:flex;gap:4px;justify-content:center;margin-bottom:3px;">'
-        +'<button onclick="event.stopPropagation();askRenameCard('+i+')" style="padding:2px 6px;border:1px solid #a5b4fc;background:#eef2ff;color:#4338ca;border-radius:10px;font-size:.64rem;cursor:pointer;">✎ 重命名</button>'
         +'<button onclick="event.stopPropagation();askDeleteCard('+i+')" style="padding:2px 6px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;border-radius:10px;font-size:.64rem;cursor:pointer;">🗑 删除</button>'
         +'</div>'
       : '';
@@ -4104,28 +4089,17 @@ window.addEventListener('message',function(e){
   const d=e.data;
   if(d&&d.type==='yu7-edit-state') _syncCardEditBtn(!!d.on);
 });
-/* ===== 卡片管理：删除 / 重命名 ===== */
+/* ===== 卡片管理：只有删除。角色卡的名字就是卡里的「角色姓名」，
+   不再有独立的外部名字，所以首页编辑模式没有重命名入口（要改就进卡里改姓名）。 ===== */
 let _cardAction={mode:'',idx:-1};
 function askDeleteCard(i){
   const c=_myCardsCache[i]; if(!c) return;
   _cardAction={mode:'delete',idx:i};
   $('#ca-title').textContent='🗑 删除角色卡';
-  $('#ca-rename-body').style.display='none';
   $('#ca-delete-body').style.display='block';
   $('#ca-delete-body').innerHTML='确定删除「<b>'+escCardText(c.name||'未命名')+'</b>」吗？<br>此操作不可恢复。';
   const btn=$('#ca-confirm'); btn.textContent='🗑 删除'; btn.style.background='#dc2626';
   $('#card-action-modal').classList.add('show');
-}
-function askRenameCard(i){
-  const c=_myCardsCache[i]; if(!c) return;
-  _cardAction={mode:'rename',idx:i};
-  $('#ca-title').textContent='✎ 重命名角色卡';
-  $('#ca-rename-body').style.display='block';
-  $('#ca-delete-body').style.display='none';
-  $('#ca-newname').value=c.name||'';
-  const btn=$('#ca-confirm'); btn.textContent='✎ 保存'; btn.style.background='#4f46e5';
-  $('#card-action-modal').classList.add('show');
-  setTimeout(()=>{ const el=$('#ca-newname'); if(el){el.focus();el.select();} },80);
 }
 function closeCardAction(){ $('#card-action-modal').classList.remove('show'); }
 function confirmCardAction(){
@@ -4145,35 +4119,6 @@ function confirmCardAction(){
     _renderMyCards(next);
     toast('🗑 已删除「'+oldName+'」');
     _autoFlushOps();   // 删除即自动同步，不再等手动点「待同步」
-  }else if(mode==='rename'){
-    const newName=String($('#ca-newname').value||'').trim().replace(/[\\/:*?"<>|]/g,'').slice(0,40);
-    if(!newName){ toast('⚠️ 新名字不能为空'); return; }
-    if(newName===oldName) return closeCardAction();
-    if(cards.some(x=>x.name===newName&&(!cid||x.id!==cid))){ toast('⚠️ 已有同名角色卡'); return; }
-    const target=cid?cards.find(x=>x.id===cid):cards.find(x=>x.name===oldName);
-    // 迁移完整 HTML：旧 key → 新 key，并把卡内姓名写成新名
-    if(target&&target.hasFull){
-      let html=_getCardHtml(uid,oldName);
-      if(html){
-        html=html.split('value="'+oldName+'"').join('value="'+escCardText(newName)+'"');
-        html=html.split('>'+oldName+'<').join('>'+escCardText(newName)+'<');
-        _saveCardHtml(uid,newName,html);
-      }
-      _delCardHtml(uid,oldName);
-      target.name=newName;
-    }else{
-      // 线上同步来的卡（无完整 HTML）：只改索引名
-      target.name=newName;
-    }
-    // 改名也算一次内容修改：id 不变，名字随同步带给 bot
-    target.name=newName;
-    target.updated_at=Math.floor(Date.now()/1000);
-    _addDeleted(uid,oldName);  // 旧名加墓碑，防止对账把旧卡加回
-    _addPending(uid,{a:'ren',id:cid,old:oldName,new:newName});   // 排队同步给 bot（带 id，改名后仍是同一张卡）
-    _saveLocal(uid,cards);
-    _renderMyCards(cards);
-    toast('✎ 已改名为「'+newName+'」');
-    _autoFlushOps();   // 改名即自动同步，不再等手动点「待同步」
   }
   closeCardAction();
 }
@@ -4227,41 +4172,6 @@ function _fetchGmPayload(force){
     finally{ if(timer) clearTimeout(timer); _gmLoading=null; }
   })();
   return _gmLoading;
-}
-function _gmSheetHtml(p){
-  const me=_tgUserId();
-  const gmUid=p?String((p.gm||{})[me]||''):'';
-  const members=p?_gmMembers(p):[];
-  const gmLine=gmUid
-    ? '<div class="gm-line">🎲 '+escCardText(_gmNameOf(p,gmUid))+'<span class="gm-uid">'+escCardText(gmUid)+'</span></div>'
-    : '<div class="gm-empty">还没有绑定 GM。在群里发 <b>/gm @某人</b>，就能把自己绑定给对方。</div>';
-  const memHtml=members.length
-    ? '<div class="gm-chips">'+members.map(function(uid){
-        return '<span class="gm-chip">'+escCardText(_gmNameOf(p,uid))+'<span class="gm-uid">'+escCardText(uid)+'</span></span>';
-      }).join('')+'</div>'
-    : '<div class="gm-empty">还没有玩家把你设为 GM。对方在群里发 <b>/gm @你</b> 之后，这里就会出现。</div>';
-  const dis=members.length?'':' disabled style="opacity:.5;cursor:not-allowed;"';
-  const btn='<button class="gm-switch'+(_gmMode?' on':'')+'"'+dis+' onclick="toggleGmMode()">'
-    +(_gmMode?'退出 GM 模式':'进入 GM 模式（看成员的角色卡）')+'</button>';
-  const tip='<div class="gm-tip">'+(p?'':'⚠️ 拉不到云端数据（cards.json），先确认网络。<br>')
-    +'绑定：群里 <b>/gm @某人</b>　查看：<b>/gm</b>　解除：<b>/gm off</b></div>';
-  return '<div class="gm-block"><div class="gm-block-title">我的 GM</div>'+gmLine+'</div>'
-    +'<div class="gm-block"><div class="gm-block-title">我的成员<span class="gm-num">'+members.length+'</span></div>'+memHtml+'</div>'
-    +btn+tip;
-}
-function openGmSheet(){
-  const wrap=$('#gm-sheet'), body=$('#gm-sheet-body');
-  if(!wrap||!body) return;
-  body.innerHTML=_gmSheetHtml(_gmData);
-  wrap.classList.add('show');
-  // 先用缓存出画面，再后台拉一次最新的（刚 /gm 绑定完不用等）
-  _fetchGmPayload(true).then(function(p){
-    if(p&&wrap.classList.contains('show')) body.innerHTML=_gmSheetHtml(p);
-  });
-}
-function closeGmSheet(){
-  const wrap=$('#gm-sheet');
-  if(wrap) wrap.classList.remove('show');
 }
 function _gmCardHtml(p,uid,idx){
   const u=(p.users||{})[uid]||{};
@@ -4324,14 +4234,15 @@ function _applyGmModeUi(on){
   }
   if(e) e.style.display=on?'none':'';        // GM 模式下不许改自己的卡墙
 }
+/* 点「🎲 GM」直接切模式：进不用确认，退也不用确认 —— 按钮本身就是开关。
+   以前要先弹一个「GM 关系」抽屉再点里面的按钮才能进去，多一步纯属碍事。 */
 function toggleGmMode(){
   _gmMode=!_gmMode;
   try{ localStorage.setItem('yu7_gm_mode',_gmMode?'1':'0'); }catch(e){}
-  closeGmSheet();
   if(_gmMode&&_editMode) toggleEditModeCards();   // 先退出编辑态，免得在 GM 模式里误删
   _applyGmModeUi(_gmMode);
   showHome();
-  if(_gmMode) toast('🎲 已进入 GM 模式');
+  toast(_gmMode?'🎲 已进入 GM 模式':'🏠 已退出 GM 模式');
 }
 /* GM 模式里点成员卡：开成和看自己卡一模一样的全屏视图（可编辑、可添加）
    卡片挂在成员自己的本地命名空间下，保存/同步都按成员 uid 走，
