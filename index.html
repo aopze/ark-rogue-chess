@@ -3826,7 +3826,8 @@ function _renderMyCards(cards){
 }
 /* 判断一条 frag 是不是「旧版伪造的空壳」（_materializeBotCard 的遗留产物）。
    旧代码用空问卷造面板，造出来的 frag 有个硬特征：没有 resultCards / financeCards，
-   而且面板里连一个装备行/道具行/人脉行/结果格都没有 —— 真卡不可能全空。
+   而且面板里连一个装备行/道具行/人脉行都没有 —— 真卡不可能这三样全空。
+   （不能用 .result-card 判断：空问卷也会渲染出「出身」「领域」两个结果格，那样会漏判。）
    这类 frag 一旦被当成真卡渲染，用户看到的就是「只有数值、其它全空」的半成品。
    识别出来就丢掉 frag，让它走「未同步」并重新拉线上，云端有真卡就自动顶上。 */
 function _looksLikeSkeleton(c){
@@ -3835,7 +3836,7 @@ function _looksLikeSkeleton(c){
   try{
     const d=document.createElement('div');
     d.innerHTML=c.frag;
-    if(d.querySelector('.result-card,.equip-row,.item-row,.conn-row')) return false;
+    if(d.querySelector('.equip-row,.item-row,.conn-row')) return false;
   }catch(e){ return false; }   // 解析不了就当日志正常，不乱删
   return true;
 }
