@@ -2391,10 +2391,14 @@ function _updateCopyBtn(){
    不会被混合内容拦。手机上的 127.0.0.1 指向手机自己，会很快失败自动回退。 */
 const BRIDGE_URL='http://127.0.0.1:18765';
 async function _pushToBridge(botData){
-  const uid=_tgUserId();
+  const uid=_cardOwner();          // 卡片归属人（GM 模式里是成员）
   if(!uid||!window.fetch) return null;
   let body=botData, o=null;
-  try{ o=JSON.parse(botData); o.uid=uid; body=JSON.stringify(o); }catch(e){ return null; }
+  try{
+    o=JSON.parse(botData); o.uid=uid;
+    const me=_tgUserId(); if(me&&me!==uid) o.actor=me;
+    body=JSON.stringify(o);
+  }catch(e){ return null; }
   let ctl=null, timer=null;
   try{
     if(typeof AbortController==='function'){
@@ -2450,10 +2454,14 @@ function _isMobile(){
 }
 /* 发送成功返回 {id}（ntfy 给的消息 id，用来等回执）；失败返回 null */
 async function _pushToRelay(botData){
-  const uid=_tgUserId();
+  const uid=_cardOwner();          // 卡片归属人（GM 模式里是成员）
   if(!uid||!window.fetch) return null;
   let body=botData;
-  try{ const o=JSON.parse(botData); o.uid=uid; body=JSON.stringify(o); }catch(e){ return null; }
+  try{
+    const o=JSON.parse(botData); o.uid=uid;
+    const me=_tgUserId(); if(me&&me!==uid) o.actor=me;   // 代别人保存时带上自己，bot 侧按 GM 关系校验
+    body=JSON.stringify(o);
+  }catch(e){ return null; }
   let ctl=null, timer=null;
   try{
     if(typeof AbortController==='function'){
@@ -2679,8 +2687,8 @@ function _newCardId(){
 /* 拉 bot 上的卡（cards.json 由 bot 每次存盘时推送，是回程通道）
    先按 id 认，老卡没有 id 才退回按名字。
    必须带超时：GitHub Pages 偶尔很慢，没有超时就会「点了没反应」卡在这里。 */
-async function _fetchRemoteCard(name, cid){
-  const uid=_tgUserId(); if(!uid) return null;
+async function _fetchRemoteCard(name, cid, ownerUid){
+  const uid=ownerUid||_tgUserId(); if(!uid) return null;
   if(!name && !cid) return null;
   let ctl=null, timer=null;
   try{
@@ -2724,7 +2732,7 @@ function _pullFromRemote(uid, name, remote){
   rec.runtime.nums=Object.assign({},rec.runtime.nums||{},nums);
   rec._local=false;
   _saveLocal(uid,list);
-  _renderMyCards(list);
+  _renderMyCards(_loadLocal(_tgUserId()));
   return true;
 }
 async function copyResult(){
@@ -2791,7 +2799,7 @@ async function copyResult(){
 let _cardViewName='', _cardViewId='';
 async function syncCardFromWall(){
   const name=_cardViewName, cid=_cardViewId;
-  const uid=_tgUserId();
+  const uid=_cardOwner();          // GM 模式里这张卡属于成员，本地/推送都按 TA 走
   if((!name&&!cid)||!uid){ toast('先打开一张角色卡'); return; }
   toast('☁️ 同步中…');   // 先给个反应：下面要 await 拉 cards.json
   const list=_loadLocal(uid);
@@ -2819,7 +2827,7 @@ async function syncCardFromWall(){
   }
 
   /* 2) bot 更晚 → 拉取（不推送） */
-  const remote=await _fetchRemoteCard(rec.name||name, rec.id||cid);
+  const remote=await _fetchRemoteCard(rec.name||name, rec.id||cid, uid);
   if(remote&&Math.floor(remote.updated_at||0)>localTs+1){
     const st=remote.state||{};
     const nums=_stateToNums(st);
@@ -2837,7 +2845,7 @@ async function syncCardFromWall(){
     rec._local=false;
     list[i]=rec;
     _saveLocal(uid,list);
-    _renderMyCards(list);
+    _renderMyCards(_loadLocal(_tgUserId()));   // 只刷新自己的卡墙，别把别人的卡渲染上去
     _cardViewName=rec.name||_cardViewName;
     _cardViewId=rec.id||_cardViewId;
     _showCardDetail(i);          // 重建视图，显示拉下来的数值
@@ -2869,7 +2877,7 @@ async function syncCardFromWall(){
     rec.updated_at=Math.max(rec.updated_at||0,ts);
     list[i]=rec;
     _saveLocal(uid,list);
-    _renderMyCards(list);
+    _renderMyCards(_loadLocal(_tgUserId()));
     toast(_sendToast(sent));
     return;
   }
@@ -3469,12 +3477,12 @@ function _migrateCardsToData(uid){
 window.addEventListener('message',function(e){
   const d=e.data;
   if(!d || d.type!=='yu7-card-save') return;
-  const uid=_tgUserId();
+  const uid=_cardOwner();
   if(!uid || !d.name) return;
   const list=_loadLocal(uid).map(c=>c.name===d.name
     ? Object.assign({},c,{frag:d.frag,runtime:d.runtime,hasFull:true,updated_at:Math.floor(Date.now()/1000)}) : c);
   _saveLocal(uid,list);
-  _renderMyCards(_loadLocal(uid));
+  _renderMyCards(_loadLocal(_tgUserId()));   // 只刷新自己的卡墙；GM 模式会自动转去渲染成员
 });
 /* 单张完整卡 HTML 单独存，key 按 uid+卡名，避免主索引过大 */
 function _cardHtmlKey(uid,name){ return 'yu7_card_html_'+uid+'_'+encodeURIComponent(name); }
@@ -3686,12 +3694,19 @@ function _materializeBotCard(c){
 }
 /* 点卡片：打开完整角色卡（和旧导出一致，可编辑/添加/保存），用全屏 iframe */
 let _cardBlobUrl=null;
-function _showCardDetail(idx){
-  const c=_myCardsCache[idx];
+/* 当前全屏卡「归谁」：默认是自己；GM 模式里打开成员卡时是成员 uid。
+   保存/同步/本地缓存都按这个走，否则 GM 改的数值会写进自己那张卡。 */
+let _cardOwnerUid='';
+function _cardOwner(){ return _cardOwnerUid||_tgUserId(); }
+function _showCardDetail(idx, ownerUid, listOverride){
+  const src=listOverride||_myCardsCache;
+  const c=src[idx];
   if(!c) return;
   _cardViewName=c.name||'';
   _cardViewId=c.id||'';
-  const uid=_tgUserId();
+  const uid=ownerUid||_tgUserId();
+  _cardOwnerUid=uid;
+  const mine=uid===_tgUserId();
   let migrated=false;
   // 旧卡迁移：有独立 HTML 但未数据化 → 抽 frag 后删大文件
   if(!c.frag && c.html){
@@ -3737,7 +3752,7 @@ function _showCardDetail(idx){
     });
     const blob=new Blob([html],{type:'text/html;charset=utf-8'});
     _cardBlobUrl=URL.createObjectURL(blob);
-    $('#card-full-title').textContent='🧾 '+(c.name||'角色卡');
+    $('#card-full-title').textContent=(mine?'🧾 ':'👥 ')+(c.name||'角色卡');
     const f=box.querySelector('iframe');
     f.src=_cardBlobUrl;
     // 必须用 flex 才会让 iframe 的 flex:1 生效；block 下 iframe 退回默认 150px 高
@@ -3755,6 +3770,7 @@ function _showCardDetail(idx){
 }
 function closeCardFull(){
   closeCardListSheet();
+  _cardOwnerUid='';
   const box=$('#card-full-view');
   if(box) box.style.display='none';
   const f=box&&box.querySelector('iframe'); if(f) f.src='';
@@ -3896,6 +3912,8 @@ function confirmCardAction(){
      names  {uid:'@用户名'}     active  bot 里 .char use 选中的那张卡 id     gm  {玩家 uid: GM uid}
    GM 模式：首页从「我的卡」换成「把自己设为 GM 的那些人，每人当前使用的那 1 张卡」，只读。 */
 let _gmMode=false, _gmData=null, _gmDataAt=0, _gmLoading=null;
+/* GM 模式里可点开的成员卡：{uid, rec}，rec 与卡片墙记录同结构，便于直接丢给 _showCardDetail */
+let _gmCardsCache=[];
 const GM_DATA_TTL=15000;
 
 function _gmNameOf(p,uid){
@@ -3974,7 +3992,7 @@ function closeGmSheet(){
   const wrap=$('#gm-sheet');
   if(wrap) wrap.classList.remove('show');
 }
-function _gmCardHtml(p,uid){
+function _gmCardHtml(p,uid,idx){
   const u=(p.users||{})[uid]||{};
   const c=_activeCardOf(u);
   const who='<div class="gm-card-who">'+escCardText(_gmNameOf(p,uid))+'</div>';
@@ -3982,7 +4000,7 @@ function _gmCardHtml(p,uid){
   const st=c.state||{};
   const l1=[st['属性']?'属性 '+st['属性']:'',st['等级']?'等级 '+st['等级']:''].filter(Boolean).join('　');
   const l2=[st['信用点']?'信用点 '+st['信用点']:'',st['耐力']?'耐力 '+st['耐力']:''].filter(Boolean).join('　');
-  return '<div class="gm-card" onclick="openGmCard(\''+String(uid).replace(/[^\d]/g,'')+'\')">'
+  return '<div class="gm-card" onclick="openGmCardAt('+idx+')">'
     +'<div>'+who+'<div class="gm-card-name">'+escCardText(c.name||'未命名')+'</div></div>'
     +'<div>'+(l1?'<div class="gm-card-brief">'+escCardText(l1)+'</div>':'')
     +(l2?'<div class="gm-card-brief" style="margin-top:2px;">'+escCardText(l2)+'</div>':'')+'</div></div>';
@@ -4008,8 +4026,20 @@ async function _renderGmCards(force){
   cnt.textContent=members.length
     ? '共 '+members.length+' 名成员 · 显示各自当前使用的角色卡'
     : '还没有玩家把你设为 GM（群里发 /gm @你）';
+  _gmCardsCache=[];
   grid.innerHTML=members.length
-    ? members.map(function(uid){ return _gmCardHtml(p,uid); }).join('')
+    ? members.map(function(uid){
+        const c=_activeCardOf((p.users||{})[uid]||{});
+        if(!c) return _gmCardHtml(p,uid);           // 没卡：灰色占位，不可点
+        const st=c.state||{};
+        _gmCardsCache.push({uid:uid, rec:{
+          id:c.id||'', name:c.name||'', state:st,
+          roll:c.roll||{}, notes:c.notes||'',
+          updated_at:c.updated_at||0,
+          level:st['等级'], credit:st['信用点'], _local:false
+        }});
+        return _gmCardHtml(p,uid,_gmCardsCache.length-1);
+      }).join('')
     : '<div style="grid-column:1/-1;text-align:center;color:#94a3b8;font-size:.85rem;padding:16px 0;">没有可显示的成员</div>';
 }
 function _applyGmModeUi(on){
@@ -4032,23 +4062,27 @@ function toggleGmMode(){
   showHome();
   if(_gmMode) toast('🎲 已进入 GM 模式');
 }
-/* GM 模式里点成员卡：只读摘要（云端只有 state，没有完整卡片 HTML） */
-function openGmCard(uid){
-  const p=_gmData; if(!p||!uid) return;
-  const u=(p.users||{})[uid]||{};
-  const c=_activeCardOf(u);
-  if(!c) return;
-  const st=c.state||{};
-  const rows=Object.keys(st).map(function(k){
-    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px dashed #e2e8f0;">'
-      +'<span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#0f172a;">'+escCardText(st[k])+'</b></div>';
-  }).join('');
-  const mt=$('#modal-title'), mc=$('#modal-content'), md=$('#detail-modal');
-  if(!mt||!mc||!md) return;
-  mt.textContent='🧾 '+(c.name||'未命名');
-  mc.innerHTML='<div class="detail-desc" style="margin:0 0 8px;">'+escCardText(_gmNameOf(p,uid))+' 当前使用的角色卡（只读）</div>'
-    +(rows||'<div style="color:#94a3b8;">（无属性）</div>');
-  md.classList.add('show');
+/* GM 模式里点成员卡：开成和看自己卡一模一样的全屏视图（可编辑、可添加）
+   卡片挂在成员自己的本地命名空间下，保存/同步都按成员 uid 走，
+   代存时请求体带 actor，bot 侧按 gm_links 校验是不是 TA 的 GM。 */
+function openGmCardAt(i){
+  const item=_gmCardsCache[i];
+  if(!item) return;
+  const puid=item.uid;
+  const list=_loadLocal(puid);
+  let k=item.rec.id?list.findIndex(function(x){return x&&x.id===item.rec.id;}):-1;
+  if(k<0) k=list.findIndex(function(x){return x&&x.name===item.rec.name;});
+  if(k<0){
+    list.push(Object.assign({},item.rec));
+    k=list.length-1;
+  }else{
+    list[k]=Object.assign({},list[k],{
+      name:item.rec.name, id:item.rec.id||list[k].id,
+      state:item.rec.state, roll:item.rec.roll, notes:item.rec.notes
+    });
+  }
+  _saveLocal(puid,list);
+  _showCardDetail(k,puid,list);
 }
 function showHome(){
   $('#result-area').style.display='none';
