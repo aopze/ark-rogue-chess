@@ -154,7 +154,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .result-card{border:1px solid #e5e7eb;border-left:4px solid var(--primary);border-radius:6px;padding:10px 12px;background:#fff;cursor:pointer;transition:all .2s;}
 .result-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);transform:translateY(-1px);}
 .result-label{font-size:.75rem;color:#6b7280;margin-bottom:4px;}
-.result-value{font-size:.9rem;font-weight:bold;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.result-value{font-size:.9rem;font-weight:bold;color:var(--text);white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;}   /* 结果卡也禁止省略号，长文本换行显示全 */
 .result-card.result-equip .result-label{display:flex;justify-content:space-between;gap:8px;}
 .result-label-right{font-size:.75rem;color:#6b7280;font-weight:400;}
 .result-card.result-equip .result-value{display:block;white-space:normal;overflow:visible;text-overflow:clip;}
@@ -177,8 +177,8 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 .weapon-block + .weapon-block{margin-top:10px;}
 .weapon-block-title{font-size:.85rem;font-weight:700;color:#334155;margin-bottom:4px;}
 .weapon-row,.weapon-custom-row{display:grid;gap:1px;background:#cbd5e1;border:1px solid #e2e8f0;border-left:4px solid var(--primary);border-radius:6px;overflow:hidden;}
-.weapon-row{grid-template-columns:repeat(4,minmax(0,1fr));}   /* 武器名 伤害 射程 维护费：四格等宽 */
-.weapon-row .weapon-cell{padding:5px 4px;font-size:.85rem;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.weapon-row{grid-template-columns:repeat(2,minmax(0,1fr));}   /* 武器名/伤害 + 射程/维护费：两格一行，宽度够就不截断 */
+.weapon-row .weapon-cell{padding:5px 4px;font-size:.85rem;line-height:1.5;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;letter-spacing:-.1px;}   /* 一律完整显示文字，禁止省略号 */
 .weapon-row .weapon-cell b{display:inline;margin:0;font-size:.78rem;}
 .weapon-row .weapon-note{grid-column:1/-1;white-space:normal;overflow:visible;text-overflow:clip;}   /* 备注独占第二行，过长可换行 */
 .weapon-custom-row{grid-template-columns:minmax(0,1fr);}
@@ -186,7 +186,7 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
 /* 定制 / 装备 / 道具：与武器同款「标签:值 同一行」的单行格，字号统一到能力正文 .85rem */
 .weapon-custom-item .weapon-cell,
 .equip-row .weapon-cell,
-.item-row .weapon-cell{padding:5px 5px;font-size:.85rem;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.1px;}
+.item-row .weapon-cell{padding:5px 5px;font-size:.85rem;line-height:1.5;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;letter-spacing:-.1px;}
 .weapon-custom-item .weapon-cell b,
 .equip-row .weapon-cell b,
 .item-row .weapon-cell b{display:inline;font-size:.78rem;margin:0;}
