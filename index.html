@@ -325,6 +325,9 @@ button.secondary{background:transparent;color:var(--text);border:1px solid #d1d5
   word-break:break-all;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
 .card-sheet-item:active{transform:scale(.985);}
 .card-sheet-item.active{border-color:#6366f1;background:#eef2ff;box-shadow:0 0 0 3px rgba(99,102,241,.18);}
+.card-sheet-group{grid-column:1/-1;font-size:.78rem;font-weight:700;color:#92400e;
+  border-bottom:1px dashed #fcd34d;padding:7px 2px 4px;margin-top:4px;}
+.card-sheet-group:first-child{margin-top:0;}
 .card-sheet-empty{grid-column:1/-1;padding:18px 0;text-align:center;color:#94a3b8;font-size:.85rem;}
 @media (max-width:360px){
   .card-sheet-item{font-size:.85rem;padding:8px 10px;min-height:48px;}
@@ -4074,13 +4077,45 @@ function closeCardFull(){
   _syncCardEditBtn(false);
 }
 /* ===== 顶栏「📋」：从顶部向下弹出的角色卡列表（只列名字，一行两张） ===== */
-/* 全屏卡顶栏「📋」：列出「当前这张卡是谁的」那些卡。
-   自己的卡 → 我的卡墙；GM 模式里打开的成员卡 → 那位成员的卡（不是自己的）。
-   以前这里不管在谁的卡上都列自己的卡，GM 想切到同一成员的别的卡就会串到自己身上。 */
+/* 全屏卡顶栏「📋」：
+   GM 模式 → 列出「所有成员」的卡（按成员分组，点谁的就开谁的）；
+   普通模式 → 列出自己的卡墙。
+   GM 模式不再只看当前这张卡的主人，省得还要退回首页才能换人。 */
 let _gmSheetCards=[];
+function _gmAllCardsSheetHtml(){
+  const p=_gmData, members=p?_gmMembers(p):[];
+  const curUid=String(_cardOwnerUid||''), curCid=String(_cardViewId||''), curName=String(_cardViewName||'');
+  _gmSheetCards=[];
+  if(!members.length) return '<div class="card-sheet-empty">还没有玩家把你设为 GM（群里发 /gm @你）</div>';
+  return members.map(function(uid){
+    const u=(p.users||{})[uid]||{};
+    let cards=(u.cards||[]).filter(function(c){return c&&(c.id||c.name);});
+    if(!cards.length) cards=(_loadLocal(uid)||[]).filter(function(c){return c&&(c.id||c.name);});
+    const who=escCardText(_gmNameOf(p,uid));
+    if(!cards.length) return '<div class="card-sheet-group">'+who+'</div><div class="card-sheet-empty" style="padding:8px 0;">还没有角色卡</div>';
+    return '<div class="card-sheet-group">'+who+'</div>'+cards.map(function(c){
+      const i=_gmSheetCards.length;
+      const nm=String(c.name||'未命名').trim()||'未命名';
+      const cid=c.id||'';
+      _gmSheetCards.push({uid:uid,cid:cid,name:nm});
+      const on=(uid===curUid&&(cid?cid===curCid:nm===curName))?' active':'';
+      return '<div class="card-sheet-item'+on+'" onclick="pickGmCardFromSheet('+i+')">'+escCardText(nm)+'</div>';
+    }).join('');
+  }).join('');
+}
 function openCardListSheet(){
   const wrap=$('#card-list-sheet'), grid=$('#card-list-sheet-grid'), title=$('#card-list-sheet-title');
   if(!wrap||!grid) return;
+  if(_gmMode){
+    const render=function(){
+      if(title) title.textContent='📋 所有成员的角色卡';
+      grid.innerHTML=_gmData?_gmAllCardsSheetHtml():'<div class="card-sheet-empty">正在拉取成员角色卡…</div>';
+    };
+    render();
+    wrap.classList.add('show');
+    if(!_gmData) void _fetchGmPayload().then(function(){ if(_gmMode&&wrap.classList.contains('show')) render(); });
+    return;
+  }
   const owner=_cardOwnerUid||_tgUserId();
   const mine=!owner||owner===_tgUserId();
   const cur=String(_cardViewName||'');
@@ -4124,13 +4159,12 @@ function pickCardFromSheet(i){
   if(!_myCardsCache||!_myCardsCache[i]) return;
   openCardRemoteFirst(i);
 }
-/* GM 模式里切到同一成员的别的卡：按成员 uid 打开，保存/同步都还落在成员身上 */
+/* GM 模式里点任意成员的卡：按那张卡自己的 uid 打开，保存/同步都落在对应成员身上 */
 function pickGmCardFromSheet(i){
   const it=_gmSheetCards[i];
-  const uid=_cardOwnerUid;
   closeCardListSheet();
-  if(!it||!uid) return;
-  _gmOpenCardById(uid, it.cid, it.name);
+  if(!it||!it.uid) return;
+  _gmOpenCardById(it.uid, it.cid, it.name);
 }
 function _gmOpenCardById(uid, cid, name){
   if(!uid) return;
