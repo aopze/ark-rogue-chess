@@ -2411,9 +2411,32 @@ function _updateCopyBtn(){
    与 cards.json 分工：cards.json 只有精简数值、推 GitHub Pages；
    完整卡（能力行 HTML/详情/人脉）经 ntfy 分片 → bot 重组 → 私有仓库 full_cards.json。
    所有设备统一走这条公网链路，不再有本机桥分支。 */
-/* 统一入口：完整卡一律走 ntfy 明文分片 → bot → 私有仓库。 */
+/* 统一入口：严格写入 —— 优先直读接口一次 POST 落库（服务端确认写进私有仓库才返回 ok）；
+   接口不可达才退回 ntfy 明文分片（慢，且只保证发出、不保证落库）。 */
 async function _routeFullCard(uid, rec){
   if(!uid||!rec) return false;
+  const wa=window.Telegram&&window.Telegram.WebApp;
+  const initData=(wa&&wa.initData)||'';
+  if(initData){
+    try{
+      let ctl=null,timer=null;
+      if(typeof AbortController==='function'){
+        ctl=new AbortController();
+        timer=setTimeout(function(){try{ctl.abort();}catch(e){}},9000);
+      }
+      try{
+        const r=await fetch(CARD_API_BASE+'/fullcard',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({uid:String(uid),card:rec,initData:initData}),
+          cache:'no-store', signal:ctl?ctl.signal:undefined});
+        if(r.ok){
+          const j=await r.json();
+          return !!(j&&j.ok);
+        }
+      } finally { if(timer) clearTimeout(timer); }
+    }catch(e){ /* 接口不通 → 退回 ntfy */ }
+  }
   const r=await _pushFullCardRelay(uid,rec);
   return !!(r&&r.ok);
 }
@@ -2533,10 +2556,38 @@ async function _pushFullCardRelay(uid, card){
     return {ok:true,n:pieces.length,req:req};
   }catch(e){ return {ok:false,err:String(e&&e.message||e)}; }
 }
-/* 请求完整卡：发 get → 轮询回执收分片 → 解码。返回卡片对象或 null */
+/* 完整卡直读接口：本机服务经固定域名暴露，一次 HTTPS 拿完整卡（1～2 秒）。
+   路径与游戏共用同一域名，只用 /yu7card-api/* 区分，不影响其他网站。
+   带 Telegram initData，服务端校验签名 + 本人/GM 权限。 */
+const CARD_API_BASE='https://ark.arkroguelike.top/yu7card-api';
+/* 请求完整卡：优先直读 API，失败才回退 ntfy 分片回执。返回卡片对象或 null */
 let _fcRx={};
 async function _requestFullCard(uid, cid){
   if(!uid||!cid) return null;
+  /* ① 直读：一次 HTTPS，服务端从本机的私有仓库取卡。 */
+  try{
+    const wa=window.Telegram&&window.Telegram.WebApp;
+    const initData=(wa&&wa.initData)||'';
+    if(initData){
+      const q=new URLSearchParams();
+      q.set('uid',String(uid)); q.set('cid',String(cid)); q.set('initData',initData);
+      let ctl=null,timer=null;
+      if(typeof AbortController==='function'){
+        ctl=new AbortController();
+        timer=setTimeout(function(){try{ctl.abort();}catch(e){}},6000);
+      }
+      try{
+        const r=await fetch(CARD_API_BASE+'/fullcard?'+q.toString(),
+          {cache:'no-store',signal:ctl?ctl.signal:undefined});
+        if(r.ok){
+          const j=await r.json();
+          if(j&&j.ok&&j.card&&j.card.frag) return j.card;   // 拿到完整卡，直接返回
+          return null;                                       // 服务端明确说没有/无权 → 不回退
+        }
+      } finally { if(timer) clearTimeout(timer); }
+    }
+  }catch(e){ /* 网络不通 → 落到下面的 ntfy 兜底 */ }
+  /* ② 兜底：ntfy 请求-回执（老通道，慢但独立） */
   const me=_tgUserId(), req='fc'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
   try{
     const o={kind:'fullcard',act:'get',uid:String(uid),cid:String(cid),req:req};
@@ -2979,7 +3030,10 @@ async function syncCardFromWall(){
     list[i]=rec;
     _saveLocal(uid,list);
     _renderMyCards(_loadLocal(_tgUserId()));
-    try{ _routeFullCard(uid,rec); }catch(e){}   // 完整卡外发（ntfy 明文分片）
+    // 严格：完整卡必须写入云端才算成功，失败明确报错（绝不留「云端缺卡」的半成品）
+    let fullOk=false;
+    try{ fullOk=await _routeFullCard(uid,rec); }catch(e){}
+    if(!fullOk){ toast('⚠️ 完整卡没写进云端，请检查网络后点「✓ 完成」重试'); return; }
     toast(_sendToast(sent));
     return;
   }
@@ -3857,7 +3911,7 @@ function _renderMyCards(cards){
   +'<div style="font-size:.78rem;margin-top:6px;font-weight:600;">创建新角色卡</div>'
   +'</div>';
 }
-/* 判断一条 frag 是不是「旧版伪造的空壳」（_materializeBotCard 的遗留产物）。
+/* 判断一条 frag 是不是「旧版伪造的空壳」（早期空问卷造面板的遗留产物）。
    旧代码用空问卷造面板，造出来的 frag 有个硬特征：没有 resultCards / financeCards，
    而且面板里连一个装备行/道具行/人脉行都没有 —— 真卡不可能这三样全空。
    （不能用 .result-card 判断：空问卷也会渲染出「出身」「领域」两个结果格，那样会漏判。）
@@ -3876,81 +3930,29 @@ function _looksLikeSkeleton(c){
 /* 缺完整卡时怎么办：如实说「只有基础数值」，绝不伪造空壳。
    （旧实现用空问卷造面板，假 frag 还会被写进本地缓存并置 hasFull=true，
      于是半成品卡永久留在设备上、后台再拉线上也覆盖不掉。） */
-function _showNoFullCard(c, ownerUid, note){
+function _showFullCardError(c, ownerUid){
   const uid=ownerUid||_tgUserId();
   const box=$('#card-full-view');
-  const st=(c&&c.state)||{};
-  const keys=Object.keys(st);
-  const rows=keys.length
-    ? keys.map(k=>'<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px dashed #e2e8f0;"><span style="color:#64748b;">'+escCardText(k)+'</span><b style="color:#0f172a;text-align:right;">'+escCardText(st[k])+'</b></div>').join('')
-    : '<div style="color:#94a3b8;font-size:.86rem;">（连基础数值都还没同步）</div>';
-  const tip=note?'<div style="margin-top:8px;color:#b91c1c;font-size:.82rem;line-height:1.6;">'+escCardText(note)+'</div>':'';
+  const nm=String((c&&c.name)||'角色卡');
   const html='<!doctype html><html><head><meta charset="utf-8">'
-    +'<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head>'
-    +'<body style="margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,\'PingFang SC\',\'Microsoft YaHei\',system-ui,sans-serif;background:#fff;color:#0f172a;">'
-    +'<div style="border:2px solid #fbbf24;background:#fffbeb;border-radius:14px;padding:14px;">'
-    +'<div style="font-weight:800;color:#b45309;font-size:1rem;line-height:1.4;">⚠️ 完整卡还没同步上来</div>'
-    +'<div style="color:#92400e;font-size:.86rem;line-height:1.7;margin-top:6px;">'
-    +'这台设备现在只拿到<b>基础数值</b>，<b>装备 / 道具 / 能力 / 人脉 / 出身领域</b>都还没有。<br>'
-    +'正在自动从云端拉取完整卡（一般几秒），拉到会原地换成完整卡；一直没变就点下面按钮再拉一次。</div>'
-    +tip
-    +'<button id="nofull-retry" style="margin-top:12px;width:100%;border:0;border-radius:10px;background:#f59e0b;color:#fff;font-weight:700;font-size:.92rem;padding:12px 0;font-family:inherit;cursor:pointer;">🔄 重新拉取完整卡</button>'
-    +'</div>'
-    +'<div style="margin-top:16px;font-weight:700;color:#334155;font-size:.9rem;">📋 已知的基础数值</div>'
-    +'<div style="margin-top:6px;">'+rows+'</div>'
-    +'<script>document.getElementById("nofull-retry").onclick=function(){'
-    +'this.textContent="拉取中…";this.disabled=true;this.style.opacity=".7";'
-    +'try{parent.postMessage({type:"yu7-retry-fullcard"},"*");}catch(e){}'
-    +'};<\/script>'
-    +'</body></html>';
-  // 没有完整卡就没有可编辑的东西，先把编辑按钮藏起来
+    +'<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+    +'<body style="margin:0;padding:20px;font-family:-apple-system,BlinkMacSystemFont,\'PingFang SC\',system-ui,sans-serif;background:#fff;color:#0f172a;">'
+    +'<div style="border:2px solid #fca5a5;background:#fef2f2;border-radius:14px;padding:16px;">'
+    +'<div style="font-weight:800;color:#b91c1c;font-size:1rem;">⚠️ 云端没有这张卡的完整版</div>'
+    +'<div style="color:#991b1b;font-size:.86rem;line-height:1.7;margin-top:8px;">'
+    +escCardText(nm)+' 的完整卡还没保存到云端，无法打开。<br>只允许打开云端完整卡，不显示不完整的半成品。<br>'
+    +'请让卡主在 Telegram 里重新打开这张卡并点「✓ 完成」保存一次。</div></div></body></html>';
   const eb=$('#card-full-edit'); if(eb) eb.style.display='none';
   _syncCardEditBtn(false);
   if(!box) return;
   if(_cardBlobUrl){ try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){} }
   _cardBlobUrl=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
   const t=$('#card-full-title');
-  if(t) t.textContent=(uid===_tgUserId()?'🧾 ':'👥 ')+((c&&c.name)||'角色卡');
+  if(t) t.textContent=(uid===_tgUserId()?'🧾 ':'👥 ')+nm;
   const f=box.querySelector('iframe');
   if(f) f.src=_cardBlobUrl;
   box.style.display='flex';
 }
-/* 缺完整卡面板里点「重新拉取」：按当前 uid+cid 再要一次线上卡，拿到就原地换成真卡 */
-async function retryFullCard(){
-  const uid=_cardOwnerUid||_tgUserId();
-  const cid=_cardViewId;
-  if(!uid||!cid) return;
-  const cur=(function(){
-    const list=_loadLocal(uid);
-    let k=list.findIndex(function(x){return x&&x.id===cid;});
-    if(k<0) k=list.findIndex(function(x){return x&&x.name===_cardViewName;});
-    return k>=0?list[k]:{name:_cardViewName,id:cid};
-  })();
-  const remote=await _requestFullCard(uid,cid);
-  if(!remote||!remote.frag){
-    _showNoFullCard(cur,uid,'这次还是没拿到（云端可能还没处理完）。过一会儿再点一次。');
-    return;
-  }
-  const list=_loadLocal(uid);
-  let k=list.findIndex(function(x){return x&&x.id===cid;});
-  if(k<0) k=list.findIndex(function(x){return x&&x.name===(remote.name||_cardViewName);});
-  const merged=Object.assign({},(k>=0?list[k]:{}),remote,{_local:false,hasFull:true});
-  if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
-  _saveLocal(uid,list);
-  if(uid===_tgUserId()){
-    const j=(_myCardsCache||[]).findIndex(function(x){return x&&x.id===cid;});
-    if(j>=0) _myCardsCache[j]=merged; else (_myCardsCache=_myCardsCache||[]).push(merged);
-    try{ _renderMyCards(_myCardsCache); }catch(e){}
-  }else{
-    const g=(_gmCardsCache||[]).findIndex(function(x){return x&&x.rec&&x.rec.id===cid;});
-    if(g>=0) _gmCardsCache[g].rec=Object.assign({},_gmCardsCache[g].rec,{hasFull:true});
-  }
-  _showCardDetail(k,uid,list);
-}
-window.addEventListener('message',function(e){
-  const d=e.data;
-  if(d&&d.type==='yu7-retry-fullcard'){ void retryFullCard(); }
-});
 /* 点卡片：打开完整角色卡（和旧导出一致，可编辑/添加/保存），用全屏 iframe */
 let _cardBlobUrl=null;
 /* 当前全屏卡「归谁」：默认是自己；GM 模式里打开成员卡时是成员 uid。
@@ -3960,33 +3962,50 @@ function _cardOwner(){ return _cardOwnerUid||_tgUserId(); }
 /* 统一开卡入口：本地秒开 + 后台静默拉线上覆盖（线上仍是真源，但不阻塞显示）。
    点开立刻用本地缓存渲染；后台取到线上完整卡后，仅当用户还在看同一张时才重建。
    GM 走 openGmCardAt（同一套远端读取，只是 uid 是成员）。 */
-function openCardRemoteFirst(i){
+async function openCardRemoteFirst(i){
   const c=_myCardsCache[i];
   if(!c) return;
-  _showCardDetail(i);                       // ① 秒开：不等网络
-  if(c.id) _bgRefreshOwnCard(i,c.id);       // ② 后台更新
-}
-async function _bgRefreshOwnCard(i, cid){
   const uid=_tgUserId();
-  const remote=await _requestFullCard(uid,cid);              // 所有设备统一走 ntfy 分片
-  if(!remote||!remote.frag){
-    // 线上还没有这张完整卡（老卡，或上次上传中途失败）→ 用本机这份真卡补传一次。
-    // 这样成员只要打开一次自己这张卡，云端就会长出完整卡，别人（含 GM）才看得到。
-    const mine=_myCardsCache[i];
-    if(mine&&mine.frag&&!_looksLikeSkeleton(mine)){
-      try{ void _routeFullCard(uid,mine); }catch(e){}
-    }
-    return;                                                  // 保留本地，不覆盖
-  }
-  if(_cardViewId!==cid) return;                              // 用户已切到别的卡 → 不打断
+  await _openRemoteCard(uid, i, c);
+}
+/* 严格开卡：必须先拿到云端完整卡才渲染；没有就报错，绝不显示半成品。
+   拿到后把线上卡写回本地缓存（本机只是镜像，云端才是真源）。 */
+async function _openRemoteCard(uid, idx, fallback){
+  const list0=_loadLocal(uid);
+  const rec0=(fallback&&fallback.id?fallback:null)||list0[idx]||fallback||{};
+  const cid=rec0.id||'';
+  _showCardLoading();                                  // 先给个转圈，不画半成品
+  const remote=cid?await _requestFullCard(uid,cid):null;
+  if(!remote||!remote.frag){ _showFullCardError(rec0,uid); return; }
   const list=_loadLocal(uid);
   let k=cid?list.findIndex(function(x){return x&&x.id===cid;}):-1;
-  if(k<0) k=list.findIndex(function(x){return x&&x.name===remote.name;});
-  const merged=Object.assign({},list[k]||{},remote,{_local:false,hasFull:true});
+  if(k<0) k=list.findIndex(function(x){return x&&x.name===(remote.name||rec0.name);});
+  const merged=Object.assign({},(k>=0?list[k]:{}),rec0,remote,
+    {id:remote.id||cid||'',_local:false,hasFull:true});
   if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
   _saveLocal(uid,list);
-  _myCardsCache[i]=merged;
-  _showCardDetail(i,uid,list);                               // ③ 静默重建为线上版本
+  if(uid===_tgUserId()) _myCardsCache[idx]=merged;
+  _showCardDetail(k,uid,list);
+}
+/* 加载中：一个转圈提示，明确「正在读云端完整卡」，没有可编辑内容 */
+function _showCardLoading(){
+  const box=$('#card-full-view');
+  const eb=$('#card-full-edit'); if(eb) eb.style.display='none';
+  _syncCardEditBtn(false);
+  if(!box) return;
+  const html='<!doctype html><html><head><meta charset="utf-8">'
+    +'<meta name="viewport" content="width=device-width,initial-scale=1"></head>'
+    +'<body style="margin:0;height:100%;display:flex;align-items:center;justify-content:center;'
+    +'font-family:-apple-system,BlinkMacSystemFont,\'PingFang SC\',system-ui,sans-serif;color:#4338ca;">'
+    +'<div style="text-align:center;"><div style="width:34px;height:34px;margin:0 auto 12px;'
+    +'border:3px solid #c7d2fe;border-top-color:#4338ca;border-radius:50%;animation:spin .8s linear infinite;"></div>'
+    +'<style>@keyframes spin{to{transform:rotate(360deg)}}</style>'
+    +'<div style="font-size:.88rem;">正在从云端读取完整卡…</div></div></body></html>';
+  if(_cardBlobUrl){try{URL.revokeObjectURL(_cardBlobUrl);}catch(e){}}
+  _cardBlobUrl=URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+  const t=$('#card-full-title'); if(t) t.textContent='🧾 读取中';
+  const f=box.querySelector('iframe'); if(f) f.src=_cardBlobUrl;
+  box.style.display='flex';
 }
 function _showCardDetail(idx, ownerUid, listOverride){
   const src=listOverride||_myCardsCache;
@@ -4063,8 +4082,8 @@ function _showCardDetail(idx, ownerUid, listOverride){
     if(migrated) _renderMyCards(_myCardsCache);
     return;
   }
-  // 没有完整卡 → 明确报「还没同步」，绝不渲染成看似正常的空壳卡
-  _showNoFullCard(c, uid);
+  // 没有完整卡 → 严格报错，绝不渲染半成品（开卡入口应先拿到线上完整卡）
+  _showFullCardError(c, uid);
 }
 function closeCardFull(){
   closeCardListSheet();
@@ -4166,33 +4185,13 @@ function pickGmCardFromSheet(i){
   if(!it||!it.uid) return;
   _gmOpenCardById(it.uid, it.cid, it.name);
 }
-function _gmOpenCardById(uid, cid, name){
+async function _gmOpenCardById(uid, cid, name){
   if(!uid) return;
-  const list=_loadLocal(uid);
-  let k=cid?list.findIndex(function(x){return x&&x.id===cid;}):-1;
-  if(k<0) k=list.findIndex(function(x){return x&&x.name===name;});
-  if(k<0){
-    list.push({id:cid||'',name:name||'',state:{},roll:{},notes:'',_local:false});
-    k=list.length-1;
-  }
-  _saveLocal(uid,list);
-  // 先把视图指向这张卡：_showCardDetail 也会设，这里提前设是为了让后台刷新的「没切卡」判定对得上
-  _cardViewId=cid||''; _cardViewName=name||'';
-  _showCardDetail(k,uid,list);
-  void _bgRefreshGmCardById(uid,cid,name);
-}
-async function _bgRefreshGmCardById(uid,cid,name){
-  if(!uid||!cid) return;
-  const remote=await _requestFullCard(uid,cid);
-  if(!remote||!remote.frag) return;                    // 线上没有就保留本地
-  if(_cardOwnerUid!==uid||_cardViewId!==cid) return;   // 用户已切卡 → 不打断
-  const list=_loadLocal(uid);
-  let k=list.findIndex(function(x){return x&&x.id===cid;});
-  if(k<0) k=list.findIndex(function(x){return x&&x.name===(remote.name||name);});
-  const merged=Object.assign({},(k>=0?list[k]:{}),remote,{_local:false,hasFull:true});
-  if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
-  _saveLocal(uid,list);
-  _showCardDetail(k,uid,list);
+  const list0=_loadLocal(uid);
+  let k0=cid?list0.findIndex(function(x){return x&&x.id===cid;}):-1;
+  if(k0<0) k0=list0.findIndex(function(x){return x&&x.name===name;});
+  const fallback=(k0>=0?list0[k0]:{id:cid||'',name:name||'',state:{},roll:{},notes:''});
+  await _openRemoteCard(uid, k0, fallback);
 }
 /* ===== 顶栏「✎ 编辑 / ✓ 完成」：控制 iframe 内 #result-area.card-editing ===== */
 let _cardEditing=false;
@@ -4387,48 +4386,15 @@ function toggleGmMode(){
 /* GM 模式里点成员卡：开成和看自己卡一模一样的全屏视图（可编辑、可添加）
    卡片挂在成员自己的本地命名空间下，保存/同步都按成员 uid 走，
    代存时请求体带 actor，bot 侧按 gm_links 校验是不是 TA 的 GM。 */
-function _gmOpenLocal(i){
-  // 秒开：用 cards.json 精简 rec + 成员本地命名空间里可能已有的完整卡
+async function openGmCardAt(i){
   const item=_gmCardsCache[i];
-  const puid=item.uid;
-  const list=_loadLocal(puid);
-  let k=item.rec.id?list.findIndex(function(x){return x&&x.id===item.rec.id;}):-1;
-  if(k<0) k=list.findIndex(function(x){return x&&x.name===item.rec.name;});
-  if(k<0){
-    list.push(Object.assign({},item.rec));
-    k=list.length-1;
-  }else{
-    const localFull=!!(list[k].frag||list[k].hasFull);
-    list[k]=Object.assign({},list[k],{
-      name:item.rec.name, id:item.rec.id||list[k].id,
-      state:item.rec.state, roll:item.rec.roll, notes:item.rec.notes,
-      hasFull:localFull
-    });
-  }
-  _saveLocal(puid,list);
-  _showCardDetail(k,puid,list);
-  return k;
-}
-async function _bgRefreshGmCard(i){
-  const item=_gmCardsCache[i];
-  if(!item) return;
-  const puid=item.uid, cid=item.rec.id||_cardViewId||'';   // 兜底用当前视图 id，别因为缺 id 就放弃拉完整卡
-  if(!cid) return;
-  const remote=await _requestFullCard(puid,cid);     // 所有设备统一走 ntfy 分片（明文）
-  if(!remote||!remote.frag) return;                  // 线上没有/失败 → 保留本地
-  if(_cardOwnerUid!==puid || _cardViewId!==cid) return; // 用户已切卡 → 不打断
-  const list=_loadLocal(puid);
-  let k=list.findIndex(function(x){return x&&x.id===cid;});
-  if(k<0) k=list.findIndex(function(x){return x&&x.name===(remote.name||item.rec.name);});
-  const merged=Object.assign({},list[k]||{},item.rec,remote,
-    {_local:false,hasFull:!!remote.frag});
-  if(k<0){ list.push(merged); k=list.length-1; } else { list[k]=merged; }
-  _saveLocal(puid,list);
-  _showCardDetail(k,puid,list);                      // 静默重建为线上完整卡
-}
-function openGmCardAt(i){
-  _gmOpenLocal(i);            // ① 秒开
-  _bgRefreshGmCard(i);        // ② 后台更新（void，不 await）
+  if(!item||!item.uid) return;
+  const puid=item.uid, cid=item.rec.id||'';
+  const list0=_loadLocal(puid);
+  let k0=cid?list0.findIndex(function(x){return x&&x.id===cid;}):-1;
+  if(k0<0) k0=list0.findIndex(function(x){return x&&x.name===item.rec.name;});
+  const fallback=(k0>=0?Object.assign({},list0[k0],item.rec):item.rec);
+  await _openRemoteCard(puid, k0, fallback);
 }
 /* 返回首页时自动保存+同步刚生成的结果卡（结果页没同步按钮了）。
    必须在隐藏 result-area 之前调用 copyResult：它要从 DOM 读姓名/数值/完整 HTML。 */
