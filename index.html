@@ -1277,6 +1277,13 @@ const weaponData=[
     {name:"下挂握把",price:50,effect:"该武器进行「攻击」相关等级判定时获得「+1」修正值。",desc:"安装在枪管下方的额外握把，可以移植后坐力，增加稳定性。"},
     {name:"光学瞄具",price:50,effect:"该武器进行远距离相关等级判定时获得「+1」修正值。",desc:"最优化远距离狙击的瞄准器。"},
     {name:"连发切换",price:50,effect:"该武器进行等级判定时可以获得「-1」修正值。如果接受修正值，给予的伤害增加2点。",desc:"可以变成全自动的快慢机。可以切换开火模式。"}]},
+  {name:"霰弹枪",range:"零～短距离",damage:"「昏迷」3",cost:10,note:"枪械、战斗噪音、奇效值-1",desc:"与突击步枪同族的短管变种。不太要求射击技术，为了防止用于暗杀，堕天特区只流通类似步枪的大型霰弹枪。",subs:[
+    {name:"消音枪管",price:20,effect:"该武器失去「战斗噪音」。",desc:"可以减轻枪声和火光的装置。可以降低周围人的警戒性，使潜入作战成功性提高。"},
+    {name:"枪口刺刀",price:20,effect:"该武器也可以作为「利器」使用。但是，无法适用「突击步枪」以外的定制。",desc:"为近战准备的刺刀。也有把枪身当斧子用的情况。"},
+    {name:"枪口抑制",price:50,effect:"该武器进行等级判定时，你的「失误值」暂时降低2。",desc:"抑制后坐力，增加射击精确度的装置。"},
+    {name:"下挂握把",price:50,effect:"该武器进行「攻击」相关等级判定时获得「+1」修正值。",desc:"安装在枪管下方的额外握把，可以移植后坐力，增加稳定性。"},
+    {name:"削短枪管",price:30,effect:"这件武器的射程变为「零距离」，获得「射程提升」。使用这件武器对零距离的对象进行「攻击」时，奇效值追加降低1点。",desc:"挫短枪身，令子弹散射的范围变大。获得高杀伤力的同时，射程距离则变短。"},
+    {name:"连发切换",price:50,effect:"该武器进行等级判定时可以获得「-1」修正值。如果接受修正值，给予的伤害增加2点。",desc:"可以变成全自动的快慢机。可以切换开火模式。"}]},
   {name:"狙击步枪",range:"中～远距离",damage:"「昏迷」4",cost:15,note:"枪械、无法常用、射程提升、战斗噪音",desc:"远距离使用的强杀伤力长枪械。随身携带会引起社会问题。",subs:[
     {name:"收纳提箱",price:20,effect:"该武器失去「无法常用」。",desc:"一种专用的容器，便于携带，打开后可以立刻部署。最常见的是形如吉他盒的。"},
     {name:"消音枪管",price:50,effect:"该武器失去「战斗噪音」。",desc:"可以减轻枪声和火光的装置。由于原本枪声更大，所以比其他武器的配件更贵。"},
@@ -1368,7 +1375,7 @@ function applyCustomEffect(eff,out,tags){
     [/每满足一条[\s\S]*?伤害增加\s*(\d+)\s*点/,m=>`奇效/GB/大失败伤害+${m[1]}`],
     [/对「属性：妖」的伤害增加\s*(\d+)\s*点/,m=>`对妖伤害+${m[1]}`],
     [/失误值[^。；;]{0,12}?(?:降低|减少)\s*(\d+)/,m=>`失误值−${m[1]}`],
-    [/奇效值[^。；;]{0,12}?(?:降低|减少)\s*(\d+)/,m=>`奇效值−${m[1]}`],
+    [/奇效值[^。；;]{0,12}?(?:降低|减少)\s*(\d+)/,m=>`奇效值-${m[1]}`],
     [/远[～~-]外距离[\s\S]*?[「]?([+-]?\d+)[」]?修正值/,m=>`远外${sgn(m[1])}`],
     [/远距离[\s\S]*?[「]?([+-]?\d+)[」]?修正值/,m=>`远距离${sgn(m[1])}`],
     [/「攻击」[\s\S]*?[「]?([+-]?\d+)[」]?修正值/,m=>`攻击${sgn(m[1])}`],
@@ -1422,7 +1429,7 @@ function damageDisplay(out){
 }
 
 const weaponRecommendations={
-  "破局手":["利器","格斗","手枪","圣物"],"护卫者":["利器","手枪","突击步枪","强化服"],"神枪手":["手枪","突击步枪","狙击步枪"],
+  "破局手":["利器","格斗","手枪","圣物"],"护卫者":["利器","手枪","突击步枪","霰弹枪","强化服"],"神枪手":["手枪","突击步枪","霰弹枪","狙击步枪"],
   "暗杀者":["利器","格斗","手枪","狙击步枪"],"魔术师":["法杖","圣物","强化服"],"妖术师":["法杖","祸鞭","诱惑"],
   "调停人":["格斗","手枪","诱惑"],"探秘人":["手枪","诱惑","强化服"],"风流客":["格斗","手枪","诱惑"],"洗脑师":["法杖","祸鞭","诱惑"]
 };
@@ -1751,7 +1758,7 @@ function finance(){
   const base=100+(answers.bonusCredits||0)+puppet;
   const weapons=[answers.weapon1,answers.weapon2].filter(Boolean);
   const custom=weapons.reduce((s,w)=>s+w.price,0);
-  const guns=['手枪','突击步枪','狙击步枪'];
+  const guns=['手枪','突击步枪','霰弹枪','狙击步枪'];
   const free=hasDomain('神枪手')?Math.min(100,weapons.filter(w=>guns.includes(w.className)).reduce((s,w)=>s+w.price,0)):0;
   const spentWeapon=custom-free;
   const spentEquip=(answers.equipments||[]).reduce((s,n)=>{const e=findEquipment(n);return s+(e?e.price:0);},0);
@@ -2165,7 +2172,7 @@ function showResult(){
     }).filter(Boolean).join(hr)||'—');
 
   const wpn=[answers.weapon1,answers.weapon2].filter(Boolean);
-  const gunNames=['手枪','突击步枪','狙击步枪'];
+  const gunNames=['手枪','突击步枪','霰弹枪','狙击步枪'];
   let freeLeft=f.free||0;
   const weaponCell=(label,value,cls)=>`<div class="weapon-cell${cls?' '+cls:''}"><b>${label}:</b>${value??'—'}</div>`;
   const weaponPlain=[];
@@ -3240,7 +3247,7 @@ function buildHKTRPGCommand(){
 /* ============ 导出独立角色卡 HTML ============ */
 /* 候选项池：按能力系统 id + 已选武器即时构建，卡片视图打开时也能重建同一份列表 */
 function buildOptionsFor(sysIds, selectedWeaponNames){
-  const gunNames=['手枪','突击步枪','狙击步枪'];
+  const gunNames=['手枪','突击步枪','霰弹枪','狙击步枪'];
   const ids=Array.isArray(sysIds)?sysIds:[];
   const wnames=Array.isArray(selectedWeaponNames)?selectedWeaponNames:[];
   return {
